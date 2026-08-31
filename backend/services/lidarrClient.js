@@ -733,6 +733,16 @@ export class LidarrClient {
     return this.request("/tag", "GET", null, skipConfigUpdate);
   }
 
+  async ensureUserTag(username) {
+    const label = String(username || "").trim().toLowerCase();
+    if (!label) return null;
+    const tags = mapTags(await this.getTags());
+    const existing = tags.find((tag) => tag.label.toLowerCase() === label);
+    if (existing) return existing.id;
+    const created = await this.request("/tag", "POST", { label });
+    return normalizeProfileId(created?.id);
+  }
+
   getArtistAddFallbacks({ rootFolders, qualityProfiles, settings } = {}) {
     const safeRootFolders = mapRootFolders(rootFolders);
     const safeQualityProfiles = mapQualityProfiles(qualityProfiles);
@@ -936,6 +946,14 @@ export class LidarrClient {
       options.tagId ?? settings.integrations?.lidarr?.tagId,
     );
     const tags = configuredTagId !== null ? [configuredTagId] : [];
+    if (settings.integrations?.lidarr?.tagUserRequests && options.requestedByUsername) {
+      try {
+        const userTagId = await this.ensureUserTag(options.requestedByUsername);
+        if (userTagId !== null && !tags.includes(userTagId)) tags.push(userTagId);
+      } catch (error) {
+        logger.warn("lidarr", `Failed to tag artist with requesting user: ${error.message}`);
+      }
+    }
 
     const lidarrArtist = {
       artistName: artistName,

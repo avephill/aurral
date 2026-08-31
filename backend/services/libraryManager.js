@@ -354,6 +354,7 @@ export class LibraryManager {
         qualityProfileId: options.qualityProfileId,
         savedQualityProfileId: options.savedQualityProfileId,
         tagId: options.tagId,
+        requestedByUsername: options.requestedByUsername,
         metadataProfileId:
           options.metadataProfileId || lidarrSettings.integrations?.lidarr?.metadataProfileId,
       });
@@ -414,6 +415,7 @@ export class LibraryManager {
       rootFolderPath: preparedAddOptions?.resolved?.rootFolderPath || null,
       qualityProfileId: preparedAddOptions?.resolved?.qualityProfileId ?? null,
       tagId: options.tagId ?? null,
+      requestedByUsername: currentUser?.username || options.user?.username || null,
       preparedAddOptions,
     };
   }
@@ -617,6 +619,7 @@ export class LibraryManager {
       rootFolderPath: options.rootFolderPath,
       qualityProfileId: options.qualityProfileId,
       tagId: options.tagId,
+      requestedByUsername: options.requestedByUsername,
     });
     if (artist?.error) {
       return artist;

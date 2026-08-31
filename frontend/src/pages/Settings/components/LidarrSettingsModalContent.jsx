@@ -410,6 +410,18 @@ export function LidarrSettingsSection({
             aria-label="Search for missing albums when artists are added"
           />
         </SettingsArrFormGroup>
+
+        <SettingsArrFormGroup
+          label="Tag requests with username"
+          help="Tags artists added to Lidarr with the requesting user's username, so Lidarr rules can target individual users."
+        >
+          <PillToggle
+            className="settings-toggle"
+            checked={settings.integrations?.lidarr?.tagUserRequests || false}
+            onChange={(e) => updateLidarr({ tagUserRequests: e.target.checked })}
+            aria-label="Tag artists added to Lidarr with the requesting user's username"
+          />
+        </SettingsArrFormGroup>
       </SettingsArrFieldSet>
 
       <SettingsArrFieldSet legend="Community guide">

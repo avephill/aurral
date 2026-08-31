@@ -94,6 +94,7 @@ const SETTINGS_SEARCH_METADATA = {
       Tag: "lidarr tag",
       "Default monitoring option": "albums existing future missing latest first",
       "Search on add": "missing albums artists",
+      "Tag requests with username": "user tag requester per user rules",
       "Community guide": "Davo recommended settings custom formats naming scheme",
     },
   },
