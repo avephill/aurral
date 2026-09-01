@@ -661,8 +661,6 @@ export const authMiddleware = (req, res, next) => {
       req.path === "/api/health" ||
       req.path === "/api/health/live" ||
       req.path === "/api/health/bootstrap" ||
-      req.path === "/api/filesystem/browse" ||
-      req.path === "/api/filesystem/ensure" ||
       req.path === "/api/image-proxy" ||
       req.path.startsWith("/api/image-proxy/") ||
       (req.method === "GET" && /^\/api\/feeds\/lidarr\/flows\/[^/]+\.json$/i.test(req.path))
@@ -696,6 +694,15 @@ export const authMiddleware = (req, res, next) => {
     const onboardingDone = settings.onboardingComplete;
 
     if (req.path.startsWith("/api/onboarding") && !onboardingDone) return next();
+
+    // The onboarding wizard's folder picker runs before any user exists;
+    // once onboarding is complete these require normal auth.
+    if (
+      (req.path === "/api/filesystem/browse" || req.path === "/api/filesystem/ensure") &&
+      !onboardingDone
+    ) {
+      return next();
+    }
 
     const authRequired = isAuthRequiredByConfig();
 
@@ -757,10 +764,7 @@ export const verifyTokenAuth = (req) => {
     req.user = streamTokenUser;
     return true;
   }
-  if (isProxyAuthEnabled()) return false;
-  const passwords = getAuthPassword();
-  if (passwords.length === 0) return true;
-  return false;
+  return !isAuthRequiredByConfig();
 };
 
 export function hasPermission(user, permission) {

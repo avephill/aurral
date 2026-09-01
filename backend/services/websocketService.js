@@ -1,21 +1,13 @@
 import { WebSocketServer } from 'ws';
-import { dbOps, userOps } from "../db/helpers/index.js";
 import { logger } from "./logger.js";
 import {
-  getAuthPassword,
-  isProxyAuthEnabled,
+  isAuthRequiredByConfig,
   resolveLocalNetworkBypassUser,
   resolveSessionUserFromToken,
   resolveProxyUser,
 } from "../middleware/auth.js";
 
-const isAuthRequired = () => {
-  const settings = dbOps.getSettings();
-  if (!settings.onboardingComplete) return false;
-  const users = userOps.getAllUsers();
-  const legacyPasswords = getAuthPassword();
-  return isProxyAuthEnabled() || users.length > 0 || legacyPasswords.length > 0;
-};
+const isAuthRequired = () => isAuthRequiredByConfig();
 
 class WebSocketService {
   constructor() {
