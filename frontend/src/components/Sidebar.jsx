@@ -34,14 +34,14 @@ import SidebarStageBackdrop, {
 
 function Sidebar({ mode, width = 208, settingsMode = false }) {
   const location = useLocation();
-  const { user, bootstrap } = useAuth();
+  const { user, bootstrap, hasPermission } = useAuth();
   const [showStageBackdrop, setShowStageBackdrop] = useState(() =>
     getSidebarStageBackdropEnabled(user?.id),
   );
   const stageBackdropVariant = showStageBackdrop
     ? resolveSidebarStageBackdropVariant()
     : null;
-  const hasFlowAccess = user?.role === "admin" || !!user?.permissions?.accessFlow;
+  const hasFlowAccess = hasPermission("accessFlow");
   const canAccessSettings = user?.role === "admin" || !!user?.permissions?.accessSettings;
   const { hasReview: hasReviewAlert } = useFlowWorkerActivity({
     enabled: hasFlowAccess,
@@ -98,10 +98,10 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
     if (!isOnLibrary) return null;
     const segment = location.pathname.replace(/^\/library\/?/, "").split("/")[0];
     const visibleViews = LIBRARY_VIEWS.filter(
-      (view) => !view.permission || user?.role === "admin" || !!user?.permissions?.[view.permission],
+      (view) => !view.permission || hasPermission(view.permission),
     );
     return visibleViews.some((view) => view.id === segment) ? segment : DEFAULT_LIBRARY_VIEW;
-  }, [isOnLibrary, location.pathname, user]);
+  }, [isOnLibrary, location.pathname, hasPermission]);
 
   const activeActivityView = useMemo(() => {
     if (!isOnActivity) return null;
@@ -166,7 +166,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
 
   const navItems = useMemo(() => {
     const libraryViews = LIBRARY_VIEWS.filter(
-      (view) => !view.permission || user?.role === "admin" || !!user?.permissions?.[view.permission],
+      (view) => !view.permission || hasPermission(view.permission),
     );
     const items = [
       {
@@ -228,11 +228,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       },
       { path: "/blocklist", label: "Blocklist", icon: Ban },
     ];
-    return items.filter(
-      (item) =>
-        !item.permission || user?.role === "admin" || !!user?.permissions?.[item.permission],
-    );
-  }, [newsConfigured, ticketmasterConfigured, user]);
+    return items.filter((item) => !item.permission || hasPermission(item.permission));
+  }, [newsConfigured, ticketmasterConfigured, hasPermission]);
 
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";
 

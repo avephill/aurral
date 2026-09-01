@@ -65,7 +65,7 @@ function Layout({ children, headerActions }) {
   });
   const [isResizing, setIsResizing] = useState(false);
   const location = useLocation();
-  const { authRequired, canLogOut, logout, user } = useAuth();
+  const { authRequired, canLogOut, logout, hasPermission } = useAuth();
   const { isActive: isPlayerActive } = useAudioQueue();
   const isArtistDetailsRoute = /^\/artist\/[^/]+(\/(albums|appears-on|release\/[^/]+))?$/.test(
     location.pathname,
@@ -148,11 +148,8 @@ function Layout({ children, headerActions }) {
         permission: "accessFlow",
       },
     ];
-    return items.filter(
-      (item) =>
-        !item.permission || user?.role === "admin" || !!user?.permissions?.[item.permission],
-    );
-  }, [user]);
+    return items.filter((item) => !item.permission || hasPermission(item.permission));
+  }, [hasPermission]);
 
   const mobileOverflowItems = useMemo(() => {
     const items = [
@@ -172,11 +169,8 @@ function Layout({ children, headerActions }) {
         permission: "accessSettings",
       },
     ];
-    return items.filter(
-      (item) =>
-        !item.permission || user?.role === "admin" || !!user?.permissions?.[item.permission],
-    );
-  }, [user]);
+    return items.filter((item) => !item.permission || hasPermission(item.permission));
+  }, [hasPermission]);
 
   const persistSidebarWidth = useCallback((width) => {
     const nextWidth = Math.max(SIDEBAR_MIN, Math.min(SIDEBAR_MAX, Math.round(width)));

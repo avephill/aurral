@@ -9,6 +9,7 @@ import {
   getMetadataProviderHealthSnapshot,
 } from "../services/apiClients/index.js";
 import { APP_VERSION } from "../config/constants.js";
+import { isPlaylistsEnabled } from "../config/featureFlags.js";
 import {
   resolveRequestUser,
   isAuthRequiredByConfig,
@@ -249,6 +250,7 @@ function buildBootstrapPayload(req) {
     oidcEnabled: oidcInfo.oidcEnabled,
     oidcRequired: oidcInfo.oidcRequired,
     oidcLogoutUrl: oidcInfo.oidcLogoutUrl,
+    playlistsEnabled: isPlaylistsEnabled(),
     onboardingRequired: !onboardingDone,
     dateTimeFormat: settings.dateTimeFormat,
     timestamp: new Date().toISOString(),

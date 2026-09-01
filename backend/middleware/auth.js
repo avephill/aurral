@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import os from "os";
+import { isPlaylistsEnabled } from "../config/featureFlags.js";
 import { dbOps, userOps } from "../db/helpers/index.js";
 import { createSession, getSessionByToken } from "../config/session-helpers.js";
 import { hashPassword, verifyPassword, needsRehash } from "./passwordHash.js";
@@ -238,7 +239,7 @@ function buildPermissions(role, permissions) {
   if (role === "admin") {
     return {
       accessSettings: true,
-      accessFlow: true,
+      accessFlow: isPlaylistsEnabled(),
       addArtist: true,
       addAlbum: true,
       changeMonitoring: true,
@@ -251,6 +252,7 @@ function buildPermissions(role, permissions) {
     ...userOps.getDefaultPermissions(),
     ...(permissions || {}),
     accessSettings: false,
+    ...(isPlaylistsEnabled() ? {} : { accessFlow: false }),
   };
 }
 
@@ -769,6 +771,7 @@ export const verifyTokenAuth = (req) => {
 
 export function hasPermission(user, permission) {
   if (!user) return false;
+  if (permission === "accessFlow" && !isPlaylistsEnabled()) return false;
   if (user.role === "admin") return true;
   return !!user.permissions?.[permission];
 }

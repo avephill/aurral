@@ -49,6 +49,7 @@ Use the web UI for most settings. Use these variables for Docker deployment sett
 | `OIDC_LOGOUT_URL` | Optional IdP logout URL. When set, Aurral redirects there after clearing the local session. |
 | `OIDC_DOMAIN` | Optional IdP origin added to the `connect-src` content security policy. |
 | `SESSION_EXPIRY_HOURS` | Session lifetime in hours for password login, proxy auth, and native OIDC. Default `720` (30 days). |
+| `AURRAL_PLAYLISTS_ENABLED` | Set to `false` to disable playlist making entirely: the `accessFlow` permission is denied for every user (admins included), which hides and blocks all playlist creation UI and routes, and the automatic discovery and weekly-flow playlist builders stop running. Default `true`. |
 
 ## Cross-origin clients
 

@@ -155,9 +155,10 @@ export const AuthProvider = ({ children }) => {
 
   const hasPermission = useCallback((perm) => {
     if (!user) return false;
+    if (perm === "accessFlow" && bootstrap?.playlistsEnabled === false) return false;
     if (user.role === "admin") return true;
     return !!user.permissions?.[perm];
-  }, [user]);
+  }, [user, bootstrap]);
 
   const canLogOut = !bootstrap?.proxyAuthEnabled || !!bootstrap?.proxyLogoutUrl;
 
