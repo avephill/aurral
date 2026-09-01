@@ -29,7 +29,7 @@ import { DiscoverPlaylistSection } from "./DiscoverPlaylistSection";
 import { AlbumCard, ArtistCard, ViewAllCard } from "./DiscoverCards";
 import { useDiscoverLayoutState } from "./useDiscoverLayoutState";
 import {
-  DEFAULT_DISCOVER_SECTIONS,
+  getDefaultDiscoverSections,
   getFallbackGenreSectionId,
   getFallbackGenreFromSectionId,
   DISCOVER_PREVIEW_ITEM_LIMIT,
@@ -83,6 +83,10 @@ function DiscoverPage() {
     handleDiscoveryFeedback,
   } = useDiscoverData();
 
+  // Snapshot the (possibly server-configured) defaults once per mount; the
+  // bootstrap response has already been applied by the time this page renders.
+  const defaultDiscoverSections = useMemo(() => getDefaultDiscoverSections(), []);
+
   const {
     discoverSections,
     draftSections,
@@ -92,7 +96,7 @@ function DiscoverPage() {
     isSavingDiscoverLayout,
     saveDiscoverLayout,
   } = useDiscoverLayoutState({
-    defaultSections: DEFAULT_DISCOVER_SECTIONS,
+    defaultSections: defaultDiscoverSections,
     userId: authUser?.id,
     normalizeLayout: normalizeDiscoverLayout,
     readStoredLayout: readStoredDiscoverLayout,
@@ -467,7 +471,7 @@ function DiscoverPage() {
     setDraftSections(
       isListenBrainzFallback
         ? displayDiscoverSections.map((item) => ({ ...item, enabled: true }))
-        : DEFAULT_DISCOVER_SECTIONS.map((item) => ({ ...item })),
+        : getDefaultDiscoverSections(),
     );
   };
 

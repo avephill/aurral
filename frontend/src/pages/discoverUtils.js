@@ -40,6 +40,28 @@ export const DEFAULT_DISCOVER_SECTIONS = [
   { id: "genreSections", label: "Because You Like", enabled: true },
 ];
 
+// The server can override which sections are enabled by default (and their
+// order) via AURRAL_DISCOVER_DEFAULT_SECTIONS; the bootstrap payload carries
+// the resolved layout and getBootstrapStatus applies it here before any
+// discover page renders.
+let configuredDefaultSections = DEFAULT_DISCOVER_SECTIONS;
+
+export const setDefaultDiscoverSections = (layout) => {
+  if (!Array.isArray(layout) || layout.length === 0) return;
+  const labelsById = new Map(DEFAULT_DISCOVER_SECTIONS.map((item) => [item.id, item.label]));
+  const next = layout
+    .filter((item) => labelsById.has(item?.id))
+    .map((item) => ({
+      id: item.id,
+      label: labelsById.get(item.id),
+      enabled: item.enabled !== false,
+    }));
+  if (next.length > 0) configuredDefaultSections = next;
+};
+
+export const getDefaultDiscoverSections = () =>
+  configuredDefaultSections.map((item) => ({ ...item }));
+
 export const FALLBACK_GENRE_SECTION_PREFIX = "fallbackGenre:";
 
 export const getFallbackGenreSectionId = (genre) =>
@@ -342,7 +364,7 @@ export const writeStoredDiscoveryData = (value, userId) => {
 export const normalizeDiscoverLayout = (value) => {
   if (!Array.isArray(value)) return null;
   const defaultsById = new Map(
-    DEFAULT_DISCOVER_SECTIONS.map((item) => [item.id, item]),
+    configuredDefaultSections.map((item) => [item.id, item]),
   );
   const seenDynamicIds = new Set();
   const normalized = [];

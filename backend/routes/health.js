@@ -10,6 +10,7 @@ import {
 } from "../services/apiClients/index.js";
 import { APP_VERSION } from "../config/constants.js";
 import { isPlaylistsEnabled } from "../config/featureFlags.js";
+import { getDefaultDiscoverLayout } from "../config/discoverLayoutDefaults.js";
 import {
   resolveRequestUser,
   isAuthRequiredByConfig,
@@ -251,6 +252,7 @@ function buildBootstrapPayload(req) {
     oidcRequired: oidcInfo.oidcRequired,
     oidcLogoutUrl: oidcInfo.oidcLogoutUrl,
     playlistsEnabled: isPlaylistsEnabled(),
+    discoverDefaultLayout: getDefaultDiscoverLayout(),
     onboardingRequired: !onboardingDone,
     dateTimeFormat: settings.dateTimeFormat,
     timestamp: new Date().toISOString(),

@@ -1,4 +1,5 @@
 import express from "express";
+import { getDefaultDiscoverLayout } from "../config/discoverLayoutDefaults.js";
 import { userOps, dbOps } from "../db/helpers/index.js";
 import { hashPassword, verifyPassword } from "../middleware/passwordHash.js";
 import { requireAuth, requireAdmin } from "../middleware/requirePermission.js";
@@ -112,22 +113,11 @@ const normalizeQualityProfileId = (value) => {
   return Math.trunc(parsed);
 };
 
-const DEFAULT_DISCOVER_LAYOUT = [
-  { id: "recentlyAdded", enabled: true },
-  { id: "playlists", enabled: true },
-  { id: "recommendedShows", enabled: true },
-  { id: "recentReleases", enabled: true },
-  { id: "news", enabled: true },
-  { id: "recommended", enabled: true },
-  { id: "globalTop", enabled: true },
-  { id: "genreSections", enabled: true },
-];
-
 const FALLBACK_GENRE_SECTION_PREFIX = "fallbackGenre:";
 
 const normalizeDiscoverLayout = (value) => {
   if (!Array.isArray(value)) return null;
-  const defaultsById = new Map(DEFAULT_DISCOVER_LAYOUT.map((item) => [item.id, item]));
+  const defaultsById = new Map(getDefaultDiscoverLayout().map((item) => [item.id, item]));
   const seenDynamicIds = new Set();
   const normalized = [];
   for (const item of value) {
@@ -368,7 +358,7 @@ router.get("/me/discover-layout", requireAuth, (req, res) => {
     }
     const storedLayout = dbOps.getUserDiscoverLayout(req.user.id);
     res.json({
-      layout: normalizeDiscoverLayout(storedLayout),
+      layout: normalizeDiscoverLayout(storedLayout) || getDefaultDiscoverLayout(),
     });
   } catch (e) {
     res.status(500).json({

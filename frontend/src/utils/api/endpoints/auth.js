@@ -1,5 +1,6 @@
 import { getData, postData, putData, patchData, deleteData, lidarrCredentialParams } from "../core.js";
 import { queryClient, queryKeys } from "../../../queryClient.js";
+import { setDefaultDiscoverSections } from "../../../pages/discoverUtils.js";
 
 export const checkHealth = ({ force = false } = {}) =>
   queryClient.fetchQuery({
@@ -14,13 +15,16 @@ export const invalidateBootstrapCache = () => {
   queryClient.removeQueries({ queryKey: queryKeys.authBootstrap });
 };
 
-export const getBootstrapStatus = () =>
-  queryClient.fetchQuery({
+export const getBootstrapStatus = async () => {
+  const bootstrap = await queryClient.fetchQuery({
     queryKey: queryKeys.authBootstrap,
     queryFn: ({ signal: querySignal }) =>
       getData("/health/bootstrap", { signal: querySignal }),
     staleTime: 25_000,
   });
+  setDefaultDiscoverSections(bootstrap?.discoverDefaultLayout);
+  return bootstrap;
+};
 
 export const browseFilesystem = (pathValue) =>
   getData("/filesystem/browse", {
