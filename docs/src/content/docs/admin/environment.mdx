@@ -35,6 +35,7 @@ Use the web UI for most settings. Use these variables for Docker deployment sett
 | `AUTH_PROXY_ROLE_HEADER` | Optional header that contains the user's group membership (for example, Authelia's `Remote-Groups`). Usually, this is a comma-separated list. Aurral compares it with `AUTH_PROXY_ADMIN_GROUPS` on every request. |
 | `AUTH_PROXY_ADMIN_GROUPS` | Comma-separated group names that give the admin role. Aurral compares these names with `AUTH_PROXY_ROLE_HEADER`. A group named `admin` has no special function unless you list it here. |
 | `OIDC_ENABLED` | Enable native OpenID Connect login. |
+| `OIDC_REQUIRED` | Make OIDC the only interactive login path. Authentication is always required, local username/password login (form, basic auth, and legacy `AUTH_USER`/`AUTH_PASSWORD`) is refused, the local-network bypass is ignored, and the sign-in page redirects straight to your IdP. Requires a working `OIDC_ENABLED` configuration; the API key and Subsonic endpoints keep working for integrations. |
 | `OIDC_ISSUER` | Identity provider issuer URL used for OIDC discovery. |
 | `OIDC_CLIENT_ID` | OIDC client ID. |
 | `OIDC_CLIENT_SECRET` | OIDC client secret. |

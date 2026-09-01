@@ -75,11 +75,13 @@ export function getOidcBootstrapInfo() {
   if (!isOidcEnabled()) {
     return {
       oidcEnabled: false,
+      oidcRequired: false,
       oidcLogoutUrl: null,
     };
   }
   return {
     oidcEnabled: true,
+    oidcRequired: process.env.OIDC_REQUIRED === "true",
     oidcLogoutUrl: process.env.OIDC_LOGOUT_URL || null,
   };
 }

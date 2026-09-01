@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { getAppBasePath } from "../utils/basePath.js";
 import { DotLoader } from "../components/DotLoader";
+
+// Only auto-redirect to the IdP once per tab, so a failed SSO attempt lands
+// back on a page with a clickable button instead of a redirect loop.
+const SSO_AUTO_REDIRECT_KEY = "aurral_sso_auto_redirected";
 
 const Login = () => {
   useDocumentTitle("Sign in");
@@ -13,6 +17,7 @@ const Login = () => {
   const [startingSso, setStartingSso] = useState(false);
   const { login, bootstrap } = useAuth();
   const oidcEnabled = !!bootstrap?.oidcEnabled;
+  const oidcRequired = !!bootstrap?.oidcRequired;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,6 +44,19 @@ const Login = () => {
     window.location.assign(`${prefix}/api/auth/oidc/login`);
   };
 
+  useEffect(() => {
+    if (!oidcRequired) return;
+    let alreadyRedirected = false;
+    try {
+      alreadyRedirected = sessionStorage.getItem(SSO_AUTO_REDIRECT_KEY) === "1";
+      if (!alreadyRedirected) sessionStorage.setItem(SSO_AUTO_REDIRECT_KEY, "1");
+    } catch {
+      alreadyRedirected = true;
+    }
+    if (!alreadyRedirected) handleOidcLogin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oidcRequired]);
+
   return (
     <main className="login-page">
       <div className="login-card">
@@ -58,12 +76,15 @@ const Login = () => {
               {startingSso ? <DotLoader size="sm" label={null} /> : null}
               {startingSso ? "Opening SSO…" : "Sign in with SSO"}
             </button>
-            <div className="login-divider">
-              <span>or</span>
-            </div>
+            {!oidcRequired && (
+              <div className="login-divider">
+                <span>or</span>
+              </div>
+            )}
           </div>
         )}
 
+        {!oidcRequired && (
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="login-fields">
             <div className="login-field">
@@ -117,6 +138,7 @@ const Login = () => {
             {submitting ? "Signing in…" : "Sign in"}
           </button>
         </form>
+        )}
       </div>
     </main>
   );

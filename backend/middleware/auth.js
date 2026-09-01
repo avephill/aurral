@@ -334,7 +334,14 @@ function resolveApiKeyUser(req) {
 
 export const isOidcAuthEnabled = () => process.env.OIDC_ENABLED === "true";
 
+// OIDC_REQUIRED makes OIDC the only interactive login path: local password,
+// basic/legacy auth, and the local-network bypass are refused, and auth is
+// required even before onboarding completes.
+export const isOidcRequired = () =>
+  isOidcAuthEnabled() && process.env.OIDC_REQUIRED === "true";
+
 export const isAuthRequiredByConfig = () => {
+  if (isOidcRequired()) return true;
   const settings = dbOps.getSettings();
   const onboardingDone = settings.onboardingComplete;
   if (!onboardingDone) return false;
@@ -591,6 +598,7 @@ export function resolveRequestUser(req) {
   if (proxyUser) return proxyUser;
   const apiKeyUser = resolveApiKeyUser(req);
   if (apiKeyUser) return apiKeyUser;
+  if (isOidcRequired()) return null;
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Basic ")) {
     try {
@@ -735,7 +743,7 @@ export const verifyTokenAuth = (req) => {
       req.user = creds.user;
       return true;
     }
-    if (creds.type === "basic") {
+    if (creds.type === "basic" && !isOidcRequired()) {
       let u = resolveUser(creds.username, creds.password);
       if (!u) u = legacyAuth(creds.username, creds.password);
       if (u) {

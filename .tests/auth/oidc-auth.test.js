@@ -20,7 +20,13 @@ const [isolatedState, { db }, dbHelpers, authModule, sessionModule, oidcModule] 
   );
 
 const { dbOps, userOps } = dbHelpers;
-const { ensureExternalUser, isAuthRequiredByConfig, isOidcAuthEnabled } = authModule;
+const {
+  ensureExternalUser,
+  isAuthRequiredByConfig,
+  isOidcAuthEnabled,
+  isOidcRequired,
+  resolveRequestUser,
+} = authModule;
 const { createSession, getSessionByToken } = sessionModule;
 const {
   exchangeOidcCallback,
@@ -69,8 +75,11 @@ function resetOidcEnv() {
   delete process.env.OIDC_GROUPS_CLAIM;
   delete process.env.OIDC_ADMIN_GROUPS;
   delete process.env.OIDC_LOGOUT_URL;
+  delete process.env.OIDC_REQUIRED;
   delete process.env.AUTH_PROXY_ENABLED;
   delete process.env.AUTH_PROXY_HEADER;
+  delete process.env.AUTH_USER;
+  delete process.env.AUTH_PASSWORD;
   resetOidcStateForTests();
 }
 
@@ -223,8 +232,41 @@ test("OIDC bootstrap exposes logout URL when configured", () => {
   enableOidcEnv({ OIDC_LOGOUT_URL: "https://auth.example.com/logout" });
   assert.deepEqual(getOidcBootstrapInfo(), {
     oidcEnabled: true,
+    oidcRequired: false,
     oidcLogoutUrl: "https://auth.example.com/logout",
   });
+});
+
+test("OIDC_REQUIRED forces auth even before onboarding", () => {
+  enableOidcEnv({ OIDC_REQUIRED: "true" });
+  assert.equal(isOidcRequired(), true);
+  assert.equal(getOidcBootstrapInfo().oidcRequired, true);
+  assert.equal(isAuthRequiredByConfig(), true);
+  completeOnboarding();
+  assert.equal(isAuthRequiredByConfig(), true);
+});
+
+test("OIDC_REQUIRED has no effect without a working OIDC config", () => {
+  process.env.OIDC_REQUIRED = "true";
+  assert.equal(isOidcRequired(), false);
+  assert.equal(isAuthRequiredByConfig(), false);
+});
+
+test("OIDC_REQUIRED refuses basic and legacy credentials", () => {
+  completeOnboarding();
+  process.env.AUTH_USER = "legacy-admin";
+  process.env.AUTH_PASSWORD = "legacy-password";
+  const basicRequest = () => ({
+    headers: {
+      authorization: `Basic ${Buffer.from("legacy-admin:legacy-password").toString("base64")}`,
+    },
+    query: {},
+  });
+
+  assert.equal(resolveRequestUser(basicRequest())?.username, "legacy-admin");
+
+  enableOidcEnv({ OIDC_REQUIRED: "true" });
+  assert.equal(resolveRequestUser(basicRequest()), null);
 });
 
 test("OIDC-provisioned users get normal Aurral sessions", () => {

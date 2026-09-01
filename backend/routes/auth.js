@@ -2,7 +2,7 @@ import express from "express";
 import { userOps } from "../db/helpers/index.js";
 import { createSession, deleteSession, getSessionByToken } from "../config/session-helpers.js";
 import { requireAuth } from "../middleware/requirePermission.js";
-import { getApiKey, rotateApiKey } from "../middleware/auth.js";
+import { getApiKey, isOidcRequired, rotateApiKey } from "../middleware/auth.js";
 import { hashPassword, verifyPassword, needsRehash } from "../middleware/passwordHash.js";
 import { clearOidcTransactionCookie, exchangeOidcCallback, startOidcLogin } from "../services/oidcAuth.js";
 import { logger } from "../services/logger.js";
@@ -17,6 +17,9 @@ const getBearerToken = (req) => {
 
 router.post("/login", async (req, res) => {
   try {
+    if (isOidcRequired()) {
+      return res.status(403).json({ error: "Local login is disabled; sign in with SSO" });
+    }
     const username = String(req.body?.username || "")
       .trim()
       .toLowerCase();

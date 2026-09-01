@@ -247,6 +247,7 @@ function buildBootstrapPayload(req) {
     authRequired,
     proxyAuthEnabled: isProxyAuthEnabled(),
     oidcEnabled: oidcInfo.oidcEnabled,
+    oidcRequired: oidcInfo.oidcRequired,
     oidcLogoutUrl: oidcInfo.oidcLogoutUrl,
     onboardingRequired: !onboardingDone,
     dateTimeFormat: settings.dateTimeFormat,
