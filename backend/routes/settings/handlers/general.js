@@ -14,6 +14,10 @@ import {
   validateDownloadFolderPath,
 } from "../../../services/downloadFolderConfig.js";
 import { normalizePathMappings } from "../../../services/pathMappings.js";
+import {
+  normalizeUserLibrariesSettings,
+  scheduleUserLibraryReconcile,
+} from "../../../services/userLibraryService.js";
 import { logger } from "../../../services/logger.js";
 import { testNavidromeConnection } from "../../shared/navidromeTest.js";
 import { mergePlexIntegration } from "./plexSettings.js";
@@ -102,6 +106,7 @@ export function registerGeneral(router) {
         playlistArtwork,
         inbox,
         dateTimeFormat,
+        userLibraries,
       } = req.body;
 
       if (dateTimeFormat !== undefined && !DATE_TIME_FORMATS.includes(dateTimeFormat)) {
@@ -486,6 +491,10 @@ export function registerGeneral(router) {
               }
             : currentSettings.playlistArtwork ||
               defaultData.settings.playlistArtwork,
+        userLibraries: normalizeUserLibrariesSettings(
+          userLibraries,
+          currentSettings.userLibraries || defaultData.settings.userLibraries,
+        ),
       };
 
       if (updatedSettings?.integrations?.coverArtArchive) {
@@ -536,6 +545,12 @@ export function registerGeneral(router) {
           });
         }
         playlistManager.scheduleScanLibrary(true);
+      }
+      if (
+        userLibraries !== undefined &&
+        updatedSettings.userLibraries?.enabled === true
+      ) {
+        scheduleUserLibraryReconcile();
       }
       const reconciled = reconcileLocalNetworkBypassSetting().settings;
       if (

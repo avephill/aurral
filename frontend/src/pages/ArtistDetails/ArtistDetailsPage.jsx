@@ -30,6 +30,7 @@ import { Music, X } from "lucide-react";
 import { DotLoader } from "../../components/DotLoader";
 import { useToast } from "../../contexts/ToastContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { useUserLibrary } from "../../hooks/useUserLibrary.js";
 import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { useModalDialog } from "../../hooks/useModalDialog.js";
 import { useArtistDetailsStream } from "./hooks/useArtistDetailsStream";
@@ -67,6 +68,7 @@ function ArtistDetailsPage() {
   );
   const { showSuccess, showError } = useToast();
   const { hasPermission } = useAuth();
+  const userLibrary = useUserLibrary(mbid);
   const similarArtistsScrollRef = useRef(null);
   const [showEditIdsModal, setShowEditIdsModal] = useState(false);
   const [idsError, setIdsError] = useState("");
@@ -528,6 +530,7 @@ function ArtistDetailsPage() {
         onTasteFeedback={handleCurrentArtistTasteFeedback}
         tasteFeedbackUsed={currentArtistFeedback}
         tasteActionPending={tasteActionPending}
+        userLibrary={userLibrary}
       />
 
       <ArtistDetailsPreviewTracks

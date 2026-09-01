@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Ban,
   ChevronDown,
+  Library,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -42,6 +43,7 @@ export function ArtistDetailsActionBar({
   onTasteFeedback,
   tasteFeedbackUsed = {},
   tasteActionPending = null,
+  userLibrary = null,
 }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const currentMonitorOption = library.getCurrentMonitorOption?.();
@@ -162,6 +164,44 @@ export function ArtistDetailsActionBar({
     );
   };
 
+  const renderUserLibraryAction = () => {
+    if (!userLibrary?.enabled || !existsInLibrary || loadingLibrary) return null;
+    if (userLibrary.inMyLibrary) {
+      return (
+        <button
+          type="button"
+          onClick={userLibrary.remove}
+          disabled={userLibrary.pending}
+          className="btn btn-neutral-active btn--bold btn-min-h"
+          title="Remove from my library"
+        >
+          {userLibrary.pending ? (
+            <DotLoader size="sm" label={null} />
+          ) : (
+            <SearchLibraryCheck size="sm" />
+          )}
+          In My Library
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={userLibrary.add}
+        disabled={userLibrary.pending}
+        className="btn btn-secondary btn--bold btn-min-h"
+        title="Add this artist to my library"
+      >
+        {userLibrary.pending ? (
+          <DotLoader size="sm" label={null} />
+        ) : (
+          <Library className="artist-icon-sm" />
+        )}
+        Add to My Library
+      </button>
+    );
+  };
+
   return (
     <div className="artist-action-bar">
       <div className="artist-action-bar__inner">
@@ -183,6 +223,7 @@ export function ArtistDetailsActionBar({
             )}
           </button>
           {renderLibraryAction()}
+          {renderUserLibraryAction()}
         </div>
 
         <div className="artist-row-actions">

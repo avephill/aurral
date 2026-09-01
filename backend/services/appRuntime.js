@@ -123,6 +123,9 @@ function stopWorkerSupervisor() {
 registerHonkerShutdownHandler(() => {
   stopWorkerSupervisor();
   stopLibraryFileWatcher();
+  import("./userLibraryService.js")
+    .then(({ stopUserLibraryReconciler }) => stopUserLibraryReconciler())
+    .catch(() => {});
 });
 
 export function startBackgroundWorkers({ logger = console } = {}) {
@@ -159,6 +162,14 @@ export function startBackgroundWorkers({ logger = console } = {}) {
       error?.message || error,
     );
   });
+  import("./userLibraryService.js")
+    .then(({ startUserLibraryReconciler }) => startUserLibraryReconciler())
+    .catch((error) => {
+      logger.warn?.(
+        "[AppRuntime] Failed to start user library reconciler:",
+        error?.message || error,
+      );
+    });
   return true;
 }
 

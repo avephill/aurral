@@ -370,6 +370,9 @@ export class LibraryManager {
           }),
         )
         .catch((err) => { logger.warn('library', err); });
+      import("./userLibraryService.js")
+        .then(({ scheduleUserLibraryReconcile }) => scheduleUserLibraryReconcile())
+        .catch(() => {});
       return mappedArtist;
     } catch (error) {
       if (isArtistAlreadyAddedError(error)) {

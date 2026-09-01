@@ -172,5 +172,9 @@ export const defaultData = {
       recommendedNews: false,
       discoveries: true,
     },
+    userLibraries: {
+      enabled: false,
+      rootPath: "",
+    },
   },
 };

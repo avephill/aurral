@@ -743,6 +743,36 @@ export class LidarrClient {
     return normalizeProfileId(created?.id);
   }
 
+  async findTagId(label) {
+    const normalized = String(label || "").trim().toLowerCase();
+    if (!normalized) return null;
+    const tags = mapTags(await this.getTags());
+    const existing = tags.find((tag) => tag.label.toLowerCase() === normalized);
+    return existing ? existing.id : null;
+  }
+
+  async listArtists(options = {}) {
+    const artists = await this.request("/artist", "GET", null, false, {
+      forceRefresh: options.forceRefresh === true,
+    });
+    return Array.isArray(artists) ? artists : [];
+  }
+
+  async updateArtistsTags(artistIds, tagIds, applyTags = "add") {
+    const ids = (Array.isArray(artistIds) ? artistIds : [])
+      .map((id) => normalizeLidarrArtistId(id))
+      .filter((id) => id !== null);
+    const tags = (Array.isArray(tagIds) ? tagIds : [])
+      .map((id) => normalizeProfileId(id))
+      .filter((id) => id !== null);
+    if (!ids.length || !tags.length) return null;
+    return this.request("/artist/editor", "PUT", {
+      artistIds: ids,
+      tags,
+      applyTags,
+    });
+  }
+
   getArtistAddFallbacks({ rootFolders, qualityProfiles, settings } = {}) {
     const safeRootFolders = mapRootFolders(rootFolders);
     const safeQualityProfiles = mapQualityProfiles(qualityProfiles);

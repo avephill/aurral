@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { loginApi } from "../../../utils/api/endpoints/auth.js";
+import { syncUserLibraries } from "../../../utils/api/endpoints/userLibrary.js";
 import { setStoredAuth } from "../../../utils/api/core.js";
 import PillToggle from "../../../components/PillToggle";
 import { SettingsInput } from "./SettingsField";
@@ -172,6 +174,24 @@ export function SettingsUsersTab({
   const isSelfEdit = editUser && editUser.id === authUser?.id;
   const localBypassStatus = getLocalBypassStatus(health?.localNetworkBypass);
   const localBypassEnabled = settings?.security?.localNetworkBypass?.enabled === true;
+  const userLibrariesEnabled = settings?.userLibraries?.enabled === true;
+  const userLibrariesRootPath = settings?.userLibraries?.rootPath || "";
+  const [syncingUserLibraries, setSyncingUserLibraries] = useState(false);
+
+  const saveUserLibraries = async (patch) => {
+    const nextSettings = {
+      ...settings,
+      userLibraries: {
+        enabled: userLibrariesEnabled,
+        rootPath: userLibrariesRootPath,
+        ...patch,
+      },
+    };
+    updateSettings(nextSettings);
+    try {
+      await handleSaveSettings(null, nextSettings);
+    } catch {}
+  };
   const deleteDialog = useModalDialog({
     open: Boolean(deleteUserTarget),
     onClose: () => setDeleteUserTarget(null),
@@ -307,6 +327,72 @@ export function SettingsUsersTab({
                 />
               </div>
             </SettingsArrFormGroup>
+          </SettingsArrFieldSet>
+
+          <SettingsArrFieldSet legend="Personal libraries">
+            <SettingsArrFormGroup
+              label="Personal libraries"
+              help="Give each user a personal library folder of artist symlinks into the main Lidarr library, kept in sync from per-user Lidarr tags. Point a Navidrome library at each user's folder."
+            >
+              <div className="settings-toggle-row">
+                <span>{userLibrariesEnabled ? "Enabled" : "Disabled"}</span>
+                <PillToggle
+                  className="settings-toggle"
+                  checked={userLibrariesEnabled}
+                  onChange={(event) => saveUserLibraries({ enabled: event.target.checked })}
+                  aria-label="Personal libraries"
+                />
+              </div>
+            </SettingsArrFormGroup>
+            <SettingsArrFormGroup
+              label="Libraries folder"
+              labelFor="user-libraries-root"
+              help="Folder (as seen by Aurral) that holds one subfolder per user, e.g. /data/music/users. Must be on the same filesystem mount as the Lidarr library so relative symlinks resolve everywhere."
+            >
+              <SettingsInput
+                id="user-libraries-root"
+                type="text"
+                placeholder="/data/music/users"
+                value={userLibrariesRootPath}
+                onChange={(event) =>
+                  updateSettings({
+                    ...settings,
+                    userLibraries: {
+                      enabled: userLibrariesEnabled,
+                      rootPath: event.target.value,
+                    },
+                  })
+                }
+                onBlur={(event) => saveUserLibraries({ rootPath: event.target.value })}
+              />
+            </SettingsArrFormGroup>
+            <div className="arr-form-actions">
+              <button
+                type="button"
+                className="arr-btn arr-btn--primary"
+                disabled={!userLibrariesEnabled || !userLibrariesRootPath || syncingUserLibraries}
+                onClick={async () => {
+                  setSyncingUserLibraries(true);
+                  try {
+                    const result = await syncUserLibraries();
+                    if (result?.skipped) {
+                      showError(`Sync skipped: ${result.reason}`);
+                    } else {
+                      showSuccess(
+                        `Synced ${result?.users?.length ?? 0} user librar${(result?.users?.length ?? 0) === 1 ? "y" : "ies"} (${result?.totalChanges ?? 0} change${(result?.totalChanges ?? 0) === 1 ? "" : "s"})`,
+                      );
+                    }
+                  } catch (err) {
+                    showError(err.response?.data?.error || err.message || "Sync failed");
+                  } finally {
+                    setSyncingUserLibraries(false);
+                  }
+                }}
+              >
+                {syncingUserLibraries ? <DotLoader size="sm" label={null} /> : null}
+                {syncingUserLibraries ? "Syncing…" : "Sync now"}
+              </button>
+            </div>
           </SettingsArrFieldSet>
 
           <SettingsArrFieldSet

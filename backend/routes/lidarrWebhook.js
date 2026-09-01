@@ -1,11 +1,15 @@
 import express from "express";
 import { requireAuth } from "../middleware/requirePermission.js";
 import { recordAlbumImportCompleted } from "../services/aurralHistoryService.js";
+import { scheduleUserLibraryReconcile } from "../services/userLibraryService.js";
 
 export const handleLidarrWebhook = (req, res) => {
   const eventType = String(req.body?.eventType || req.body?.EventType || "")
     .trim()
     .toLowerCase();
+  if (eventType === "download" || eventType === "rename" || eventType === "artistadd") {
+    scheduleUserLibraryReconcile();
+  }
   if (eventType !== "download") return res.status(204).end();
 
   const album = req.body?.album || req.body?.Album || {};
