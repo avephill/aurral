@@ -46,7 +46,7 @@ const Login = () => {
 
   useEffect(() => {
     if (!oidcRequired) return;
-    let alreadyRedirected = false;
+    let alreadyRedirected;
     try {
       alreadyRedirected = sessionStorage.getItem(SSO_AUTO_REDIRECT_KEY) === "1";
       if (!alreadyRedirected) sessionStorage.setItem(SSO_AUTO_REDIRECT_KEY, "1");
