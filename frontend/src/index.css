@@ -13870,11 +13870,23 @@ button.native-library-genre-row:focus-visible {
 
 .list-import__stat {
   padding: 0.25rem 0.625rem;
+  border: 1px solid transparent;
   border-radius: var(--aurral-radius-round);
   background: var(--aurral-surface-selected);
   color: var(--aurral-text-muted);
+  font-family: inherit;
   font-size: 0.75rem;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.list-import__stat:hover {
+  border-color: var(--aurral-border-strong);
+}
+
+.list-import__stat.is-active {
+  border-color: currentcolor;
+  color: var(--aurral-text);
 }
 
 .list-import__stat--ok {
@@ -13882,8 +13894,28 @@ button.native-library-genre-row:focus-visible {
   color: var(--aurral-success);
 }
 
+.list-import__stat--ok.is-active {
+  color: var(--aurral-success);
+}
+
+.list-import__stat--warn {
+  background: color-mix(in srgb, var(--aurral-warning) 16%, transparent);
+  color: var(--aurral-warning);
+}
+
+.list-import__stat--warn.is-active {
+  color: var(--aurral-warning);
+}
+
 .list-import__stat--miss {
   color: var(--aurral-text-muted);
+}
+
+.list-import__rows-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 0.25rem;
 }
 
 .list-import__rows {

@@ -23,6 +23,18 @@ const STATUS_META = {
   none: { label: "Not on the server", icon: AlertTriangle, tone: "miss" },
 };
 
+// "needsLook" deliberately overlaps the buckets: a fuzzy match that was
+// auto-selected still counts as an add, but it is the one people want to
+// re-read before committing.
+const REVIEW_FILTERS = [
+  { id: "all", label: "in the list", tone: "" },
+  { id: "add", label: "to add", tone: "ok" },
+  { id: "needsLook", label: "to check", tone: "warn" },
+  { id: "have", label: "already yours", tone: "" },
+  { id: "skipped", label: "skipped", tone: "" },
+  { id: "missing", label: "not on the server", tone: "miss" },
+];
+
 export default function ArtistListImportModal({ artists, pending = false, onAdd, onClose }) {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
@@ -30,6 +42,7 @@ export default function ArtistListImportModal({ artists, pending = false, onAdd,
   const [dragging, setDragging] = useState(false);
   const [results, setResults] = useState(null);
   const [selections, setSelections] = useState(() => new Map());
+  const [reviewFilter, setReviewFilter] = useState("all");
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef(null);
   const { dialogRef, handleBackdropClick } = useModalDialog({
@@ -78,11 +91,13 @@ export default function ArtistListImportModal({ artists, pending = false, onAdd,
     setError("");
     setResults(matched);
     setSelections(new Map(matched.map((row) => [row.id, row.selected])));
+    setReviewFilter("all");
   };
 
   const handleBack = () => {
     setResults(null);
     setSelections(new Map());
+    setReviewFilter("all");
     setCopied(false);
   };
 
@@ -95,23 +110,38 @@ export default function ArtistListImportModal({ artists, pending = false, onAdd,
   };
 
   const resolved = useMemo(() => {
-    if (!results) return { toAdd: [], alreadyIn: 0, skipped: 0, missingNames: [] };
+    const counts = { all: 0, add: 0, needsLook: 0, have: 0, skipped: 0, missing: 0 };
+    if (!results) return { rows: [], counts, toAdd: [], missingNames: [] };
     const toAdd = new Set();
-    let alreadyIn = 0;
-    let skipped = 0;
     const missingNames = [];
-    for (const row of results) {
+    const rows = results.map((row) => {
       const mbid = selections.get(row.id) || "";
-      if (!mbid) {
-        skipped += 1;
-        if (row.status === "none") missingNames.push(row.input);
-        continue;
+      let bucket;
+      if (row.status === "none") {
+        bucket = "missing";
+        missingNames.push(row.input);
+      } else if (!mbid) {
+        bucket = "skipped";
+      } else if (artistsByMbid.get(mbid)?.inLibrary) {
+        bucket = "have";
+      } else {
+        bucket = "add";
+        toAdd.add(mbid);
       }
-      if (artistsByMbid.get(mbid)?.inLibrary) alreadyIn += 1;
-      else toAdd.add(mbid);
-    }
-    return { toAdd: [...toAdd], alreadyIn, skipped, missingNames };
+      const needsLook = row.status === "close" || row.status === "ambiguous";
+      counts.all += 1;
+      counts[bucket] += 1;
+      if (needsLook) counts.needsLook += 1;
+      return { ...row, bucket, needsLook };
+    });
+    return { rows, counts, toAdd: [...toAdd], missingNames };
   }, [results, selections, artistsByMbid]);
+
+  const visibleRows = useMemo(() => {
+    if (reviewFilter === "all") return resolved.rows;
+    if (reviewFilter === "needsLook") return resolved.rows.filter((row) => row.needsLook);
+    return resolved.rows.filter((row) => row.bucket === reviewFilter);
+  }, [resolved.rows, reviewFilter]);
 
   const copyMissing = async () => {
     try {
@@ -161,10 +191,12 @@ export default function ArtistListImportModal({ artists, pending = false, onAdd,
 
         {results ? (
           <ReviewStep
-            results={results}
+            rows={visibleRows}
+            counts={resolved.counts}
+            filter={reviewFilter}
+            onFilter={setReviewFilter}
             selections={selections}
             onSelect={select}
-            resolved={resolved}
           />
         ) : (
           <div
@@ -264,31 +296,45 @@ export default function ArtistListImportModal({ artists, pending = false, onAdd,
   );
 }
 
-function ReviewStep({ results, selections, onSelect, resolved }) {
+function ReviewStep({ rows, counts, filter, onFilter, selections, onSelect }) {
   return (
     <>
-      <div className="list-import__summary">
-        <span className="list-import__stat list-import__stat--ok">
-          {pluralize(resolved.toAdd.length, "artist")} to add
-        </span>
-        {resolved.alreadyIn ? (
-          <span className="list-import__stat">{resolved.alreadyIn} already in your library</span>
-        ) : null}
-        {resolved.skipped ? (
-          <span className="list-import__stat list-import__stat--miss">
-            {resolved.skipped} skipped
-          </span>
-        ) : null}
+      <div className="list-import__summary" role="group" aria-label="Show">
+        {REVIEW_FILTERS.map((option) => {
+          const count = counts[option.id];
+          if (!count && option.id !== "all") return null;
+          const active = filter === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              className={`list-import__stat${option.tone ? ` list-import__stat--${option.tone}` : ""}${active ? " is-active" : ""}`}
+              aria-pressed={active}
+              onClick={() => onFilter(option.id)}
+            >
+              {count} {option.label}
+            </button>
+          );
+        })}
       </div>
       <div className="list-import__rows" role="list">
-        {results.map((row) => (
-          <ReviewRow
-            key={row.id}
-            row={row}
-            value={selections.get(row.id) || ""}
-            onSelect={onSelect}
-          />
-        ))}
+        {rows.length ? (
+          rows.map((row) => (
+            <ReviewRow
+              key={row.id}
+              row={row}
+              value={selections.get(row.id) || ""}
+              onSelect={onSelect}
+            />
+          ))
+        ) : (
+          <p className="list-import__row-empty list-import__rows-empty">
+            Nothing in this group any more.{" "}
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => onFilter("all")}>
+              Show all
+            </button>
+          </p>
+        )}
       </div>
     </>
   );
