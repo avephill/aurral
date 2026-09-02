@@ -10,7 +10,7 @@ import {
   validateDownloadFolderPath,
 } from "../../services/downloadFolderConfig.js";
 import { normalizeExistingFileMode } from "../../services/weeklyFlow/weeklyFlowFileReuseMode.js";
-import { normalizeDateTimeFormat } from "../../config/constants.js";
+import { defaultData, normalizeDateTimeFormat } from "../../config/constants.js";
 import { normalizeQualityProfile } from "../../services/qualityProfileModel.js";
 
 const getSettingStmt = db.prepare("SELECT value FROM settings WHERE key = ?");
@@ -139,6 +139,7 @@ export const dbOps = {
       readStoredSettingJson("playlistArtwork"),
     );
     const inbox = dbHelpers.parseJSON(getSettingStmt.get("inbox")?.value) || {};
+    const userLibraries = readStoredSettingJson("userLibraries") || {};
     const blocklist = dbHelpers.parseJSON(
       getSettingStmt.get("blocklist")?.value
     );
@@ -187,6 +188,10 @@ export const dbOps = {
         news: inbox.news !== false,
         recommendedNews: inbox.recommendedNews === true,
         discoveries: inbox.discoveries !== false,
+      },
+      userLibraries: {
+        ...defaultData.settings.userLibraries,
+        ...userLibraries,
       },
       blocklist:
         blocklist && typeof blocklist === "object"
@@ -346,6 +351,12 @@ export const dbOps = {
           dbHelpers.stringifyJSON(
             normalizePlaylistArtworkSettings(settings.playlistArtwork),
           ),
+        );
+      }
+      if (settings.userLibraries !== undefined) {
+        upsertSettingStmt.run(
+          "userLibraries",
+          dbHelpers.stringifyJSON(settings.userLibraries),
         );
       }
       if (settings.blocklist !== undefined) {
