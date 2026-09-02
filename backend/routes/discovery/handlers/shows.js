@@ -88,10 +88,17 @@ export function registerShows(router) {
           }).slice(0, 18)
         : [];
       const libraryArtistNames = libraryArtistNamesStmt.all();
+      const { scopeCanonicalArtistsToUser } = await import(
+        "../../../services/userLibraryService.js"
+      );
+      // Shows are suggested from the artists you follow, so on a shared server
+      // they should follow your personal library rather than everyone's.
+      const scopedArtists = await scopeCanonicalArtistsToUser(req.user);
       const nearbyShows = await getNearbyShows({
         req,
         zipCode,
-        libraryArtists: () => [...iterateCanonicalArtistProjection({ pageSize: 100 })],
+        libraryArtists: () =>
+          scopedArtists || [...iterateCanonicalArtistProjection({ pageSize: 100 })],
         recommendedArtists,
         trendingArtists,
         limit: req.query.limit,

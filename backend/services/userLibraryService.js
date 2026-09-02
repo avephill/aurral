@@ -7,6 +7,7 @@ import { getPathMappings, resolveLocalPath } from "./pathMappings.js";
 import { NavidromeClient } from "./navidrome.js";
 import {
   getCanonicalAlbumCountsByArtistMbid,
+  getCanonicalArtistProjection,
   getCanonicalNewlyAvailableAlbums,
 } from "./libraryQueryService.js";
 import { logger } from "./logger.js";
@@ -156,6 +157,29 @@ export async function filterArtistsToUserLibrary(artists, user) {
   } catch (error) {
     logger.warn("library", `[UserLibraries] Could not filter to personal library: ${error.message}`);
     return list;
+  }
+}
+
+// The viewer's personal library as canonical artists, for the Discover
+// sections that are seeded from "the library" (releases, shows, genres).
+// Returns null when personal libraries are off so callers keep their existing
+// whole-library behaviour instead of silently narrowing to nothing.
+export async function scopeCanonicalArtistsToUser(user) {
+  const config = getUserLibrariesSettings();
+  if (!config.enabled || !user?.username) return null;
+  try {
+    const lidarr = await requireConfiguredLidarr();
+    const tagId = await lidarr.findTagId(getUserTagLabel(user.username));
+    if (tagId === null) return [];
+    const mbids = (await lidarr.listArtists())
+      .filter((artist) => artistHasTag(artist, tagId))
+      .map((artist) => String(artist.foreignArtistId || ""))
+      .filter(Boolean);
+    if (!mbids.length) return [];
+    return getCanonicalArtistProjection({ mbids });
+  } catch (error) {
+    logger.warn("library", `[UserLibraries] Could not scope artists: ${error.message}`);
+    return null;
   }
 }
 

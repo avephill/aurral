@@ -297,6 +297,7 @@ function buildCanonicalArtistProjectionQuery({
   pageSize = 100,
   offset = null,
   reference = null,
+  mbids = null,
 } = {}) {
   const normalizedPage = Math.max(1, Number.parseInt(page, 10) || 1);
   const normalizedPageSize = Math.min(
@@ -327,9 +328,20 @@ function buildCanonicalArtistProjectionQuery({
       ...references,
     );
   }
+  // Restricting to a known set of artists (a personal library, say) is far
+  // cheaper than materialising every artist and filtering afterwards.
+  const mbidFilter = Array.isArray(mbids)
+    ? [...new Set(mbids.map((value) => String(value || "").trim()).filter(Boolean))]
+    : null;
+  if (mbidFilter) {
+    if (mbidFilter.length === 0) return { parameters: [], sql: null };
+    where.push(`artist.mbid IN (${mbidFilter.map(() => "?").join(",")})`);
+    parameters.push(...mbidFilter);
+  }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
-  const limit = references.length ? "" : "LIMIT ? OFFSET ?";
-  if (!references.length) {
+  const unpaged = references.length > 0 || mbidFilter !== null;
+  const limit = unpaged ? "" : "LIMIT ? OFFSET ?";
+  if (!unpaged) {
     parameters.push(normalizedPageSize, normalizedOffset);
   }
   return {
@@ -388,6 +400,7 @@ function buildCanonicalArtistProjectionQuery({
 
 export function getCanonicalArtistProjection(options = {}) {
   const query = buildCanonicalArtistProjectionQuery(options);
+  if (!query.sql) return [];
   const rows = db.prepare(query.sql).all(...query.parameters);
   return rows.map(canonicalArtistProjection);
 }

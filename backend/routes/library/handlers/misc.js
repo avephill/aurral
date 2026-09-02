@@ -335,7 +335,18 @@ export function registerMisc(router) {
     try {
       const { getRecentMissingReleases } = await import(
         "../../../services/discovery/recentReleases.js"
-      );      const recentMissing = await getRecentMissingReleases(24);
+      );
+      const { scopeCanonicalArtistsToUser } = await import(
+        "../../../services/userLibraryService.js"
+      );
+      // Releases should be for artists the viewer actually follows, not for
+      // everything on the server. Returns null when personal libraries are off,
+      // which leaves the whole-library behaviour untouched.
+      const scopedArtists = await scopeCanonicalArtistsToUser(req.user);
+      const recentMissing = await getRecentMissingReleases(
+        24,
+        scopedArtists ? { artists: scopedArtists } : {},
+      );
 
       const cachedCovers = dbOps.getImages(
         recentMissing
