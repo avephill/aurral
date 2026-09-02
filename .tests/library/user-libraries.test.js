@@ -170,6 +170,31 @@ test("selectUserLibraryCatalog flags membership and other users' libraries, sort
   assert.equal(forMom[1].inLibrary, true);
 });
 
+test("selectUserLibraryCatalog reports albums on the server alongside Lidarr's total", () => {
+  const lidarrArtists = [
+    {
+      id: 1,
+      foreignArtistId: "a",
+      artistName: "Aimee Mann",
+      statistics: { albumCount: 22 },
+    },
+    { id: 2, foreignArtistId: "b", artistName: "Beak", statistics: { albumCount: 3 } },
+  ];
+  const catalog = selectUserLibraryCatalog({
+    lidarrArtists,
+    tagLabelsById: new Map(),
+    usernames: [],
+    viewerUsername: "avery",
+    albumCountsByMbid: new Map([["a", 12]]),
+  });
+
+  assert.equal(catalog[0].albumCount, 22);
+  assert.equal(catalog[0].libraryAlbumCount, 12);
+  // An artist with nothing on disk reports zero rather than inheriting Lidarr's count.
+  assert.equal(catalog[1].albumCount, 3);
+  assert.equal(catalog[1].libraryAlbumCount, 0);
+});
+
 test("planNavidromeLibraries creates missing libraries and assigns them to matching users", () => {
   const config = { navidromeRootPath: "/music/users" };
   const entries = [

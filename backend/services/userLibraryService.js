@@ -5,7 +5,10 @@ import { dbOps, userOps } from "../db/helpers/index.js";
 import { lidarrClient } from "./lidarrClient.js";
 import { getPathMappings, resolveLocalPath } from "./pathMappings.js";
 import { NavidromeClient } from "./navidrome.js";
-import { getCanonicalNewlyAvailableAlbums } from "./libraryQueryService.js";
+import {
+  getCanonicalAlbumCountsByArtistMbid,
+  getCanonicalNewlyAvailableAlbums,
+} from "./libraryQueryService.js";
 import { logger } from "./logger.js";
 
 const RECONCILE_DEBOUNCE_MS = 3000;
@@ -126,6 +129,36 @@ export async function getUserLibraryMembership(user, { forceRefresh = false } = 
   };
 }
 
+// Narrow a list of Lidarr artists to the ones in this user's personal library.
+// Returns the list untouched when personal libraries are off, so callers can
+// apply it unconditionally. Artists carry their own tags, so this needs one
+// tag lookup rather than a per-artist check.
+export async function filterArtistsToUserLibrary(artists, user) {
+  const list = Array.isArray(artists) ? artists : [];
+  const config = getUserLibrariesSettings();
+  if (!config.enabled || !user?.username) return list;
+  try {
+    const lidarr = await requireConfiguredLidarr();
+    const tagId = await lidarr.findTagId(getUserTagLabel(user.username));
+    if (tagId === null) return [];
+    // Match on MBID rather than tags: callers pass aurral's normalized artists,
+    // which carry no tag field, and Lidarr artists match on the same id anyway.
+    const memberMbids = new Set(
+      (await lidarr.listArtists())
+        .filter((artist) => artistHasTag(artist, tagId))
+        .map((artist) => String(artist.foreignArtistId || ""))
+        .filter(Boolean),
+    );
+    if (!memberMbids.size) return [];
+    return list.filter((artist) =>
+      memberMbids.has(String(artist.foreignArtistId || artist.mbid || "")),
+    );
+  } catch (error) {
+    logger.warn("library", `[UserLibraries] Could not filter to personal library: ${error.message}`);
+    return list;
+  }
+}
+
 export async function setUserLibraryMembership(user, mbids, member) {
   const config = getUserLibrariesSettings();
   if (!config.enabled) {
@@ -195,6 +228,7 @@ export function selectUserLibraryCatalog({
   tagLabelsById = new Map(),
   usernames = [],
   viewerUsername = "",
+  albumCountsByMbid = new Map(),
 } = {}) {
   const viewerTag = getUserTagLabel(viewerUsername);
   const userTags = buildUserTags(usernames);
@@ -210,6 +244,7 @@ export function selectUserLibraryCatalog({
         artistName: artist.artistName || "",
         sortName: artist.sortName || artist.artistName || "",
         albumCount: Number(stats.albumCount) || 0,
+        libraryAlbumCount: albumCountsByMbid.get(String(artist.foreignArtistId)) || 0,
         trackFileCount: Number(stats.trackFileCount) || 0,
         added: artist.added || null,
         inLibrary: !!viewerTag && labels.includes(viewerTag),
@@ -231,6 +266,7 @@ export async function getUserLibraryCatalog(user) {
       tagLabelsById: buildTagLabelsById(tagsRaw),
       usernames: userOps.getAllUsers().map((entry) => entry.username),
       viewerUsername: user?.username,
+      albumCountsByMbid: getCanonicalAlbumCountsByArtistMbid(),
     }),
   };
 }

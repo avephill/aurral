@@ -698,6 +698,25 @@ export function getCanonicalTrackCount({ source = null, availableOnly = false } 
   ).get(...parameters)?.total || 0);
 }
 
+// Albums actually present on the server, per artist MBID. Lidarr's artist
+// statistics count every album it knows about, monitored or not, which is not
+// what "how much of this artist do we have" means to someone picking artists.
+export function getCanonicalAlbumCountsByArtistMbid() {
+  const rows = db.prepare(
+    `SELECT artist.mbid AS mbid, COUNT(DISTINCT album.id) AS album_count
+     FROM library_albums AS album
+     JOIN library_artists AS artist ON artist.id = album.artist_id
+     JOIN library_album_tracks AS album_track ON album_track.album_id = album.id
+     JOIN library_media_files AS media
+       ON media.track_id = album_track.track_id
+       AND ${albumMediaCondition("media", "album_track")}
+       AND media.available = 1
+     WHERE artist.mbid IS NOT NULL
+     GROUP BY artist.id`,
+  ).all();
+  return new Map(rows.map((row) => [String(row.mbid), Number(row.album_count) || 0]));
+}
+
 export function getCanonicalTrackSample({
   source = null,
   availableOnly = false,

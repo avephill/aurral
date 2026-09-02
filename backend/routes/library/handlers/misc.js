@@ -305,7 +305,14 @@ export function registerMisc(router) {
 
   router.get("/recent", async (req, res) => {
     try {
-      const artists = await libraryManager.getAllArtists();
+      const { filterArtistsToUserLibrary } = await import(
+        "../../../services/userLibraryService.js"
+      );
+      const allArtists = await libraryManager.getAllArtists();
+      // With personal libraries on, "Recently Added" means recently added to
+      // *your* library, not to the server. Response is per-user from here, so
+      // it must not be cached publicly.
+      const artists = await filterArtistsToUserLibrary(allArtists, req.user);
       const recent = [...artists]
         .sort((a, b) => new Date(b.addedAt || b.added) - new Date(a.addedAt || a.added))
         .slice(0, 20)
@@ -314,7 +321,7 @@ export function registerMisc(router) {
           foreignArtistId: artist.foreignArtistId || artist.mbid,
           added: artist.addedAt || artist.added,
         }));
-      res.set("Cache-Control", "public, max-age=300");
+      res.set("Cache-Control", "private, max-age=300");
       res.json(recent);
     } catch (error) {
       res.status(500).json({
