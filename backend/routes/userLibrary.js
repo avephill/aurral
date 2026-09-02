@@ -6,6 +6,7 @@ import {
   getUserLibraryMembership,
   setUserLibraryMembership,
   reconcileUserLibraries,
+  getNewToServer,
 } from "../services/userLibraryService.js";
 import { logger } from "../services/logger.js";
 
@@ -31,6 +32,18 @@ router.get("/", requireAuth, noCache, async (req, res) => {
     res.json(membership);
   } catch (error) {
     handleError(res, error, "Failed to load user library");
+  }
+});
+
+router.get("/new", requireAuth, noCache, async (req, res) => {
+  try {
+    const result = await getNewToServer(req.user, {
+      days: req.query.days,
+      limit: req.query.limit,
+    });
+    res.json(result);
+  } catch (error) {
+    handleError(res, error, "Failed to load new-to-server albums");
   }
 });
 

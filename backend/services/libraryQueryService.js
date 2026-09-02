@@ -518,6 +518,65 @@ export function getCanonicalAlbumsByReleaseDate({
   return rows.map(canonicalDateAlbumProjection);
 }
 
+// Albums ordered by when their media first appeared on the server. "First
+// seen" is the earliest indexed file for the album, so re-scans, retags, and
+// partial re-rips do not make an old album look new again.
+export function getCanonicalNewlyAvailableAlbums({ since = 0, limit = 30 } = {}) {
+  const sinceMs = Math.max(0, Number(since) || 0);
+  const boundedLimit = Math.min(500, Math.max(1, Number.parseInt(limit, 10) || 30));
+  const rows = db.prepare(`
+    SELECT
+      album.id,
+      album.identity_key,
+      album.mbid,
+      album.release_group_mbid,
+      album.artist_id,
+      album.title,
+      album.release_date,
+      album.metadata_json,
+      artist.identity_key AS artist_identity_key,
+      artist.mbid AS artist_mbid,
+      artist.name AS artist_name,
+      artist.metadata_json AS artist_metadata_json,
+      MIN(media.created_at) AS first_seen_at,
+      COUNT(DISTINCT album_track.track_id) AS track_count
+    FROM library_albums AS album
+    JOIN library_artists AS artist ON artist.id = album.artist_id
+    JOIN library_album_tracks AS album_track ON album_track.album_id = album.id
+    JOIN library_media_files AS media
+      ON media.track_id = album_track.track_id
+      AND ${albumMediaCondition("media", "album_track")}
+      AND media.available = 1
+    GROUP BY album.id
+    HAVING first_seen_at >= ?
+    ORDER BY first_seen_at DESC, album.id DESC
+    LIMIT ?
+  `).all(sinceMs, boundedLimit);
+  return rows.map((row) => {
+    const metadata = parseJson(row.metadata_json) || {};
+    const artistMetadata = parseJson(row.artist_metadata_json) || {};
+    return {
+      id: String(row.id),
+      providerId: metadata.id == null ? null : String(metadata.id),
+      artistId: String(row.artist_id),
+      providerArtistId: artistMetadata.id == null ? null : String(artistMetadata.id),
+      artistName: row.artist_name,
+      artistMbid: row.artist_mbid || null,
+      foreignArtistId:
+        artistMetadata.foreignArtistId || row.artist_mbid || row.artist_identity_key,
+      mbid: row.mbid || row.release_group_mbid || null,
+      releaseGroupMbid: row.release_group_mbid || null,
+      foreignAlbumId: row.mbid || row.release_group_mbid || row.identity_key,
+      albumName: row.title,
+      title: row.title,
+      releaseDate: row.release_date,
+      albumType: metadata.albumType || metadata.releaseType || null,
+      trackCount: Number(row.track_count || 0),
+      firstSeenAt: Number(row.first_seen_at) || null,
+    };
+  });
+}
+
 export function getCanonicalTrackPath(albumReference, trackReference) {
   const albumValue = String(albumReference ?? "").trim();
   const trackValue = String(trackReference ?? "").trim();

@@ -1,7 +1,7 @@
 import { memo, useCallback, useState, useEffect } from "react";
 import { getReleaseGroupCover, getArtistCover } from "../utils/api/endpoints/artists.js";
 
-import { Music } from "lucide-react";
+import { Library, Music } from "lucide-react";
 import ArtistImage from "../components/ArtistImage";
 import AddActionButton from "../components/AddActionButton";
 import { ArtistContextMenu } from "../components/ArtistContextMenu";
@@ -178,6 +178,84 @@ export const ArtistCard = memo(
 );
 
 ArtistCard.displayName = "ArtistCard";
+const useAlbumCoverUrl = (album) => {
+  const releaseGroupMbid = album.mbid || album.foreignAlbumId;
+  const artistMbid = album.artistMbid || album.foreignArtistId;
+  const [fetchedCover, setFetchedCover] = useState(null);
+  const coverUrl = album.coverUrl || fetchedCover;
+
+  useEffect(() => {
+    if (album.coverUrl || fetchedCover) return;
+
+    const fetchCover = async () => {
+      if (releaseGroupMbid) {
+        try {
+          const data = await getReleaseGroupCover(releaseGroupMbid, {
+            artistName: album.artistName || "",
+            albumTitle: album.albumName || "",
+          });
+          if (data?.images?.length > 0) {
+            const front = data.images.find((img) => img.front) || data.images[0];
+            if (front?.image) { setFetchedCover(front.image); return; }
+          }
+        } catch {}
+      }
+      if (artistMbid) {
+        try {
+          const data = await getArtistCover(artistMbid, album.artistName);
+          if (data?.images?.length > 0) {
+            const front = data.images.find((img) => img.front) || data.images[0];
+            if (front?.image) setFetchedCover(front.image);
+          }
+        } catch {}
+      }
+    };
+
+    fetchCover();
+  }, [releaseGroupMbid, artistMbid, album.coverUrl, album.artistName, album.albumName, fetchedCover]);
+
+  return { coverUrl, releaseGroupMbid, artistMbid };
+};
+
+const useAlbumNavigation = ({ album, onNavigate, releaseGroupMbid, artistMbid, coverUrl }) =>
+  useCallback(() => {
+    const target = getReleaseNavigationTarget({
+      type: "album",
+      id: releaseGroupMbid,
+      artistMbid,
+      artistName: album.artistName,
+      title: album.albumName,
+      releaseDate: album.releaseDate,
+      coverUrl,
+    });
+    if (target) {
+      onNavigate(target.pathname, { state: target.state });
+    }
+  }, [
+    album.albumName,
+    album.artistName,
+    album.releaseDate,
+    artistMbid,
+    coverUrl,
+    onNavigate,
+    releaseGroupMbid,
+  ]);
+
+const AlbumCover = ({ coverUrl, albumName }) =>
+  coverUrl ? (
+    <img
+      src={coverUrl}
+      alt={albumName}
+      className="artist-discover-card__image"
+      loading="lazy"
+      decoding="async"
+    />
+  ) : (
+    <div className="artist-media-placeholder--discover">
+      <Music className="artist-icon-lg" />
+    </div>
+  );
+
 export const AlbumCard = memo(
   ({
     album,
@@ -186,65 +264,17 @@ export const AlbumCard = memo(
     isPending = false,
     onAlbumAction,
   }) => {
-    const releaseGroupMbid = album.mbid || album.foreignAlbumId;
-    const artistMbid = album.artistMbid || album.foreignArtistId;
-    const [fetchedCover, setFetchedCover] = useState(null);
-    const coverUrl = album.coverUrl || fetchedCover;
-
-    useEffect(() => {
-      if (album.coverUrl || fetchedCover) return;
-
-      const fetchCover = async () => {
-        if (releaseGroupMbid) {
-          try {
-            const data = await getReleaseGroupCover(releaseGroupMbid, {
-              artistName: album.artistName || "",
-              albumTitle: album.albumName || "",
-            });
-            if (data?.images?.length > 0) {
-              const front = data.images.find((img) => img.front) || data.images[0];
-              if (front?.image) { setFetchedCover(front.image); return; }
-            }
-          } catch {}
-        }
-        if (artistMbid) {
-          try {
-            const data = await getArtistCover(artistMbid, album.artistName);
-            if (data?.images?.length > 0) {
-              const front = data.images.find((img) => img.front) || data.images[0];
-              if (front?.image) setFetchedCover(front.image);
-            }
-          } catch {}
-        }
-      };
-
-      fetchCover();
-    }, [releaseGroupMbid, artistMbid, album.coverUrl, album.artistName, album.albumName, fetchedCover]);
+    const { coverUrl, releaseGroupMbid, artistMbid } = useAlbumCoverUrl(album);
     const albumArtistText = album.artistName || "Unknown Artist";
     const albumReleaseText = formatReleaseStatus(album.releaseDate);
     const isComplete = (album.statistics?.percentOfTracks || 0) > 0;
-    const handleClick = useCallback(() => {
-      const target = getReleaseNavigationTarget({
-        type: "album",
-        id: releaseGroupMbid,
-        artistMbid,
-        artistName: album.artistName,
-        title: album.albumName,
-        releaseDate: album.releaseDate,
-        coverUrl,
-      });
-      if (target) {
-        onNavigate(target.pathname, { state: target.state });
-      }
-    }, [
-      album.albumName,
-      album.artistName,
-      album.releaseDate,
-      artistMbid,
-      coverUrl,
+    const handleClick = useAlbumNavigation({
+      album,
       onNavigate,
       releaseGroupMbid,
-    ]);
+      artistMbid,
+      coverUrl,
+    });
 
     const canOpen = Boolean(releaseGroupMbid && artistMbid);
 
@@ -260,19 +290,7 @@ export const AlbumCard = memo(
       >
         <div className="artist-discover-card__cover-wrap">
           <div className={`artist-discover-card__cover${canOpen ? "" : " is-disabled"}`}>
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt={album.albumName}
-                className="artist-discover-card__image"
-                loading="lazy"
-                decoding="async"
-              />
-            ) : (
-              <div className="artist-media-placeholder--discover">
-                <Music className="artist-icon-lg" />
-              </div>
-            )}
+            <AlbumCover coverUrl={coverUrl} albumName={album.albumName} />
           </div>
           {isComplete ? (
             <div className="artist-discover-card__action">
@@ -341,6 +359,105 @@ export const AlbumCard = memo(
 );
 
 AlbumCard.displayName = "AlbumCard";
+
+const formatLibrariesText = (libraries) => {
+  const names = Array.isArray(libraries) ? libraries.filter(Boolean) : [];
+  if (names.length === 0) return null;
+  if (names.length === 1) return `In ${names[0]}'s library`;
+  if (names.length === 2) return `In ${names[0]}'s and ${names[1]}'s libraries`;
+  return `In ${names[0]}'s and ${names.length - 1} other libraries`;
+};
+
+export const NewToServerCard = memo(
+  ({ album, onNavigate, canAdd = false, isPending = false, onAddToMyLibrary }) => {
+    const { coverUrl, releaseGroupMbid, artistMbid } = useAlbumCoverUrl(album);
+    const albumArtistText = album.artistName || "Unknown Artist";
+    const librariesText = formatLibrariesText(album.libraries);
+    const addedText = album.firstSeenAt
+      ? `Added ${formatDate(new Date(album.firstSeenAt))}`
+      : null;
+    const metaText = [librariesText, addedText].filter(Boolean).join(" · ");
+    const addLabel = `Add ${albumArtistText} to My Library`;
+    const handleClick = useAlbumNavigation({
+      album,
+      onNavigate,
+      releaseGroupMbid,
+      artistMbid,
+      coverUrl,
+    });
+
+    const canOpen = Boolean(releaseGroupMbid && artistMbid);
+
+    return (
+      <div
+        role="button"
+        tabIndex={canOpen ? 0 : -1}
+        onClick={handleClick}
+        onKeyDown={(event) => handleCoverKeyDown(event, handleClick)}
+        className={`artist-discover-card artist-discover-card--album${canOpen ? "" : " is-disabled"}`}
+        aria-label={`Open ${album.albumName}`}
+        aria-disabled={!canOpen}
+      >
+        <div className="artist-discover-card__cover-wrap">
+          <div className={`artist-discover-card__cover${canOpen ? "" : " is-disabled"}`}>
+            <AlbumCover coverUrl={coverUrl} albumName={album.albumName} />
+          </div>
+          {canAdd && typeof onAddToMyLibrary === "function" ? (
+            <div
+              className="artist-discover-card__action"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <AddActionButton
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAddToMyLibrary(album);
+                }}
+                icon={Library}
+                isLoading={isPending}
+                disabled={isPending}
+                label={addLabel}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="artist-discover-card__content">
+          <div className="artist-discover-card__text">
+            <div className="artist-card-title-row--discover">
+              <span
+                className={`artist-card-title--discover${canOpen ? "" : " is-disabled"}`}
+                title={album.albumName}
+              >
+                {album.albumName}
+              </span>
+            </div>
+            <p className="artist-card-meta--discover" title={albumArtistText}>
+              {albumArtistText}
+            </p>
+            {metaText && (
+              <p className="artist-card-meta--discover" title={metaText}>
+                {metaText}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  },
+  (prevProps, nextProps) =>
+    prevProps.album.id === nextProps.album.id &&
+    prevProps.album.albumName === nextProps.album.albumName &&
+    prevProps.album.artistName === nextProps.album.artistName &&
+    prevProps.album.firstSeenAt === nextProps.album.firstSeenAt &&
+    prevProps.album.coverUrl === nextProps.album.coverUrl &&
+    (prevProps.album.libraries || []).join("|") === (nextProps.album.libraries || []).join("|") &&
+    prevProps.canAdd === nextProps.canAdd &&
+    prevProps.isPending === nextProps.isPending &&
+    prevProps.onNavigate === nextProps.onNavigate &&
+    prevProps.onAddToMyLibrary === nextProps.onAddToMyLibrary,
+);
+
+NewToServerCard.displayName = "NewToServerCard";
 export const ViewAllCard = memo(({ onClick, label = "View All" }) => {
   return (
     <button type="button" onClick={onClick} className="artist-view-all-card--discover">

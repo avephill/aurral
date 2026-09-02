@@ -2,6 +2,8 @@ import { getData, postData, deleteData } from "../core.js";
 
 export const getMyUserLibrary = (options = {}) => getData("/user-library", options);
 
+export const getNewToServer = (options = {}) => getData("/user-library/new", options);
+
 export const addArtistToMyLibrary = (mbid) => postData("/user-library/artists", { mbid });
 
 export const addArtistsToMyLibraryBulk = (mbids) =>

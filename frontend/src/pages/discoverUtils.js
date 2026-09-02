@@ -30,6 +30,7 @@ const DISCOVER_RECENTLY_ADDED_KEY = "discoverRecentlyAdded";
 const DISCOVER_RECENT_RELEASES_KEY = "discoverRecentReleases";
 
 export const DEFAULT_DISCOVER_SECTIONS = [
+  { id: "newToServer", label: "New to Server", enabled: true },
   { id: "recentlyAdded", label: "Recently Added", enabled: true },
   { id: "playlists", label: "Playlists", enabled: true },
   { id: "recommendedShows", label: "Shows Near You", enabled: true },

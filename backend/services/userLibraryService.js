@@ -5,11 +5,16 @@ import { dbOps, userOps } from "../db/helpers/index.js";
 import { lidarrClient } from "./lidarrClient.js";
 import { getPathMappings, resolveLocalPath } from "./pathMappings.js";
 import { NavidromeClient } from "./navidrome.js";
+import { getCanonicalNewlyAvailableAlbums } from "./libraryQueryService.js";
 import { logger } from "./logger.js";
 
 const RECONCILE_DEBOUNCE_MS = 3000;
 const RECONCILE_STARTUP_DELAY_MS = 20000;
 const RECONCILE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const NEW_TO_SERVER_DEFAULT_DAYS = 90;
+const NEW_TO_SERVER_MAX_DAYS = 365;
+const NEW_TO_SERVER_DEFAULT_LIMIT = 24;
+const NEW_TO_SERVER_MAX_LIMIT = 60;
 
 let reconcileTimer = null;
 let periodicTimer = null;
@@ -150,6 +155,98 @@ export async function setUserLibraryMembership(user, mbids, member) {
   return {
     changed: targets.map(mapMemberArtist),
     missing,
+  };
+}
+
+// Pure selection so the filtering rules can be unit-tested without Lidarr:
+// keep albums whose artist is in Lidarr but not tagged for the viewer, and
+// annotate each with the other users whose personal libraries hold it.
+export function selectNewToServerAlbums({
+  albums = [],
+  lidarrArtists = [],
+  tagLabelsById = new Map(),
+  usernames = [],
+  viewerUsername = "",
+  limit = NEW_TO_SERVER_DEFAULT_LIMIT,
+} = {}) {
+  const viewerTag = getUserTagLabel(viewerUsername);
+  const userTags = new Map(
+    usernames
+      .map((username) => [getUserTagLabel(username), username])
+      .filter(([label]) => label),
+  );
+  const artistsByMbid = new Map();
+  for (const artist of lidarrArtists) {
+    const mbid = String(artist?.foreignArtistId || "").trim();
+    if (mbid) artistsByMbid.set(mbid, artist);
+  }
+
+  const results = [];
+  for (const album of albums) {
+    const artist =
+      artistsByMbid.get(String(album?.foreignArtistId || "").trim()) ||
+      artistsByMbid.get(String(album?.artistMbid || "").trim());
+    if (!artist) continue;
+    const labels = (Array.isArray(artist.tags) ? artist.tags : [])
+      .map((id) => tagLabelsById.get(Number(id)))
+      .filter(Boolean);
+    if (viewerTag && labels.includes(viewerTag)) continue;
+    const libraries = labels
+      .filter((label) => userTags.has(label))
+      .map((label) => userTags.get(label));
+    results.push({
+      ...album,
+      artistMbid: artist.foreignArtistId,
+      foreignArtistId: artist.foreignArtistId,
+      artistName: album.artistName || artist.artistName,
+      libraries,
+    });
+    if (results.length >= limit) break;
+  }
+  return results;
+}
+
+export async function getNewToServer(user, { days, limit } = {}) {
+  const config = getUserLibrariesSettings();
+  if (!config.enabled) return { enabled: false, albums: [] };
+  if (!lidarrClient || !lidarrClient.isConfigured()) return { enabled: true, albums: [] };
+
+  const windowDays = Math.min(
+    NEW_TO_SERVER_MAX_DAYS,
+    Math.max(1, Number.parseInt(days, 10) || NEW_TO_SERVER_DEFAULT_DAYS),
+  );
+  const boundedLimit = Math.min(
+    NEW_TO_SERVER_MAX_LIMIT,
+    Math.max(1, Number.parseInt(limit, 10) || NEW_TO_SERVER_DEFAULT_LIMIT),
+  );
+
+  // Over-fetch so the viewer's own albums can be filtered out and still fill the rail.
+  const albums = getCanonicalNewlyAvailableAlbums({
+    since: Date.now() - windowDays * 24 * 60 * 60 * 1000,
+    limit: boundedLimit * 4,
+  });
+  if (!albums.length) return { enabled: true, albums: [] };
+
+  const [tagsRaw, lidarrArtists] = await Promise.all([
+    lidarrClient.getTags(),
+    lidarrClient.listArtists(),
+  ]);
+  const tagLabelsById = new Map(
+    (Array.isArray(tagsRaw) ? tagsRaw : [])
+      .filter((tag) => tag && typeof tag.label === "string")
+      .map((tag) => [Number(tag.id), tag.label.trim().toLowerCase()]),
+  );
+
+  return {
+    enabled: true,
+    albums: selectNewToServerAlbums({
+      albums,
+      lidarrArtists,
+      tagLabelsById,
+      usernames: userOps.getAllUsers().map((entry) => entry.username),
+      viewerUsername: user?.username,
+      limit: boundedLimit,
+    }),
   };
 }
 

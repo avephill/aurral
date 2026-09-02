@@ -26,8 +26,9 @@ import { DiscoverRail } from "../components/DiscoverRail";
 import { NewsArticleCard } from "../components/NewsArticleCard";
 import { DiscoverLayoutModal } from "./DiscoverLayoutModal";
 import { DiscoverPlaylistSection } from "./DiscoverPlaylistSection";
-import { AlbumCard, ArtistCard, ViewAllCard } from "./DiscoverCards";
+import { AlbumCard, ArtistCard, NewToServerCard, ViewAllCard } from "./DiscoverCards";
 import { useDiscoverLayoutState } from "./useDiscoverLayoutState";
+import { useNewToServer } from "../hooks/useUserLibrary.js";
 import {
   getDefaultDiscoverSections,
   getFallbackGenreSectionId,
@@ -82,6 +83,8 @@ function DiscoverPage() {
     handleRecentReleaseAlbumAction,
     handleDiscoveryFeedback,
   } = useDiscoverData();
+
+  const newToServer = useNewToServer({ enabled: !!authUser });
 
   // Snapshot the (possibly server-configured) defaults once per mount; the
   // bootstrap response has already been applied by the time this page renders.
@@ -263,6 +266,7 @@ function DiscoverPage() {
 
   const sectionAvailability = useMemo(
     () => ({
+      newToServer: newToServer.enabled && newToServer.albums.length > 0,
       recentlyAdded: recentlyAdded.length > 0,
       playlists: displayDiscoverPlaylists.length > 0 || !!playlistsUpdating,
       recentReleases: recentReleases.length > 0,
@@ -277,6 +281,8 @@ function DiscoverPage() {
       genreSections: genreSections.length > 0,
     }),
     [
+      newToServer.enabled,
+      newToServer.albums,
       recentlyAdded,
       displayDiscoverPlaylists,
       playlistsUpdating,
@@ -511,6 +517,35 @@ function DiscoverPage() {
                 }
               />
             </div>
+          </>
+        </DiscoverRail>
+      );
+    }
+
+    if (id === "newToServer") {
+      if (!sectionAvailability.newToServer) return null;
+      return (
+        <DiscoverRail
+          key="newToServer"
+          title="New to Server"
+          subtitle="Recently added to the server, not yet in your library"
+        >
+          <>
+            {newToServer.albums.slice(0, DISCOVER_PREVIEW_ITEM_LIMIT).map((album) => (
+              <div key={`new-${album.id}`} className="artist-discover-shelf-card">
+                <NewToServerCard
+                  album={album}
+                  onNavigate={navigate}
+                  canAdd={!!(album.artistMbid || album.foreignArtistId)}
+                  isPending={
+                    !!newToServer.pendingArtistMbid &&
+                    newToServer.pendingArtistMbid ===
+                      (album.artistMbid || album.foreignArtistId)
+                  }
+                  onAddToMyLibrary={newToServer.addArtist}
+                />
+              </div>
+            ))}
           </>
         </DiscoverRail>
       );

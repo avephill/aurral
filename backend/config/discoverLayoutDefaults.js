@@ -1,4 +1,5 @@
 export const DISCOVER_SECTION_IDS = [
+  "newToServer",
   "recentlyAdded",
   "playlists",
   "recommendedShows",
