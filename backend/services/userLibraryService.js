@@ -22,22 +22,28 @@ let startupTimer = null;
 let reconcileInFlight = null;
 let reconcileQueued = false;
 
+const cleanRootPath = (value) => String(value || "").trim().replace(/[\\/]+$/, "");
+
 export function getUserLibrariesSettings(settings = null) {
   const current = settings || dbOps.getSettings();
   const config = current?.userLibraries || {};
   return {
     enabled: config.enabled === true,
-    rootPath: String(config.rootPath || "").trim().replace(/\/+$/, ""),
+    rootPath: cleanRootPath(config.rootPath),
+    // Create/assign a Navidrome library per user folder from the reconciler.
+    manageNavidrome: config.manageNavidrome !== false,
+    // The libraries folder as Navidrome sees it; blank means same path as Aurral.
+    navidromeRootPath: cleanRootPath(config.navidromeRootPath),
   };
 }
 
 export function normalizeUserLibrariesSettings(input, existing = {}) {
+  const pick = (key, fallback) => (input?.[key] !== undefined ? input[key] : existing?.[key] ?? fallback);
   return {
-    enabled: input?.enabled !== undefined ? input.enabled === true : existing.enabled === true,
-    rootPath:
-      input?.rootPath !== undefined
-        ? String(input.rootPath || "").trim().replace(/\/+$/, "")
-        : String(existing.rootPath || "").trim().replace(/\/+$/, ""),
+    enabled: pick("enabled", false) === true,
+    rootPath: cleanRootPath(pick("rootPath", "")),
+    manageNavidrome: pick("manageNavidrome", true) !== false,
+    navidromeRootPath: cleanRootPath(pick("navidromeRootPath", "")),
   };
 }
 
@@ -64,6 +70,30 @@ const getUserTagLabel = (username) => String(username || "").trim().toLowerCase(
 function artistHasTag(artist, tagId) {
   return Array.isArray(artist?.tags) && artist.tags.some((id) => Number(id) === Number(tagId));
 }
+
+const buildTagLabelsById = (tagsRaw) =>
+  new Map(
+    (Array.isArray(tagsRaw) ? tagsRaw : [])
+      .filter((tag) => tag && typeof tag.label === "string")
+      .map((tag) => [Number(tag.id), tag.label.trim().toLowerCase()]),
+  );
+
+// Maps a Lidarr artist's tag ids to the Aurral usernames whose personal
+// libraries include it. Returns [labels, libraries].
+function resolveArtistLibraries(artist, tagLabelsById, userTags) {
+  const labels = (Array.isArray(artist?.tags) ? artist.tags : [])
+    .map((id) => tagLabelsById.get(Number(id)))
+    .filter(Boolean);
+  const libraries = labels.filter((label) => userTags.has(label)).map((label) => userTags.get(label));
+  return [labels, libraries];
+}
+
+const buildUserTags = (usernames) =>
+  new Map(
+    usernames
+      .map((username) => [getUserTagLabel(username), username])
+      .filter(([label]) => label),
+  );
 
 function mapMemberArtist(artist) {
   return {
@@ -158,6 +188,53 @@ export async function setUserLibraryMembership(user, mbids, member) {
   };
 }
 
+// Every Lidarr artist with the viewer's membership and which other users hold
+// it, for the bulk add/remove page. Pure so it can be tested without Lidarr.
+export function selectUserLibraryCatalog({
+  lidarrArtists = [],
+  tagLabelsById = new Map(),
+  usernames = [],
+  viewerUsername = "",
+} = {}) {
+  const viewerTag = getUserTagLabel(viewerUsername);
+  const userTags = buildUserTags(usernames);
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  return lidarrArtists
+    .filter((artist) => artist?.foreignArtistId)
+    .map((artist) => {
+      const [labels, libraries] = resolveArtistLibraries(artist, tagLabelsById, userTags);
+      const stats = artist.statistics || {};
+      return {
+        mbid: artist.foreignArtistId,
+        artistId: artist.id,
+        artistName: artist.artistName || "",
+        sortName: artist.sortName || artist.artistName || "",
+        albumCount: Number(stats.albumCount) || 0,
+        trackFileCount: Number(stats.trackFileCount) || 0,
+        added: artist.added || null,
+        inLibrary: !!viewerTag && labels.includes(viewerTag),
+        libraries: libraries.filter((username) => getUserTagLabel(username) !== viewerTag),
+      };
+    })
+    .sort((a, b) => collator.compare(a.sortName, b.sortName));
+}
+
+export async function getUserLibraryCatalog(user) {
+  const config = getUserLibrariesSettings();
+  if (!config.enabled) return { enabled: false, artists: [] };
+  const lidarr = await requireConfiguredLidarr();
+  const [tagsRaw, lidarrArtists] = await Promise.all([lidarr.getTags(), lidarr.listArtists()]);
+  return {
+    enabled: true,
+    artists: selectUserLibraryCatalog({
+      lidarrArtists,
+      tagLabelsById: buildTagLabelsById(tagsRaw),
+      usernames: userOps.getAllUsers().map((entry) => entry.username),
+      viewerUsername: user?.username,
+    }),
+  };
+}
+
 // Pure selection so the filtering rules can be unit-tested without Lidarr:
 // keep albums whose artist is in Lidarr but not tagged for the viewer, and
 // annotate each with the other users whose personal libraries hold it.
@@ -170,11 +247,7 @@ export function selectNewToServerAlbums({
   limit = NEW_TO_SERVER_DEFAULT_LIMIT,
 } = {}) {
   const viewerTag = getUserTagLabel(viewerUsername);
-  const userTags = new Map(
-    usernames
-      .map((username) => [getUserTagLabel(username), username])
-      .filter(([label]) => label),
-  );
+  const userTags = buildUserTags(usernames);
   const artistsByMbid = new Map();
   for (const artist of lidarrArtists) {
     const mbid = String(artist?.foreignArtistId || "").trim();
@@ -187,13 +260,8 @@ export function selectNewToServerAlbums({
       artistsByMbid.get(String(album?.foreignArtistId || "").trim()) ||
       artistsByMbid.get(String(album?.artistMbid || "").trim());
     if (!artist) continue;
-    const labels = (Array.isArray(artist.tags) ? artist.tags : [])
-      .map((id) => tagLabelsById.get(Number(id)))
-      .filter(Boolean);
+    const [labels, libraries] = resolveArtistLibraries(artist, tagLabelsById, userTags);
     if (viewerTag && labels.includes(viewerTag)) continue;
-    const libraries = labels
-      .filter((label) => userTags.has(label))
-      .map((label) => userTags.get(label));
     results.push({
       ...album,
       artistMbid: artist.foreignArtistId,
@@ -231,18 +299,13 @@ export async function getNewToServer(user, { days, limit } = {}) {
     lidarrClient.getTags(),
     lidarrClient.listArtists(),
   ]);
-  const tagLabelsById = new Map(
-    (Array.isArray(tagsRaw) ? tagsRaw : [])
-      .filter((tag) => tag && typeof tag.label === "string")
-      .map((tag) => [Number(tag.id), tag.label.trim().toLowerCase()]),
-  );
 
   return {
     enabled: true,
     albums: selectNewToServerAlbums({
       albums,
       lidarrArtists,
-      tagLabelsById,
+      tagLabelsById: buildTagLabelsById(tagsRaw),
       usernames: userOps.getAllUsers().map((entry) => entry.username),
       viewerUsername: user?.username,
       limit: boundedLimit,
@@ -337,17 +400,167 @@ export async function materializeUserLibrary(userDir, memberArtists, mappings) {
   return changes;
 }
 
-async function triggerNavidromeScan() {
+function getNavidromeClient() {
+  const settings = dbOps.getSettings();
+  const navidrome = settings?.integrations?.navidrome || {};
+  const client = new NavidromeClient(navidrome.url, navidrome.username, navidrome.password);
+  return client.isConfigured() ? client : null;
+}
+
+async function triggerNavidromeScan(client = getNavidromeClient()) {
+  if (!client) return;
   try {
-    const settings = dbOps.getSettings();
-    const navidrome = settings?.integrations?.navidrome || {};
-    const client = new NavidromeClient(navidrome.url, navidrome.username, navidrome.password);
-    if (!client.isConfigured()) return;
     await client.scanLibrary();
     logger.info("library", "[UserLibraries] Triggered Navidrome library scan");
   } catch (error) {
     logger.warn("library", `[UserLibraries] Navidrome scan failed: ${error.message}`);
   }
+}
+
+const normalizeLibraryPath = (value) => String(value || "").trim().replace(/[\\/]+$/, "");
+
+// Where Navidrome sees a user's folder. Same path as Aurral unless the admin
+// says the libraries folder is mounted elsewhere in the Navidrome container.
+export function resolveNavidromeUserLibraryPath(userDir, config) {
+  if (!config?.navidromeRootPath) return userDir;
+  return `${config.navidromeRootPath}/${path.basename(userDir)}`;
+}
+
+// Decide what to create and assign without touching Navidrome, so the rules
+// can be unit-tested. Libraries are matched by path; a name clash on a
+// different path is left alone rather than hijacked.
+export function planNavidromeLibraries({
+  entries = [],
+  libraries = [],
+  navidromeUsers = [],
+  userLibraryIds = new Map(),
+  config = {},
+} = {}) {
+  const byPath = new Map(libraries.map((lib) => [normalizeLibraryPath(lib.path), lib]));
+  const byName = new Map(libraries.map((lib) => [String(lib.name || "").toLowerCase(), lib]));
+  const navUsersByName = new Map(
+    navidromeUsers.map((user) => [String(user.userName || "").toLowerCase(), user]),
+  );
+  const create = [];
+  const assign = [];
+  const skipped = [];
+  for (const entry of entries) {
+    const navPath = resolveNavidromeUserLibraryPath(entry.userDir, config);
+    const name = String(entry.username || "").trim();
+    let library = byPath.get(normalizeLibraryPath(navPath)) || null;
+    if (!library) {
+      if (byName.has(name.toLowerCase())) {
+        skipped.push({ username: entry.username, reason: "name-in-use" });
+        continue;
+      }
+      create.push({ username: entry.username, name, path: navPath });
+    }
+    const navUser = navUsersByName.get(name.toLowerCase());
+    if (!navUser) {
+      skipped.push({ username: entry.username, reason: "no-navidrome-user" });
+      continue;
+    }
+    if (navUser.isAdmin) continue;
+    const current = userLibraryIds.get(String(navUser.id)) || [];
+    if (library && current.some((id) => Number(id) === Number(library.id))) continue;
+    assign.push({
+      username: entry.username,
+      navUserId: navUser.id,
+      libraryId: library ? library.id : null,
+      libraryPath: normalizeLibraryPath(navPath),
+      currentIds: current.map((id) => Number(id)),
+    });
+  }
+  return { create, assign, skipped };
+}
+
+// Ensure each populated user folder is a Navidrome library that the matching
+// Navidrome user (same username) can see. Needs the configured Navidrome
+// account to be an admin; otherwise the native API answers 403 and we skip.
+async function ensureNavidromeLibraries(entries, config) {
+  const result = { created: 0, assigned: 0, skipped: [] };
+  if (!config.manageNavidrome || !entries.length) return result;
+  const client = getNavidromeClient();
+  if (!client) return result;
+
+  let libraries;
+  let navidromeUsers;
+  try {
+    [libraries, navidromeUsers] = await Promise.all([client.getLibraries(), client.getUsers()]);
+  } catch (error) {
+    logger.warn(
+      "library",
+      `[UserLibraries] Navidrome library management skipped (needs an admin account): ${error.message}`,
+    );
+    return result;
+  }
+
+  const wanted = new Set(entries.map((entry) => String(entry.username || "").toLowerCase()));
+  const userLibraryIds = new Map();
+  for (const navUser of navidromeUsers) {
+    if (navUser.isAdmin || !wanted.has(String(navUser.userName || "").toLowerCase())) continue;
+    try {
+      const current = await client.getUserLibraries(navUser.id);
+      userLibraryIds.set(String(navUser.id), current.map((lib) => lib.id));
+    } catch (error) {
+      logger.warn(
+        "library",
+        `[UserLibraries] Could not read Navidrome libraries for ${navUser.userName}: ${error.message}`,
+      );
+    }
+  }
+
+  const plan = planNavidromeLibraries({ entries, libraries, navidromeUsers, userLibraryIds, config });
+  result.skipped = plan.skipped;
+  for (const item of plan.skipped) {
+    const detail =
+      item.reason === "name-in-use"
+        ? `a Navidrome library named "${item.username}" already points elsewhere`
+        : `no Navidrome user named "${item.username}" to assign it to`;
+    logger.info("library", `[UserLibraries] Navidrome: ${detail}`);
+  }
+
+  for (const item of plan.create) {
+    try {
+      await client.createLibrary(item.name, item.path);
+      result.created += 1;
+      logger.info("library", `[UserLibraries] Created Navidrome library "${item.name}" at ${item.path}`);
+    } catch (error) {
+      logger.warn(
+        "library",
+        `[UserLibraries] Failed to create Navidrome library "${item.name}": ${error.message}`,
+      );
+    }
+  }
+
+  if (plan.assign.length) {
+    // Re-read so freshly created libraries get their ids.
+    let refreshed = libraries;
+    if (result.created > 0) {
+      try {
+        refreshed = await client.getLibraries();
+      } catch {}
+    }
+    const idByPath = new Map(refreshed.map((lib) => [normalizeLibraryPath(lib.path), lib.id]));
+    for (const item of plan.assign) {
+      const libraryId = item.libraryId ?? idByPath.get(item.libraryPath);
+      if (libraryId == null) continue;
+      try {
+        await client.setUserLibraries(item.navUserId, [...item.currentIds, libraryId]);
+        result.assigned += 1;
+        logger.info(
+          "library",
+          `[UserLibraries] Gave Navidrome user "${item.username}" access to their library`,
+        );
+      } catch (error) {
+        logger.warn(
+          "library",
+          `[UserLibraries] Failed to assign Navidrome library to "${item.username}": ${error.message}`,
+        );
+      }
+    }
+  }
+  return result;
 }
 
 async function runReconcile() {
@@ -373,6 +586,7 @@ async function runReconcile() {
   const users = userOps.getAllUsers();
   let totalChanges = 0;
   const summary = [];
+  const populated = [];
 
   for (const user of users) {
     const tagId = tagIdsByLabel.get(getUserTagLabel(user.username));
@@ -385,6 +599,7 @@ async function runReconcile() {
       const changes = await materializeUserLibrary(userDir, memberArtists, mappings);
       totalChanges += changes;
       summary.push({ username: user.username, artists: memberArtists.length, changes });
+      if (memberArtists.length) populated.push({ username: user.username, userDir });
     } catch (error) {
       logger.warn(
         "library",
@@ -393,10 +608,11 @@ async function runReconcile() {
     }
   }
 
-  if (totalChanges > 0) {
+  const navidrome = await ensureNavidromeLibraries(populated, config);
+  if (totalChanges > 0 || navidrome.created > 0) {
     await triggerNavidromeScan();
   }
-  return { skipped: false, totalChanges, users: summary };
+  return { skipped: false, totalChanges, users: summary, navidrome };
 }
 
 export async function reconcileUserLibraries() {

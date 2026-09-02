@@ -3,13 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getMyUserLibrary,
   getNewToServer,
+  getUserLibraryCatalog,
   addArtistToMyLibrary,
+  addArtistsToMyLibraryBulk,
   removeArtistFromMyLibrary,
+  removeArtistsFromMyLibraryBulk,
 } from "../utils/api/endpoints/userLibrary.js";
 import { useToast } from "../contexts/ToastContext";
 
 const USER_LIBRARY_QUERY_KEY = ["user-library"];
 const NEW_TO_SERVER_QUERY_KEY = ["user-library", "new"];
+const CATALOG_QUERY_KEY = ["user-library", "catalog"];
 
 const errorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.message || fallback;
@@ -95,5 +99,65 @@ export function useNewToServer({ enabled = true, days, limit } = {}) {
     loading: query.isLoading,
     pendingArtistMbid,
     addArtist,
+  };
+}
+
+const pluralArtists = (count) => `${count} artist${count === 1 ? "" : "s"}`;
+
+// Whole main-library catalog with membership flags, plus bulk add/remove.
+export function useUserLibraryCatalog({ enabled = true } = {}) {
+  const queryClient = useQueryClient();
+  const { showSuccess, showError } = useToast();
+
+  const query = useQuery({
+    queryKey: CATALOG_QUERY_KEY,
+    queryFn: ({ signal }) => getUserLibraryCatalog({ signal }),
+    enabled,
+    staleTime: 30000,
+  });
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: USER_LIBRARY_QUERY_KEY });
+
+  const mutation = useMutation({
+    mutationFn: ({ mbids, action }) =>
+      action === "remove" ? removeArtistsFromMyLibraryBulk(mbids) : addArtistsToMyLibraryBulk(mbids),
+    onSuccess: (result, { action }) => {
+      const changed = Array.isArray(result?.changed) ? result.changed.length : 0;
+      const missing = Array.isArray(result?.missing) ? result.missing.length : 0;
+      const verb = action === "remove" ? "Removed" : "Added";
+      const preposition = action === "remove" ? "from" : "to";
+      showSuccess(
+        `${verb} ${pluralArtists(changed)} ${preposition} your library${missing ? ` (${missing} not in the main library)` : ""}`,
+      );
+      invalidate();
+    },
+    onError: (error, { action }) =>
+      showError(
+        errorMessage(
+          error,
+          action === "remove" ? "Failed to remove from your library" : "Failed to add to your library",
+        ),
+      ),
+  });
+
+  const apply = useCallback(
+    (mbids, action) => {
+      const list = Array.isArray(mbids) ? mbids.filter(Boolean) : [];
+      if (!list.length || mutation.isPending) return Promise.resolve(null);
+      return mutation.mutateAsync({ mbids: list, action }).catch(() => null);
+    },
+    [mutation],
+  );
+
+  return {
+    enabled: query.data?.enabled === true,
+    artists: Array.isArray(query.data?.artists) ? query.data.artists : [],
+    loading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+    pending: mutation.isPending,
+    pendingAction: mutation.isPending ? mutation.variables?.action : null,
+    addArtists: (mbids) => apply(mbids, "add"),
+    removeArtists: (mbids) => apply(mbids, "remove"),
   };
 }

@@ -37,6 +37,7 @@ import { noCache } from "../middleware/cache.js";
 import { requireAuth } from "../middleware/requirePermission.js";
 import { getImageProxyCacheSizeBytes } from "../services/imageProxyService.js";
 import { getDownloadSourceStatus } from "../services/downloadSourceService.js";
+import { getUserLibrariesSettings } from "../services/userLibraryService.js";
 import {
   DISCOVERY_PROVIDER_LASTFM,
   DISCOVERY_PROVIDER_LISTENBRAINZ_FALLBACK,
@@ -277,6 +278,7 @@ function buildBootstrapPayload(req) {
     payload.lastfmConfigured = !!getLastfmApiKey();
     payload.ticketmasterConfigured = !!getTicketmasterApiKey();
     payload.inboxEnabled = settings.inbox?.enabled !== false;
+    payload.userLibrariesEnabled = getUserLibrariesSettings(settings).enabled;
     const newsSettings = getNewsSettings();
     payload.newsConfigured = newsSettings.enabled && newsSettings.feeds.some(
       (feed) => feed.enabled && (feed.group === "custom" || newsSettings.groups[feed.group] !== false),

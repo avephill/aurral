@@ -4,6 +4,7 @@ import { noCache } from "../middleware/cache.js";
 import {
   getUserLibrariesSettings,
   getUserLibraryMembership,
+  getUserLibraryCatalog,
   setUserLibraryMembership,
   reconcileUserLibraries,
   getNewToServer,
@@ -35,6 +36,15 @@ router.get("/", requireAuth, noCache, async (req, res) => {
   }
 });
 
+// Every main-library artist with the viewer's membership, for bulk editing.
+router.get("/catalog", requireAuth, noCache, async (req, res) => {
+  try {
+    res.json(await getUserLibraryCatalog(req.user));
+  } catch (error) {
+    handleError(res, error, "Failed to load library catalog");
+  }
+});
+
 router.get("/new", requireAuth, noCache, async (req, res) => {
   try {
     const result = await getNewToServer(req.user, {
@@ -63,15 +73,17 @@ router.post("/artists", requireAuth, async (req, res) => {
 });
 
 router.post("/artists/bulk", requireAuth, async (req, res) => {
+  const action = req.body?.action === "remove" ? "remove" : "add";
   try {
-    const result = await setUserLibraryMembership(req.user, req.body?.mbids, true);
+    const result = await setUserLibraryMembership(req.user, req.body?.mbids, action === "add");
     res.json({
       success: true,
+      action,
       changed: result.changed,
       missing: result.missing,
     });
   } catch (error) {
-    handleError(res, error, "Failed to bulk-add artists to user library");
+    handleError(res, error, `Failed to bulk-${action} artists in user library`);
   }
 });
 

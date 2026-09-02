@@ -415,6 +415,24 @@ export class NavidromeClient {
     return this._nativeRequest("PUT", `/api/library/${id}`, payload);
   }
 
+  async getUsers() {
+    const users = await this._nativeRequest("GET", "/api/user");
+    return Array.isArray(users) ? users : [];
+  }
+
+  // Library access for a non-admin Navidrome user. Admins implicitly see every
+  // library, and Navidrome rejects assignments for them.
+  async getUserLibraries(userId) {
+    const libraries = await this._nativeRequest("GET", `/api/user/${encodeURIComponent(userId)}/library`);
+    return Array.isArray(libraries) ? libraries : [];
+  }
+
+  async setUserLibraries(userId, libraryIds) {
+    return this._nativeRequest("PUT", `/api/user/${encodeURIComponent(userId)}/library`, {
+      libraryIds: (Array.isArray(libraryIds) ? libraryIds : []).map((id) => Number(id)),
+    });
+  }
+
   async scanLibrary() {
     if (!this.isConfigured()) return null;
     try {

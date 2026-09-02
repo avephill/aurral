@@ -175,6 +175,8 @@ export const defaultData = {
     userLibraries: {
       enabled: false,
       rootPath: "",
+      manageNavidrome: true,
+      navidromeRootPath: "",
     },
   },
 };

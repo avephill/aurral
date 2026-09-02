@@ -8,4 +8,14 @@ export const LIBRARY_VIEWS = [
   { id: "artists", label: "Artists", path: "/library/artists" },
   { id: "genres", label: "Genres", path: "/library/genres" },
   { id: "playlists", label: "Playlists", path: "/library/playlists", permission: "accessFlow" },
+  // Personal-library bulk editor; only offered when the admin enabled user libraries.
+  { id: "mine", label: "My Library", path: "/library/mine", requiresUserLibraries: true },
 ];
+
+export const isLibraryViewAvailable = (view, { hasPermission, userLibrariesEnabled } = {}) => {
+  if (view.permission && !(typeof hasPermission === "function" && hasPermission(view.permission))) {
+    return false;
+  }
+  if (view.requiresUserLibraries && !userLibrariesEnabled) return false;
+  return true;
+};

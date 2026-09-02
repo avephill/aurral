@@ -23,7 +23,11 @@ import {
   buildWantedPath,
   WANTED_VIEWS,
 } from "../navigation/activityNavConfig";
-import { DEFAULT_LIBRARY_VIEW, LIBRARY_VIEWS } from "../navigation/libraryNavConfig";
+import {
+  DEFAULT_LIBRARY_VIEW,
+  LIBRARY_VIEWS,
+  isLibraryViewAvailable,
+} from "../navigation/libraryNavConfig";
 import { useDiscoverRecent } from "../contexts/DiscoverRecentProvider";
 import { useStorageHealth } from "../hooks/useStorageHealth";
 import SidebarStageBackdrop, {
@@ -43,6 +47,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
     : null;
   const hasFlowAccess = hasPermission("accessFlow");
   const canAccessSettings = user?.role === "admin" || !!user?.permissions?.accessSettings;
+  const userLibrariesEnabled = bootstrap?.userLibrariesEnabled === true;
   const { hasReview: hasReviewAlert } = useFlowWorkerActivity({
     enabled: hasFlowAccess,
   });
@@ -97,11 +102,11 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const activeLibraryView = useMemo(() => {
     if (!isOnLibrary) return null;
     const segment = location.pathname.replace(/^\/library\/?/, "").split("/")[0];
-    const visibleViews = LIBRARY_VIEWS.filter(
-      (view) => !view.permission || hasPermission(view.permission),
+    const visibleViews = LIBRARY_VIEWS.filter((view) =>
+      isLibraryViewAvailable(view, { hasPermission, userLibrariesEnabled }),
     );
     return visibleViews.some((view) => view.id === segment) ? segment : DEFAULT_LIBRARY_VIEW;
-  }, [isOnLibrary, location.pathname, hasPermission]);
+  }, [isOnLibrary, location.pathname, hasPermission, userLibrariesEnabled]);
 
   const activeActivityView = useMemo(() => {
     if (!isOnActivity) return null;
@@ -165,8 +170,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   );
 
   const navItems = useMemo(() => {
-    const libraryViews = LIBRARY_VIEWS.filter(
-      (view) => !view.permission || hasPermission(view.permission),
+    const libraryViews = LIBRARY_VIEWS.filter((view) =>
+      isLibraryViewAvailable(view, { hasPermission, userLibrariesEnabled }),
     );
     const items = [
       {
@@ -229,7 +234,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       { path: "/blocklist", label: "Blocklist", icon: Ban },
     ];
     return items.filter((item) => !item.permission || hasPermission(item.permission));
-  }, [newsConfigured, ticketmasterConfigured, hasPermission]);
+  }, [newsConfigured, ticketmasterConfigured, hasPermission, userLibrariesEnabled]);
 
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";
 

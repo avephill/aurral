@@ -176,16 +176,22 @@ export function SettingsUsersTab({
   const localBypassEnabled = settings?.security?.localNetworkBypass?.enabled === true;
   const userLibrariesEnabled = settings?.userLibraries?.enabled === true;
   const userLibrariesRootPath = settings?.userLibraries?.rootPath || "";
+  const userLibrariesManageNavidrome = settings?.userLibraries?.manageNavidrome !== false;
+  const userLibrariesNavidromeRootPath = settings?.userLibraries?.navidromeRootPath || "";
   const [syncingUserLibraries, setSyncingUserLibraries] = useState(false);
 
+  const userLibrariesState = {
+    enabled: userLibrariesEnabled,
+    rootPath: userLibrariesRootPath,
+    manageNavidrome: userLibrariesManageNavidrome,
+    navidromeRootPath: userLibrariesNavidromeRootPath,
+  };
+  const editUserLibraries = (patch) =>
+    updateSettings({ ...settings, userLibraries: { ...userLibrariesState, ...patch } });
   const saveUserLibraries = async (patch) => {
     const nextSettings = {
       ...settings,
-      userLibraries: {
-        enabled: userLibrariesEnabled,
-        rootPath: userLibrariesRootPath,
-        ...patch,
-      },
+      userLibraries: { ...userLibrariesState, ...patch },
     };
     updateSettings(nextSettings);
     try {
@@ -354,16 +360,38 @@ export function SettingsUsersTab({
                 type="text"
                 placeholder="/data/music/users"
                 value={userLibrariesRootPath}
-                onChange={(event) =>
-                  updateSettings({
-                    ...settings,
-                    userLibraries: {
-                      enabled: userLibrariesEnabled,
-                      rootPath: event.target.value,
-                    },
-                  })
-                }
+                onChange={(event) => editUserLibraries({ rootPath: event.target.value })}
                 onBlur={(event) => saveUserLibraries({ rootPath: event.target.value })}
+              />
+            </SettingsArrFormGroup>
+            <SettingsArrFormGroup
+              label="Manage Navidrome libraries"
+              help="On each sync, create a Navidrome library for every user folder and give the Navidrome user with the same username access to it. Requires the Navidrome account in Integrations to be an admin."
+            >
+              <div className="settings-toggle-row">
+                <span>{userLibrariesManageNavidrome ? "Enabled" : "Disabled"}</span>
+                <PillToggle
+                  className="settings-toggle"
+                  checked={userLibrariesManageNavidrome}
+                  disabled={!userLibrariesEnabled}
+                  onChange={(event) => saveUserLibraries({ manageNavidrome: event.target.checked })}
+                  aria-label="Manage Navidrome libraries"
+                />
+              </div>
+            </SettingsArrFormGroup>
+            <SettingsArrFormGroup
+              label="Libraries folder as seen by Navidrome"
+              labelFor="user-libraries-navidrome-root"
+              help="Only needed if Navidrome mounts the libraries folder at a different path than Aurral. Leave blank when both containers use the same path."
+            >
+              <SettingsInput
+                id="user-libraries-navidrome-root"
+                type="text"
+                placeholder={userLibrariesRootPath || "/music/users"}
+                value={userLibrariesNavidromeRootPath}
+                disabled={!userLibrariesEnabled || !userLibrariesManageNavidrome}
+                onChange={(event) => editUserLibraries({ navidromeRootPath: event.target.value })}
+                onBlur={(event) => saveUserLibraries({ navidromeRootPath: event.target.value })}
               />
             </SettingsArrFormGroup>
             <div className="arr-form-actions">
@@ -378,8 +406,13 @@ export function SettingsUsersTab({
                     if (result?.skipped) {
                       showError(`Sync skipped: ${result.reason}`);
                     } else {
+                      const navidrome = result?.navidrome || {};
+                      const extras = [
+                        navidrome.created ? `${navidrome.created} Navidrome librar${navidrome.created === 1 ? "y" : "ies"} created` : null,
+                        navidrome.assigned ? `${navidrome.assigned} user${navidrome.assigned === 1 ? "" : "s"} granted access` : null,
+                      ].filter(Boolean);
                       showSuccess(
-                        `Synced ${result?.users?.length ?? 0} user librar${(result?.users?.length ?? 0) === 1 ? "y" : "ies"} (${result?.totalChanges ?? 0} change${(result?.totalChanges ?? 0) === 1 ? "" : "s"})`,
+                        `Synced ${result?.users?.length ?? 0} user librar${(result?.users?.length ?? 0) === 1 ? "y" : "ies"} (${result?.totalChanges ?? 0} change${(result?.totalChanges ?? 0) === 1 ? "" : "s"})${extras.length ? `; ${extras.join(", ")}` : ""}`,
                       );
                     }
                   } catch (err) {

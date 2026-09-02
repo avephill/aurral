@@ -39,6 +39,7 @@ const SearchResultsPage = lazy(() => import("./pages/SearchResultsPage"));
 const DiscoverPage = lazy(() => import("./pages/DiscoverPage"));
 const ShowsPage = lazy(() => import("./pages/ShowsPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
+const MyLibraryPage = lazy(() => import("./pages/MyLibraryPage"));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const BlocklistPage = lazy(() => import("./pages/BlocklistPage"));
@@ -270,6 +271,7 @@ function AppContent() {
                           </PermissionRoute>
                         }
                       />
+                      <Route path="/library/mine" element={<MyLibraryPage />} />
                       <Route path="/library/album/:albumId" element={<LibraryPage />} />
                       <Route path="/library/artist/:artistId" element={<LibraryPage />} />
                       <Route path="/library/:section?" element={<LibraryPage />} />

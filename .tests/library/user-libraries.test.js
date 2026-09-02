@@ -8,7 +8,9 @@ import path from "node:path";
 import {
   materializeUserLibrary,
   normalizeUserLibrariesSettings,
+  planNavidromeLibraries,
   sanitizeUserFolderName,
+  selectUserLibraryCatalog,
 } from "../../backend/services/userLibraryService.js";
 
 async function makeFixture() {
@@ -115,14 +117,109 @@ test("sanitizeUserFolderName strips unsafe characters and falls back to user id"
 });
 
 test("normalizeUserLibrariesSettings merges input over existing values", () => {
-  const existing = { enabled: true, rootPath: "/data/music/users" };
+  const existing = {
+    enabled: true,
+    rootPath: "/data/music/users",
+    manageNavidrome: false,
+    navidromeRootPath: "/music/users",
+  };
   assert.deepEqual(normalizeUserLibrariesSettings(undefined, existing), existing);
   assert.deepEqual(normalizeUserLibrariesSettings({ enabled: false }, existing), {
+    ...existing,
     enabled: false,
-    rootPath: "/data/music/users",
   });
   assert.deepEqual(
-    normalizeUserLibrariesSettings({ rootPath: " /data/other/ " }, existing),
-    { enabled: true, rootPath: "/data/other" },
+    normalizeUserLibrariesSettings({ rootPath: " /data/other/ ", navidromeRootPath: "" }, existing),
+    { ...existing, rootPath: "/data/other", navidromeRootPath: "" },
   );
+  // Legacy saved settings without the Navidrome keys default to managing Navidrome.
+  assert.deepEqual(
+    normalizeUserLibrariesSettings(undefined, { enabled: true, rootPath: "/data/music/users" }),
+    { enabled: true, rootPath: "/data/music/users", manageNavidrome: true, navidromeRootPath: "" },
+  );
+});
+
+test("selectUserLibraryCatalog flags membership and other users' libraries, sorted by name", () => {
+  const tagLabelsById = new Map([[1, "mom"], [2, "avery"], [3, "flac"]]);
+  const lidarrArtists = [
+    { id: 2, foreignArtistId: "b", artistName: "The Beatles", sortName: "beatles, the", tags: [2, 3], statistics: { albumCount: 12, trackFileCount: 200 } },
+    { id: 1, foreignArtistId: "a", artistName: "Aimee Mann", sortName: "mann, aimee", tags: [1, 2] },
+    { id: 3, foreignArtistId: null, artistName: "No MBID", tags: [1] },
+  ];
+  const catalog = selectUserLibraryCatalog({
+    lidarrArtists,
+    tagLabelsById,
+    usernames: ["Mom", "avery"],
+    viewerUsername: "avery",
+  });
+  assert.deepEqual(catalog.map((artist) => artist.artistName), ["The Beatles", "Aimee Mann"]);
+  assert.equal(catalog[0].inLibrary, true);
+  assert.deepEqual(catalog[0].libraries, []);
+  assert.equal(catalog[0].albumCount, 12);
+  assert.equal(catalog[1].inLibrary, true);
+  assert.deepEqual(catalog[1].libraries, ["Mom"]);
+
+  const forMom = selectUserLibraryCatalog({
+    lidarrArtists,
+    tagLabelsById,
+    usernames: ["Mom", "avery"],
+    viewerUsername: "Mom",
+  });
+  assert.equal(forMom[0].inLibrary, false);
+  assert.deepEqual(forMom[0].libraries, ["avery"]);
+  assert.equal(forMom[1].inLibrary, true);
+});
+
+test("planNavidromeLibraries creates missing libraries and assigns them to matching users", () => {
+  const config = { navidromeRootPath: "/music/users" };
+  const entries = [
+    { username: "mom", userDir: "/data/music/users/mom" },
+    { username: "avery", userDir: "/data/music/users/avery" },
+    { username: "dad", userDir: "/data/music/users/dad" },
+    { username: "kid", userDir: "/data/music/users/kid" },
+  ];
+  const libraries = [
+    { id: 1, name: "Music Library", path: "/music/Library-main" },
+    { id: 2, name: "avery", path: "/music/users/avery/" },
+    { id: 3, name: "kid", path: "/music/somewhere-else" },
+  ];
+  const navidromeUsers = [
+    { id: "u-mom", userName: "Mom", isAdmin: false },
+    { id: "u-avery", userName: "avery", isAdmin: true },
+    { id: "u-kid", userName: "kid", isAdmin: false },
+  ];
+  const plan = planNavidromeLibraries({
+    entries,
+    libraries,
+    navidromeUsers,
+    userLibraryIds: new Map([["u-mom", [1]]]),
+    config,
+  });
+  assert.deepEqual(plan.create, [
+    { username: "mom", name: "mom", path: "/music/users/mom" },
+    { username: "dad", name: "dad", path: "/music/users/dad" },
+  ]);
+  // mom: new library, resolved by path after creation, keeps existing access.
+  assert.deepEqual(plan.assign, [
+    { username: "mom", navUserId: "u-mom", libraryId: null, libraryPath: "/music/users/mom", currentIds: [1] },
+  ]);
+  // avery is a Navidrome admin (sees everything); dad has no Navidrome user; kid's name is taken.
+  assert.deepEqual(plan.skipped, [
+    { username: "dad", reason: "no-navidrome-user" },
+    { username: "kid", reason: "name-in-use" },
+  ]);
+
+  // Already assigned: nothing to do.
+  const settled = planNavidromeLibraries({
+    entries: [entries[0]],
+    libraries: [...libraries, { id: 4, name: "mom", path: "/music/users/mom" }],
+    navidromeUsers,
+    userLibraryIds: new Map([["u-mom", [1, 4]]]),
+    config,
+  });
+  assert.deepEqual(settled, { create: [], assign: [], skipped: [] });
+
+  // No Navidrome root override: paths are the same as Aurral's.
+  const samePath = planNavidromeLibraries({ entries: [entries[0]], libraries: [], navidromeUsers, config: {} });
+  assert.equal(samePath.create[0].path, "/data/music/users/mom");
 });
