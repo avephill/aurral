@@ -1361,16 +1361,21 @@ export class LidarrClient {
         normalizedArtistIds,
         LIDARR_MAX_CONCURRENT,
         async (artistId) => {
-          const result = await this.request(
-            `/track?artistId=${artistId}`,
-            "GET",
-            null,
-            false,
-            requestOptions,
-          );
-          if (Array.isArray(result)) return result;
-          if (result?.records && Array.isArray(result.records)) return result.records;
-          return [];
+          try {
+            const result = await this.request(
+              `/track?artistId=${artistId}`,
+              "GET",
+              null,
+              false,
+              requestOptions,
+            );
+            if (Array.isArray(result)) return result;
+            if (result?.records && Array.isArray(result.records)) return result.records;
+            return [];
+          } catch (error) {
+            console.error(`Lidarr bulk track fetch failed for artist ${artistId}:`, error.message);
+            return [];
+          }
         },
         { stopOnError: true },
       );
@@ -1392,16 +1397,21 @@ export class LidarrClient {
         normalizedArtistIds,
         LIDARR_MAX_CONCURRENT,
         async (artistId) => {
-          const result = await this.request(
-            `/trackfile?artistId=${artistId}`,
-            "GET",
-            null,
-            false,
-            requestOptions,
-          );
-          if (Array.isArray(result)) return result;
-          if (result?.records && Array.isArray(result.records)) return result.records;
-          return [];
+          try {
+            const result = await this.request(
+              `/trackfile?artistId=${artistId}`,
+              "GET",
+              null,
+              false,
+              requestOptions,
+            );
+            if (Array.isArray(result)) return result;
+            if (result?.records && Array.isArray(result.records)) return result.records;
+            return [];
+          } catch (error) {
+            console.error(`Lidarr bulk track-file fetch failed for artist ${artistId}:`, error.message);
+            return [];
+          }
         },
         { stopOnError: true },
       );

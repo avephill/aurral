@@ -3,6 +3,7 @@ import { db } from "../config/db-sqlite.js";
 import { dbOps } from "../db/helpers/index.js";
 import { enqueueLibraryScanJob, getLibraryScanQueue } from "./honkerDb.js";
 import { isHonkerDatabaseClosedError } from "./honkerWorkerRuntime.js";
+import { lidarrClient } from "./lidarrClient.js";
 import { websocketService } from "./websocketService.js";
 
 const WORKER_NAME = "library-scan";
@@ -31,9 +32,18 @@ export function getScheduledLibraryScanJobId() {
 }
 
 export function hasCompletedLibraryScan() {
-  return Boolean(
+  const hasAnyCompleteScan = Boolean(
     db
       .prepare("SELECT 1 FROM library_scan_runs WHERE status = 'complete' LIMIT 1")
+      .get(),
+  );
+  if (!hasAnyCompleteScan) return false;
+  if (!lidarrClient.isConfigured()) return true;
+  return Boolean(
+    db
+      .prepare(
+        "SELECT 1 FROM library_scan_runs WHERE status = 'complete' AND source = 'lidarr' LIMIT 1",
+      )
       .get(),
   );
 }

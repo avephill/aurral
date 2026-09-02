@@ -79,6 +79,7 @@ export async function scanConfiguredLibrary({
       try {
         lidarr = await indexLidarrLibrary({ client: lidarrClient, syncSearch: false });
       } catch (error) {
+        console.error("Lidarr library indexing failed:", error.message);
         scanFailed = true;
         lidarr = {
           skipped: false,
