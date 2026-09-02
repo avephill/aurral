@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Library, Search, X } from "lucide-react";
+import { Check, Library, ListPlus, Search, X } from "lucide-react";
+import ArtistListImportModal from "../components/ArtistListImportModal";
 import { DotLoader } from "../components/DotLoader";
 import { useAuth } from "../contexts/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -37,6 +38,7 @@ export default function MyLibraryPage() {
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(() => new Set());
   const [visibleLimit, setVisibleLimit] = useState(PAGE_STEP);
+  const [importOpen, setImportOpen] = useState(false);
 
   const enabled = catalog.enabled || bootstrap?.userLibrariesEnabled === true;
   const artists = catalog.artists;
@@ -110,6 +112,11 @@ export default function MyLibraryPage() {
     });
   };
 
+  const applyImport = async (mbids) => {
+    const result = await catalog.addArtists(mbids);
+    if (result) setImportOpen(false);
+  };
+
   if (!catalog.loading && !enabled) {
     return (
       <div className="my-library-page">
@@ -138,10 +145,21 @@ export default function MyLibraryPage() {
               : ""}
           </p>
         </div>
-        <Link to="/library/artists" className="btn btn-secondary btn-sm">
-          <Library className="artist-icon-sm" aria-hidden="true" />
-          Browse the library
-        </Link>
+        <div className="my-library-page__header-actions">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setImportOpen(true)}
+            disabled={!artists.length}
+          >
+            <ListPlus className="artist-icon-sm" aria-hidden="true" />
+            Import a list
+          </button>
+          <Link to="/library/artists" className="btn btn-secondary btn-sm">
+            <Library className="artist-icon-sm" aria-hidden="true" />
+            Browse the library
+          </Link>
+        </div>
       </header>
 
       <div className="my-library-page__toolbar">
@@ -274,6 +292,15 @@ export default function MyLibraryPage() {
             </button>
           </div>
         </div>
+      ) : null}
+
+      {importOpen ? (
+        <ArtistListImportModal
+          artists={artists}
+          pending={catalog.pending}
+          onAdd={applyImport}
+          onClose={() => setImportOpen(false)}
+        />
       ) : null}
     </div>
   );
