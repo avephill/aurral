@@ -366,7 +366,7 @@ export function SettingsUsersTab({
             </SettingsArrFormGroup>
             <SettingsArrFormGroup
               label="Manage Navidrome libraries"
-              help="On each sync, create a Navidrome library for every user folder and give the Navidrome user with the same username access to it. Requires the Navidrome account in Integrations to be an admin."
+              help="On each sync, create a Navidrome library for every user folder and give the Navidrome user with the same username access to it. Requires the Navidrome account under Settings → Playback to be an admin. Admin users are skipped, since Navidrome already gives them every library."
             >
               <div className="settings-toggle-row">
                 <span>{userLibrariesManageNavidrome ? "Enabled" : "Disabled"}</span>
