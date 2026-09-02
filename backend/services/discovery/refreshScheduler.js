@@ -1,4 +1,5 @@
 import { dbOps } from "../../db/helpers/index.js";
+import { isDiscoveryEnabled } from "../../config/featureFlags.js";
 import { getLastfmApiKey } from "../apiClients/index.js";
 import { getCanonicalArtistProjection } from "../libraryQueryService.js";
 import {
@@ -169,6 +170,7 @@ function emitDiscoveryQueued(reason) {
 }
 
 export function enqueueDiscoveryRefresh(options = {}) {
+  if (!isDiscoveryEnabled()) return { enqueued: false, reason: "disabled" };
   const {
     force = false,
     reason = "manual",
@@ -224,6 +226,7 @@ export function enqueueDiscoveryRefresh(options = {}) {
 }
 
 export function scheduleNextDiscoveryRefresh() {
+  if (!isDiscoveryEnabled()) return { enqueued: false, reason: "disabled" };
   pruneDuplicateScheduledDiscoveryRefreshes();
   const cache = getDiscoveryCache();
   const refreshMs = getDiscoveryAutoRefreshHours() * 60 * 60 * 1000;
@@ -240,6 +243,7 @@ export function scheduleNextDiscoveryRefresh() {
 }
 
 export async function enqueueDiscoveryRefreshIfNeeded(options = {}) {
+  if (!isDiscoveryEnabled()) return { enqueued: false, reason: "disabled" };
   if (!(await isDiscoveryRefreshConfigured())) {
     return { enqueued: false, reason: "not_configured" };
   }
@@ -250,6 +254,7 @@ export async function enqueueDiscoveryRefreshIfNeeded(options = {}) {
 }
 
 export async function bootstrapDiscoveryRefresh() {
+  if (!isDiscoveryEnabled()) return;
   recoverDeadDiscoveryRefresh();
   const cache = getDiscoveryCache();
   if (

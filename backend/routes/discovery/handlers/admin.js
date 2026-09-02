@@ -17,6 +17,13 @@ export function registerAdmin(router) {
       reason: "manual",
       force: true,
     });
+    if (result.reason === "disabled") {
+      return res.status(403).json({
+        message: "Discovery is disabled on this server",
+        isUpdating: false,
+        reason: result.reason,
+      });
+    }
     if (!result.enqueued || result.reason === "already_updating") {
       return res.status(409).json({
         message: "Discovery update already in progress",

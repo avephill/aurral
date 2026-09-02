@@ -48,6 +48,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const hasFlowAccess = hasPermission("accessFlow");
   const canAccessSettings = user?.role === "admin" || !!user?.permissions?.accessSettings;
   const userLibrariesEnabled = bootstrap?.userLibrariesEnabled === true;
+  const discoveryEnabled = bootstrap?.discoveryEnabled !== false;
   const { hasReview: hasReviewAlert } = useFlowWorkerActivity({
     enabled: hasFlowAccess,
   });
@@ -174,12 +175,16 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       isLibraryViewAvailable(view, { hasPermission, userLibrariesEnabled }),
     );
     const items = [
-      {
-        path: "/discover",
-        label: "Discover",
-        icon: Sparkles,
-        section: "discover",
-      },
+      ...(discoveryEnabled
+        ? [
+            {
+              path: "/discover",
+              label: "Discover",
+              icon: Sparkles,
+              section: "discover",
+            },
+          ]
+        : []),
       {
         path: "/library",
         label: "Library",
@@ -234,7 +239,13 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       { path: "/blocklist", label: "Blocklist", icon: Ban },
     ];
     return items.filter((item) => !item.permission || hasPermission(item.permission));
-  }, [newsConfigured, ticketmasterConfigured, hasPermission, userLibrariesEnabled]);
+  }, [
+    newsConfigured,
+    ticketmasterConfigured,
+    hasPermission,
+    userLibrariesEnabled,
+    discoveryEnabled,
+  ]);
 
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";
 

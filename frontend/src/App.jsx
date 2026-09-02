@@ -255,7 +255,16 @@ function AppContent() {
                   )}
                   <Suspense fallback={<PageLoader />}>
                     <Routes>
-                      <Route path="/" element={<DiscoverPage />} />
+                      <Route
+                        path="/"
+                        element={
+                          bootstrap?.discoveryEnabled === false ? (
+                            <Navigate to="/library/artists" replace />
+                          ) : (
+                            <DiscoverPage />
+                          )
+                        }
+                      />
                       <Route path="/shows" element={<Navigate to="/shows/all" replace />} />
                       <Route path="/shows/:filter" element={<ShowsPage />} />
                       <Route path="/search" element={<SearchResultsPage />} />
