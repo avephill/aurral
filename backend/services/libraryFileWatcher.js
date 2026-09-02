@@ -4,6 +4,7 @@ import path from "node:path";
 import { resolvePlaylistRoot } from "./playlistPaths.js";
 import { isLibraryScanExcludedDirectory } from "./libraryFileScanner.js";
 import { lidarrClient } from "./lidarrClient.js";
+import { logger as defaultLogger } from "./logger.js";
 import { scheduleLibraryScan } from "./libraryScanWorker.js";
 import { getPathMappings, resolveLocalPath } from "./pathMappings.js";
 
@@ -82,23 +83,32 @@ async function resolveLibraryWatchRoots() {
 let watcherStarted = false;
 let activeWatcher = null;
 
-export async function refreshLibraryFileWatcher({ logger = console } = {}) {
+export async function refreshLibraryFileWatcher({ logger = defaultLogger } = {}) {
   if (!watcherStarted) return false;
   activeWatcher?.close();
   const playlistRoot = path.resolve(resolvePlaylistRoot());
+  const roots = await resolveLibraryWatchRoots();
+  // Registering a recursive watch walks the whole tree, which is slow on a
+  // large library. This runs on every settings save, so time it: a long setup
+  // here explains an unresponsive server better than anything in the JS profile.
+  const startedAt = Date.now();
   activeWatcher = createLibraryFileWatcher({
-    roots: await resolveLibraryWatchRoots(),
+    roots,
     onChange: (changedRoots) => scheduleLibraryScan({
       includeLidarr: changedRoots.some((root) => path.resolve(root) !== playlistRoot),
     }),
     onError: (error, root) => {
-      logger.warn?.(`[Library] Failed to watch ${root}:`, error?.message || error);
+      logger.warn?.("library", `Failed to watch ${root}: ${error?.message || error}`);
     },
   });
+  const elapsedMs = Date.now() - startedAt;
+  const message = `Watching ${roots.length} root(s) (setup ${elapsedMs}ms)`;
+  if (elapsedMs >= 1000) logger.warn?.("library", message);
+  else logger.info?.("library", message);
   return true;
 }
 
-export async function startLibraryFileWatcher({ logger = console } = {}) {
+export async function startLibraryFileWatcher({ logger = defaultLogger } = {}) {
   if (watcherStarted) return false;
   watcherStarted = true;
   try {

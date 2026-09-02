@@ -12,6 +12,7 @@ dns.setDefaultResultOrder("ipv4first");
 import { authMiddleware, isProxyAuthEnabled } from "./middleware/auth.js";
 import { handleOidcCallback, isOidcEnabled } from "./services/oidcAuth.js";
 import { logger } from "./services/logger.js";
+import { getSlowRequestThresholdMs, startEventLoopMonitor } from "./services/diagnostics.js";
 import { websocketService } from "./services/websocketService.js";
 import {
   getLidarrStatusSnapshot,
@@ -141,6 +142,25 @@ if (process.env.AUTH_PROXY_DOMAIN) {
 if (process.env.OIDC_DOMAIN) {
   connectSrcDirectives.push(process.env.OIDC_DOMAIN);
 }
+
+// Log requests that take long enough for a user to notice, so a slow page
+// points at an endpoint instead of a guess. Query strings are dropped: they
+// can carry tokens.
+const slowRequestThresholdMs = getSlowRequestThresholdMs();
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
+  res.on("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    if (durationMs < slowRequestThresholdMs) return;
+    logger.warn("perf", "Slow request", {
+      method: req.method,
+      path: String(req.originalUrl || req.url || "").split("?")[0],
+      status: res.statusCode,
+      durationMs: Math.round(durationMs),
+    });
+  });
+  next();
+});
 
 app.use(corsMiddleware);
 app.use(
@@ -416,6 +436,7 @@ process.once("SIGINT", () => {
 
 httpServer.listen(PORT, async () => {
   logger.info("system", `Server running on port ${PORT}`);
+  startEventLoopMonitor();
   bootstrapHonkerSchedules();
   initializeAppRuntime({ logger });
 });
