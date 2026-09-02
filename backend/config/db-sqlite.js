@@ -621,6 +621,24 @@ export const dbHelpers = {
 initializeSchemaOnStartup(db, dbHelpers);
 initializeLibrarySearchIndex(db);
 
+// Without sqlite_stat1 the query planner guesses, and on a large library it
+// guesses badly enough to build throwaway indexes mid-query: one Discover
+// query measured 316s with no stats and 31ms with them, for 141ms of ANALYZE.
+// Backfill once for databases created before this ran; refreshLibraryStats()
+// keeps them current after a scan changes the row counts.
+export function refreshLibraryStats() {
+  try {
+    db.exec("ANALYZE");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+if (!db.prepare("SELECT name FROM sqlite_master WHERE name = 'sqlite_stat1'").get()) {
+  refreshLibraryStats();
+}
+
 const existingDownloadFolder = db
   .prepare("SELECT value FROM settings WHERE key = ?")
   .get("downloadFolderPath");

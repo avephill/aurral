@@ -1,5 +1,5 @@
 import path from "node:path";
-import { db } from "../config/db-sqlite.js";
+import { db, refreshLibraryStats } from "../config/db-sqlite.js";
 import { resolvePlaylistRoot } from "./playlistPaths.js";
 import { scanMusicRoot } from "./libraryFileScanner.js";
 import { upsertLibraryArtist } from "./libraryMediaStore.js";
@@ -97,6 +97,9 @@ export async function scanConfiguredLibrary({
     if (scanFailed || local?.changed || lidarr?.changed) {
       rebuildLibrarySearchIndex();
       rebuildCanonicalGenreStats();
+      // A scan can change row counts by orders of magnitude, which is exactly
+      // when stale planner statistics turn library queries pathological.
+      refreshLibraryStats();
     }
   }
   return { local, lidarr };
