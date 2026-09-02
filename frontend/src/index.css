@@ -13603,6 +13603,9 @@ button.native-library-genre-row:focus-visible {
 
 .my-library-page__list {
   display: grid;
+  /* Full-width rows push the membership badge so far from the artist name that
+     the pairing is hard to read on a wide screen. */
+  max-width: 60rem;
   border-top: 1px solid var(--aurral-border);
 }
 
@@ -13624,8 +13627,26 @@ button.native-library-genre-row:focus-visible {
   background: var(--aurral-surface-selected);
 }
 
+/* Membership has to be legible from the left edge, where the eye already is,
+   not only from the badge at the far right. */
+.my-library-page__row.is-member {
+  background: color-mix(in srgb, var(--aurral-success) 8%, transparent);
+  box-shadow: inset 3px 0 0 var(--aurral-success);
+}
+
+.my-library-page__row.is-member:hover,
+.my-library-page__row.is-member:focus-within {
+  background: color-mix(in srgb, var(--aurral-success) 14%, transparent);
+}
+
+/* Selection is a different axis from membership, so it has to stay
+   distinguishable on a row that is both. */
 .my-library-page__row.is-selected {
   background: color-mix(in srgb, var(--aurral-control-on) 10%, var(--aurral-surface));
+}
+
+.my-library-page__row.is-selected.is-member {
+  background: color-mix(in srgb, var(--aurral-control-on) 16%, transparent);
 }
 
 .my-library-page__row--head {

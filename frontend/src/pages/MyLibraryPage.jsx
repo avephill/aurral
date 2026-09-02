@@ -281,13 +281,12 @@ export default function MyLibraryPage() {
 
 function ArtistRow({ artist, checked, onToggle }) {
   const librariesText = formatLibraries(artist.libraries);
-  // What matters when picking artists is how much of them is actually on the
-  // server, not how many albums Lidarr knows about.
+  // Albums actually on the server, not the count Lidarr knows about, which
+  // includes everything never downloaded.
   const onServer = Number(artist.libraryAlbumCount) || 0;
-  const known = Number(artist.albumCount) || 0;
-  const albumText =
-    known > onServer ? `${onServer} of ${pluralize(known, "album")}` : pluralize(onServer, "album");
-  const meta = [albumText, librariesText].filter(Boolean).join(" · ");
+  const meta = [`${pluralize(onServer, "album")} on server`, librariesText]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <label
       className={`my-library-page__row${checked ? " is-selected" : ""}${artist.inLibrary ? " is-member" : ""}`}
