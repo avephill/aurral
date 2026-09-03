@@ -49,6 +49,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const canAccessSettings = user?.role === "admin" || !!user?.permissions?.accessSettings;
   const userLibrariesEnabled = bootstrap?.userLibrariesEnabled === true;
   const discoveryEnabled = bootstrap?.discoveryEnabled !== false;
+  const libraryRecommendationsEnabled = bootstrap?.libraryRecommendationsEnabled !== false;
   const { hasReview: hasReviewAlert } = useFlowWorkerActivity({
     enabled: hasFlowAccess,
   });
@@ -262,29 +263,44 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         location.pathname === "/search" && location.search === "?type=recommended";
       const isTrendingActive =
         location.pathname === "/search" && location.search === "?type=trending";
-      return (
-        <nav className="sidebar-subnav" aria-label={`${item.label} views`}>
+      // Recommended and Trending both read the whole-library recommendation
+      // cache, so with that engine off they lead to a permanently empty page.
+      const links = [
+        hasFlowAccess ? (
           <Link
+            key="playlists"
             to="/discover/playlists"
             className={`sidebar-subnav-link${location.pathname.startsWith("/discover/playlists") ? " is-active" : ""}`}
             aria-current={location.pathname.startsWith("/discover/playlists") ? "page" : undefined}
           >
             Playlists
           </Link>
+        ) : null,
+        libraryRecommendationsEnabled ? (
           <Link
+            key="recommended"
             to="/search?type=recommended"
             className={`sidebar-subnav-link${isRecommendedActive ? " is-active" : ""}`}
             aria-current={isRecommendedActive ? "page" : undefined}
           >
             Recommended
           </Link>
+        ) : null,
+        libraryRecommendationsEnabled ? (
           <Link
+            key="trending"
             to="/search?type=trending"
             className={`sidebar-subnav-link${isTrendingActive ? " is-active" : ""}`}
             aria-current={isTrendingActive ? "page" : undefined}
           >
             Trending
           </Link>
+        ) : null,
+      ].filter(Boolean);
+      if (!links.length) return null;
+      return (
+        <nav className="sidebar-subnav" aria-label={`${item.label} views`}>
+          {links}
         </nav>
       );
     }

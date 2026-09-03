@@ -110,32 +110,29 @@ const readStoredAt = (key) => {
   }
 };
 
-const getStoredArraySourceKey = (primaryKey, fallbackKey) => {
+// These caches used to fall back to an unsuffixed, account-wide key when the
+// per-user one was missing. That key predates personal libraries, so its
+// contents are the whole server's rails: it would paint artists the viewer
+// does not follow, and on a shared browser it would paint another account's.
+// A missing per-user cache now just means a fetch.
+const getStoredArraySourceKey = (key) => {
   try {
-    const primary = JSON.parse(localStorage.getItem(primaryKey) || "null");
-    if (Array.isArray(primary)) return primaryKey;
-    if (primaryKey === fallbackKey) return null;
-    const fallback = JSON.parse(localStorage.getItem(fallbackKey) || "null");
-    return Array.isArray(fallback) ? fallbackKey : null;
+    return Array.isArray(JSON.parse(localStorage.getItem(key) || "null")) ? key : null;
   } catch {
     return null;
   }
 };
 
-const readStoredArray = (primaryKey, fallbackKey) => {
-  const sourceKey = getStoredArraySourceKey(primaryKey, fallbackKey);
-  if (!sourceKey) return null;
+const readStoredArray = (key) => {
+  if (!getStoredArraySourceKey(key)) return null;
   try {
-    return JSON.parse(localStorage.getItem(sourceKey) || "null");
+    return JSON.parse(localStorage.getItem(key) || "null");
   } catch {
     return null;
   }
 };
 
-const readStoredArrayAt = (primaryKey, fallbackKey) => {
-  const sourceKey = getStoredArraySourceKey(primaryKey, fallbackKey);
-  return sourceKey ? readStoredAt(sourceKey) : 0;
-};
+const readStoredArrayAt = (key) => (getStoredArraySourceKey(key) ? readStoredAt(key) : 0);
 
 const isStoredFresh = (key) => {
   const at = readStoredAt(key);
@@ -150,10 +147,10 @@ export const isStoredRecentReleasesFresh = (userId) =>
   isStoredFresh(getDiscoverRecentReleasesStorageKey(userId));
 
 export const getStoredRecentlyAddedAt = (userId) =>
-  readStoredArrayAt(getDiscoverRecentlyAddedStorageKey(userId), DISCOVER_RECENTLY_ADDED_KEY);
+  readStoredArrayAt(getDiscoverRecentlyAddedStorageKey(userId));
 
 export const getStoredRecentReleasesAt = (userId) =>
-  readStoredArrayAt(getDiscoverRecentReleasesStorageKey(userId), DISCOVER_RECENT_RELEASES_KEY);
+  readStoredArrayAt(getDiscoverRecentReleasesStorageKey(userId));
 
 export const readStoredNearbyLocation = () => {
   try {
@@ -179,10 +176,7 @@ export const writeStoredNearbyLocation = ({ mode, zip } = {}) => {
 };
 
 export const readStoredRecentlyAdded = (userId) => {
-  return readStoredArray(
-    getDiscoverRecentlyAddedStorageKey(userId),
-    DISCOVER_RECENTLY_ADDED_KEY,
-  );
+  return readStoredArray(getDiscoverRecentlyAddedStorageKey(userId));
 };
 
 export const writeStoredRecentlyAdded = (value, userId) => {
@@ -199,10 +193,7 @@ export const writeStoredRecentlyAdded = (value, userId) => {
 };
 
 export const readStoredRecentReleases = (userId) => {
-  return readStoredArray(
-    getDiscoverRecentReleasesStorageKey(userId),
-    DISCOVER_RECENT_RELEASES_KEY,
-  );
+  return readStoredArray(getDiscoverRecentReleasesStorageKey(userId));
 };
 
 export const writeStoredRecentReleases = (value, userId) => {
@@ -329,14 +320,10 @@ export const readStoredDiscoveryData = (userId) => {
     };
   };
   try {
-    const primaryKey = getDiscoveryCacheStorageKey(userId);
-    const primary = fromStorage(
-      JSON.parse(localStorage.getItem(primaryKey) || "null"),
-    );
-    if (primary) return primary;
-    if (primaryKey === DISCOVERY_CACHE_KEY) return null;
+    // Same reason as the rail caches above: no fall back to the account-wide
+    // key, whose contents predate personal libraries.
     return fromStorage(
-      JSON.parse(localStorage.getItem(DISCOVERY_CACHE_KEY) || "null"),
+      JSON.parse(localStorage.getItem(getDiscoveryCacheStorageKey(userId)) || "null"),
     );
   } catch {
     return null;

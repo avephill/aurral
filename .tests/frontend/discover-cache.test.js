@@ -6,7 +6,7 @@ import {
   readStoredRecentlyAdded,
 } from "../../frontend/src/pages/discoverUtils.js";
 
-test("discover cache timestamps follow fallback data and reject future values", () => {
+const withFakeStorage = (run) => {
   const originalStorage = globalThis.localStorage;
   const originalNow = Date.now;
   const values = new Map();
@@ -15,19 +15,39 @@ test("discover cache timestamps follow fallback data and reject future values", 
     setItem: (key, value) => values.set(key, String(value)),
   };
   Date.now = () => 1_000_000;
-
   try {
-    localStorage.setItem("discoverRecentlyAdded", JSON.stringify([{ id: 1 }]));
-    localStorage.setItem("discoverRecentlyAdded:at", "999000");
-    assert.deepEqual(readStoredRecentlyAdded(7), [{ id: 1 }]);
-    assert.equal(getStoredRecentlyAddedAt(7), 999000);
-    assert.equal(isStoredRecentlyAddedFresh(), true);
-
-    localStorage.setItem("discoverRecentlyAdded:at", "1001000");
-    assert.equal(isStoredRecentlyAddedFresh(), false);
+    run();
   } finally {
     Date.now = originalNow;
     if (originalStorage === undefined) delete globalThis.localStorage;
     else globalThis.localStorage = originalStorage;
   }
+};
+
+test("a user's discover cache reads only that user's key", () => {
+  withFakeStorage(() => {
+    // Written before caches were keyed per user, so it holds the whole
+    // server's rails. Reading it for a signed-in user would paint artists
+    // outside their personal library, or another account's on a shared browser.
+    localStorage.setItem("discoverRecentlyAdded", JSON.stringify([{ id: 1 }]));
+    localStorage.setItem("discoverRecentlyAdded:at", "999000");
+    assert.equal(readStoredRecentlyAdded(7), null);
+    assert.equal(getStoredRecentlyAddedAt(7), 0);
+
+    localStorage.setItem("discoverRecentlyAdded:7", JSON.stringify([{ id: 2 }]));
+    localStorage.setItem("discoverRecentlyAdded:7:at", "999000");
+    assert.deepEqual(readStoredRecentlyAdded(7), [{ id: 2 }]);
+    assert.equal(getStoredRecentlyAddedAt(7), 999000);
+  });
+});
+
+test("discover cache freshness rejects future timestamps", () => {
+  withFakeStorage(() => {
+    localStorage.setItem("discoverRecentlyAdded", JSON.stringify([{ id: 1 }]));
+    localStorage.setItem("discoverRecentlyAdded:at", "999000");
+    assert.equal(isStoredRecentlyAddedFresh(), true);
+
+    localStorage.setItem("discoverRecentlyAdded:at", "1001000");
+    assert.equal(isStoredRecentlyAddedFresh(), false);
+  });
 });

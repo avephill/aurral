@@ -793,13 +793,21 @@ function DiscoverPage() {
       }
 
       if (nearbyShowsError) {
+        // The commonest cause is a ZIP the provider cannot place, so the
+        // location control has to stay reachable — dropping it leaves the only
+        // way out of a bad ZIP behind a bad ZIP.
         return (
-          <section key="recommendedShows" className="artist-discover-section">
+          <DiscoverRail
+            key="recommendedShows"
+            title="Shows Near You"
+            onViewAll={() => navigate("/shows")}
+            headerActions={nearbyHeaderActions}
+          >
             <div className="artist-nearby-status">
               <h3 className="artist-nearby-status__title">Unable to load nearby shows</h3>
               <p className="artist-nearby-status__text">{nearbyShowsError}</p>
             </div>
-          </section>
+          </DiscoverRail>
         );
       }
 
