@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { db } from "../../backend/config/db-sqlite.js";
 import { getCanonicalNewlyAvailableAlbums } from "../../backend/services/libraryQueryService.js";
+import { rebuildLibraryRollups } from "../../backend/services/libraryRollups.js";
 import { selectNewToServerAlbums } from "../../backend/services/userLibraryService.js";
 import {
   linkLibraryAlbumTrack,
@@ -70,6 +71,10 @@ test("getCanonicalNewlyAvailableAlbums orders by first-seen media and respects t
   // Two genuinely new albums, newest first.
   seedAlbum({ artist, albumKey: "aaaaaaaa-0000-4000-8000-000000000002", title: "Last Week", files: [now - 7 * day, now - 6 * day] });
   seedAlbum({ artist, albumKey: "aaaaaaaa-0000-4000-8000-000000000003", title: "Yesterday", files: [now - 1 * day] });
+
+  // The query reads library_album_stats, which indexing rebuilds; seeding the
+  // base tables directly has to do the same.
+  rebuildLibraryRollups();
 
   const albums = getCanonicalNewlyAvailableAlbums({ since: now - 90 * day, limit: 10 });
   assert.deepEqual(albums.map((album) => album.albumName), ["Yesterday", "Last Week"]);

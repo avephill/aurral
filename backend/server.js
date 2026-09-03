@@ -12,7 +12,12 @@ dns.setDefaultResultOrder("ipv4first");
 import { authMiddleware, isProxyAuthEnabled } from "./middleware/auth.js";
 import { handleOidcCallback, isOidcEnabled } from "./services/oidcAuth.js";
 import { logger } from "./services/logger.js";
-import { getSlowRequestThresholdMs, startEventLoopMonitor } from "./services/diagnostics.js";
+import {
+  getSlowRequestThresholdMs,
+  recordRequestForRepeatDetection,
+  startEventLoopMonitor,
+} from "./services/diagnostics.js";
+import { ensureLibraryRollups } from "./services/libraryRollups.js";
 import { websocketService } from "./services/websocketService.js";
 import {
   getLidarrStatusSnapshot,
@@ -150,11 +155,13 @@ const slowRequestThresholdMs = getSlowRequestThresholdMs();
 app.use((req, res, next) => {
   const startedAt = process.hrtime.bigint();
   res.on("finish", () => {
+    const path = String(req.originalUrl || req.url || "").split("?")[0];
+    recordRequestForRepeatDetection({ method: req.method, path, userId: req.user?.id });
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
     if (durationMs < slowRequestThresholdMs) return;
     logger.warn("perf", "Slow request", {
       method: req.method,
-      path: String(req.originalUrl || req.url || "").split("?")[0],
+      path,
       status: res.statusCode,
       durationMs: Math.round(durationMs),
     });
@@ -437,6 +444,9 @@ process.once("SIGINT", () => {
 httpServer.listen(PORT, async () => {
   logger.info("system", `Server running on port ${PORT}`);
   startEventLoopMonitor();
+  // Builds the artist/album rollups if this database predates them. One-time
+  // per database; after that the scan keeps them current.
+  ensureLibraryRollups();
   bootstrapHonkerSchedules();
   initializeAppRuntime({ logger });
 });

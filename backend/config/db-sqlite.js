@@ -304,6 +304,33 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_library_media_files_scan_id
     ON library_media_files (last_seen_scan_id);
 
+  -- Rollups of the artist -> album -> track -> media join, which is otherwise
+  -- recomputed on every request that lists artists or newly available albums.
+  -- On a large library that join costs the better part of a second each time
+  -- while producing byte-identical results between scans, so it is done once
+  -- when the library is indexed instead. Rebuilt by libraryRollups.js.
+  CREATE TABLE IF NOT EXISTS library_artist_stats (
+    artist_id INTEGER PRIMARY KEY,
+    album_count INTEGER NOT NULL DEFAULT 0,
+    track_count INTEGER NOT NULL DEFAULT 0,
+    size_on_disk INTEGER NOT NULL DEFAULT 0,
+    sources TEXT,
+    available INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (artist_id) REFERENCES library_artists(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS library_album_stats (
+    album_id INTEGER PRIMARY KEY,
+    first_seen_at INTEGER,
+    track_count INTEGER NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (album_id) REFERENCES library_albums(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_library_album_stats_first_seen
+    ON library_album_stats (first_seen_at DESC, album_id DESC);
+
   CREATE TABLE IF NOT EXISTS aurral_history (
     id TEXT PRIMARY KEY,
     kind TEXT NOT NULL,

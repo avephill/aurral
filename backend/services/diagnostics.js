@@ -61,6 +61,47 @@ export function startEventLoopMonitor() {
   return true;
 }
 
+// A client that refetches the same endpoint in a loop looks like nothing at
+// all once the endpoint is fast: no error, no slow request, just steady load
+// nobody asked for. This counts identical GETs per user and complains once per
+// window, so the next occurrence names itself instead of having to be caught
+// in the act.
+const repeatCounts = new Map();
+let repeatWindowStartedAt = Date.now();
+
+export const getRepeatRequestThreshold = () =>
+  readEnvNumber("AURRAL_REPEAT_REQUEST_LIMIT", 10);
+export const getRepeatRequestWindowMs = () =>
+  readEnvNumber("AURRAL_REPEAT_REQUEST_WINDOW_MS", 60000);
+
+export function recordRequestForRepeatDetection({ method, path, userId }) {
+  if (method !== "GET") return;
+  const windowMs = getRepeatRequestWindowMs();
+  const now = Date.now();
+  if (now - repeatWindowStartedAt >= windowMs) {
+    repeatCounts.clear();
+    repeatWindowStartedAt = now;
+  }
+  const key = `${userId || "anon"} ${path}`;
+  const seen = (repeatCounts.get(key) || 0) + 1;
+  repeatCounts.set(key, seen);
+
+  const threshold = getRepeatRequestThreshold();
+  // Only on the crossing, or a busy loop would log as often as it fetches.
+  if (seen !== threshold) return;
+  logger.warn("perf", "Repeated identical requests", {
+    path,
+    userId: userId || null,
+    count: seen,
+    windowS: Math.round(windowMs / 1000),
+  });
+}
+
+export function resetRepeatRequestTracking() {
+  repeatCounts.clear();
+  repeatWindowStartedAt = Date.now();
+}
+
 export function stopEventLoopMonitor() {
   if (timer) clearInterval(timer);
   timer = null;

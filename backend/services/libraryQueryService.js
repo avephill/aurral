@@ -369,11 +369,11 @@ function buildCanonicalArtistProjectionQuery({
       artist.sort_name,
       artist.metadata_json,
       artist.created_at,
-      COUNT(DISTINCT album.id) AS album_count,
-      COUNT(DISTINCT album_track.track_id) AS track_count,
-      COALESCE(SUM(CASE WHEN media.available = 1 THEN media.size ELSE 0 END), 0) AS size_on_disk,
-      GROUP_CONCAT(DISTINCT media.source) AS sources,
-      MAX(CASE WHEN media.available = 1 THEN 1 ELSE 0 END) AS available,
+      COALESCE(stats.album_count, 0) AS album_count,
+      COALESCE(stats.track_count, 0) AS track_count,
+      COALESCE(stats.size_on_disk, 0) AS size_on_disk,
+      stats.sources AS sources,
+      COALESCE(stats.available, 0) AS available,
       CASE WHEN EXISTS (
         SELECT 1
         FROM library_scan_runs AS scan
@@ -388,11 +388,10 @@ function buildCanonicalArtistProjectionQuery({
           ), 0)
       ) THEN 1 ELSE 0 END AS stale
     FROM artist_page AS artist
-    LEFT JOIN library_albums AS album ON album.artist_id = artist.id
-    LEFT JOIN library_album_tracks AS album_track ON album_track.album_id = album.id
-    LEFT JOIN library_media_files AS media ON media.track_id = album_track.track_id
-      AND (media.album_id = album_track.album_id OR media.album_id IS NULL)
-    GROUP BY artist.id
+    -- Counts come from library_artist_stats, rebuilt when the library is
+    -- indexed. Aggregating the album/track/media join here instead cost most
+    -- of a second per request for results that only change on a scan.
+    LEFT JOIN library_artist_stats AS stats ON stats.artist_id = artist.id
     ORDER BY artist.sort_name COLLATE NOCASE, artist.name COLLATE NOCASE, artist.id
   `,
   };
@@ -551,18 +550,16 @@ export function getCanonicalNewlyAvailableAlbums({ since = 0, limit = 30 } = {})
       artist.mbid AS artist_mbid,
       artist.name AS artist_name,
       artist.metadata_json AS artist_metadata_json,
-      MIN(media.created_at) AS first_seen_at,
-      COUNT(DISTINCT album_track.track_id) AS track_count
-    FROM library_albums AS album
+      stats.first_seen_at AS first_seen_at,
+      stats.track_count AS track_count
+    FROM library_album_stats AS stats
+    JOIN library_albums AS album ON album.id = stats.album_id
     JOIN library_artists AS artist ON artist.id = album.artist_id
-    JOIN library_album_tracks AS album_track ON album_track.album_id = album.id
-    JOIN library_media_files AS media
-      ON media.track_id = album_track.track_id
-      AND ${albumMediaCondition("media", "album_track")}
-      AND media.available = 1
-    GROUP BY album.id
-    HAVING first_seen_at >= ?
-    ORDER BY first_seen_at DESC, album.id DESC
+    -- Aggregating every album's media to return the newest handful meant
+    -- scanning the whole library per request; library_album_stats carries the
+    -- same numbers with an index on first_seen_at.
+    WHERE stats.first_seen_at >= ?
+    ORDER BY stats.first_seen_at DESC, album.id DESC
     LIMIT ?
   `).all(sinceMs, boundedLimit);
   return rows.map((row) => {

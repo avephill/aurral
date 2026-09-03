@@ -5,6 +5,7 @@ import { scanMusicRoot } from "./libraryFileScanner.js";
 import { upsertLibraryArtist } from "./libraryMediaStore.js";
 import { indexLidarrLibrary } from "./libraryLidarrIndexer.js";
 import { rebuildLibrarySearchIndex } from "./librarySearchIndex.js";
+import { rebuildLibraryRollups } from "./libraryRollups.js";
 import { rebuildCanonicalGenreStats } from "./libraryQueryService.js";
 import { musicbrainzGetArtistNameByMbid } from "./apiClients/index.js";
 
@@ -97,6 +98,9 @@ export async function scanConfiguredLibrary({
     if (scanFailed || local?.changed || lidarr?.changed) {
       rebuildLibrarySearchIndex();
       rebuildCanonicalGenreStats();
+      // Artist and album counts are read from rollups now, so they have to be
+      // rebuilt here or every listing serves the previous scan's numbers.
+      rebuildLibraryRollups();
       // A scan can change row counts by orders of magnitude, which is exactly
       // when stale planner statistics turn library queries pathological.
       refreshLibraryStats();
