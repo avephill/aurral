@@ -1307,7 +1307,6 @@ function LibraryPage() {
         .slice(0, 12),
     [genreStats],
   );
-  const homeTracks = ownedLibraryTracks.slice(0, 12);
   const libraryAlbum = routeAlbumId ? albumsById.get(String(routeAlbumId)) || null : null;
   const libraryArtist = routeArtistId ? artistsById.get(String(routeArtistId)) || null : null;
   const hasMissingAlbumTracks = Boolean(
@@ -2191,12 +2190,6 @@ function LibraryPage() {
           <div ref={homeAlbumsGridRef} className="native-library-grid">
             {homeAlbums.map(renderAlbumCard)}
           </div>
-        </section>
-      )}
-      {homeTracks.length > 0 && (
-        <section className="native-library-section">
-          {renderSectionHeader("Tracks", ownedLibraryTracks.length, "/library/tracks")}
-          {renderTrackList(homeTracks, "Library tracks")}
         </section>
       )}
     </div>

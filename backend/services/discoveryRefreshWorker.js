@@ -1,5 +1,5 @@
 import createHonkerWorker from "./honkerWorkerFactory.js";
-import { isDiscoveryEnabled } from "../config/featureFlags.js";
+import { isDiscoveryRefreshEnabled } from "../config/featureFlags.js";
 import { getDiscoveryRefreshQueue } from "./honkerDb.js";
 import {
   clearDiscoveryUpdateProgress,
@@ -14,7 +14,7 @@ import {
   scheduleNextDiscoveryRefresh,
 } from "./discovery/refreshScheduler.js";
 async function runDiscoveryRefresh(payload) {
-  if (!isDiscoveryEnabled()) {
+  if (!isDiscoveryRefreshEnabled()) {
     getDiscoveryCache().isUpdating = false;
     clearDiscoveryUpdateProgress();
     return;

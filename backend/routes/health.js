@@ -9,7 +9,11 @@ import {
   getMetadataProviderHealthSnapshot,
 } from "../services/apiClients/index.js";
 import { APP_VERSION } from "../config/constants.js";
-import { isDiscoveryEnabled, isPlaylistsEnabled } from "../config/featureFlags.js";
+import {
+  isDiscoveryEnabled,
+  isLibraryRecommendationsEnabled,
+  isPlaylistsEnabled,
+} from "../config/featureFlags.js";
 import { getDefaultDiscoverLayout } from "../config/discoverLayoutDefaults.js";
 import {
   resolveRequestUser,
@@ -254,6 +258,7 @@ function buildBootstrapPayload(req) {
     oidcLogoutUrl: oidcInfo.oidcLogoutUrl,
     playlistsEnabled: isPlaylistsEnabled(),
     discoveryEnabled: isDiscoveryEnabled(),
+    libraryRecommendationsEnabled: isLibraryRecommendationsEnabled(),
     discoverDefaultLayout: getDefaultDiscoverLayout(),
     onboardingRequired: !onboardingDone,
     dateTimeFormat: settings.dateTimeFormat,

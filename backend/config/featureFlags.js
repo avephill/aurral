@@ -12,3 +12,24 @@ export const isPlaylistsEnabled = () => process.env.AURRAL_PLAYLISTS_ENABLED !==
 // is hidden. Discovery samples the whole library, which is expensive on a large
 // one, so this exists to keep it from running at all.
 export const isDiscoveryEnabled = () => process.env.AURRAL_DISCOVERY_ENABLED !== "false";
+
+// AURRAL_LIBRARY_RECOMMENDATIONS_ENABLED=false drops the whole-library
+// recommendation engine: no taste profile, no recommendation pipeline, no
+// genre stats, and the three rails built from them ("Recommended", "Global
+// Trending", "Because You Like") disappear from Discover.
+//
+// Those rails describe one taste profile sampled from the entire server. That
+// is defensible on a single-owner install and meaningless on a shared one,
+// where every member curates their own personal library — and it is by far the
+// most expensive thing discovery does. The per-user rails (New to Server,
+// Recently Added, Recent Releases, Shows Near You, Artist News) are scoped to
+// the viewer's library and keep working.
+export const isLibraryRecommendationsEnabled = () =>
+  process.env.AURRAL_LIBRARY_RECOMMENDATIONS_ENABLED !== "false";
+
+// The discovery refresh exists to build that whole-library cache — taste
+// profile, recommendations, genre stats and the discovery playlists derived
+// from them — so it only runs when both switches are on. The rails that read
+// the library per-user fetch on request and never wait for it.
+export const isDiscoveryRefreshEnabled = () =>
+  isDiscoveryEnabled() && isLibraryRecommendationsEnabled();
