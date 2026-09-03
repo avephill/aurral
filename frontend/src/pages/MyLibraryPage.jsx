@@ -30,7 +30,7 @@ const matchesQuery = (artist, query) => {
 };
 
 export default function MyLibraryPage() {
-  useDocumentTitle("My Library");
+  useDocumentTitle("Bulk migration");
   const { user, bootstrap } = useAuth();
   const catalog = useUserLibraryCatalog({ enabled: !!user });
   const [query, setQuery] = useState("");
@@ -122,7 +122,7 @@ export default function MyLibraryPage() {
       <div className="my-library-page">
         <header className="my-library-page__header">
           <div>
-            <h1 className="page-title">My Library</h1>
+            <h1 className="page-title">Bulk migration</h1>
             <p className="page-subtitle">
               Personal libraries are not enabled on this server. An admin can turn them on under
               Settings → Users.
@@ -137,7 +137,7 @@ export default function MyLibraryPage() {
     <div className="my-library-page">
       <header className="my-library-page__header">
         <div>
-          <h1 className="page-title">My Library</h1>
+          <h1 className="page-title">Bulk migration</h1>
           <p className="page-subtitle">
             Choose which artists from the main library appear in your personal library.
             {artists.length

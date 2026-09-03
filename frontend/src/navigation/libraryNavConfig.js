@@ -11,7 +11,7 @@ export const LIBRARY_VIEWS = [
   { id: "genres", label: "Genres", path: "/library/genres" },
   { id: "playlists", label: "Playlists", path: "/library/playlists", permission: "accessFlow" },
   // Personal-library bulk editor; only offered when the admin enabled user libraries.
-  { id: "mine", label: "My Library", path: "/library/mine", requiresUserLibraries: true },
+  { id: "mine", label: "Bulk migration", path: "/library/mine", requiresUserLibraries: true },
 ];
 
 export const isLibraryViewAvailable = (view, { hasPermission, userLibrariesEnabled } = {}) => {
