@@ -42,7 +42,7 @@ export function registerAdmin(router) {
       dbOps.clearImages();
       await clearImageProxyCache();
       clearApiCaches();
-      res.json({ message: "Image cache cleared" });
+      res.json({ message: "Artwork cache cleared" });
     } catch (err) {
       res.status(500).json({
         message: `Failed to clear cache: ${err.message || "Internal server error"}`,

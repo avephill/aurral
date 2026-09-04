@@ -347,6 +347,8 @@ router.get("/", noCache, async (req, res) => {
         lastScan: null,
       };
       const discoveryUpdateStatus = getDiscoveryUpdateStatus();
+      const artworkLinkCount = dbOps.countImages();
+      const nativeImageCacheSizeBytes = await getImageProxyCacheSizeBytes();
       payload.discovery = {
         provider: getLastfmApiKey()
           ? DISCOVERY_PROVIDER_LASTFM
@@ -357,8 +359,10 @@ router.get("/", noCache, async (req, res) => {
         ...discoveryUpdateStatus,
         recommendationsCount: discoveryCache?.recommendations?.length || 0,
         globalTopCount: discoveryCache?.globalTop?.length || 0,
-        cachedImagesCount: dbOps.countImages(),
-        cachedImagesSizeBytes: await getImageProxyCacheSizeBytes(),
+        artworkLinkCount,
+        nativeImageCacheSizeBytes,
+        cachedImagesCount: artworkLinkCount,
+        cachedImagesSizeBytes: nativeImageCacheSizeBytes,
       };
       payload.websocket = {
         clients: wsStats.totalClients,
