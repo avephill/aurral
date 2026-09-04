@@ -306,6 +306,8 @@ export class NavidromeClient {
           response = await axios.post(url, body, { headers });
         } else if (method === "PUT") {
           response = await axios.put(url, body, { headers });
+        } else if (method === "DELETE") {
+          response = await axios.delete(url, { headers });
         } else {
           throw new Error(`Unsupported method: ${method}`);
         }
