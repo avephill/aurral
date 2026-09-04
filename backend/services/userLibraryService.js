@@ -398,7 +398,11 @@ async function pruneStaleSymlinks(userDir, desired) {
       await fsp.unlink(linkPath);
       changes += 1;
       if (target) {
+        // Still wanted, so it is rebuilt below once its target is back. Worth
+        // logging: this is the line that accounts for a link a scanner has
+        // been reporting as broken.
         desired.set(entry.name, target);
+        logger.info("library", `[UserLibraries] Removed broken symlink ${linkPath}`);
       } else {
         logger.info("library", `[UserLibraries] Removed stale symlink ${linkPath}`);
       }
