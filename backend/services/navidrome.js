@@ -433,6 +433,32 @@ export class NavidromeClient {
     });
   }
 
+  async getPlaylists() {
+    const playlists = await this._nativeRequest("GET", "/api/playlist?_end=1000");
+    return Array.isArray(playlists) ? playlists : [];
+  }
+
+  // Navidrome pages this endpoint; playlists here run to thousands of tracks.
+  async getPlaylistTracks(playlistId, { limit = 5000 } = {}) {
+    const tracks = await this._nativeRequest(
+      "GET",
+      `/api/playlist/${encodeURIComponent(playlistId)}/tracks?_end=${Number(limit)}`,
+    );
+    return Array.isArray(tracks) ? tracks : [];
+  }
+
+  // A file's path is stored relative to its library root, so the same file
+  // symlinked into a personal library carries the identical path there. That
+  // is the only identity shared across libraries: Navidrome's own persistent
+  // id deliberately prepends the library id, so it cannot be used for this.
+  async findSongsByPath(path) {
+    const songs = await this._nativeRequest(
+      "GET",
+      `/api/song?_end=25&path=${encodeURIComponent(String(path || ""))}`,
+    );
+    return Array.isArray(songs) ? songs : [];
+  }
+
   async scanLibrary() {
     if (!this.isConfigured()) return null;
     try {
