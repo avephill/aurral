@@ -451,6 +451,26 @@ export class NavidromeClient {
   // symlinked into a personal library carries the identical path there. That
   // is the only identity shared across libraries: Navidrome's own persistent
   // id deliberately prepends the library id, so it cannot be used for this.
+  // Appends in payload order.
+  async addPlaylistTracks(playlistId, mediaFileIds) {
+    return this._nativeRequest(
+      "POST",
+      `/api/playlist/${encodeURIComponent(playlistId)}/tracks`,
+      { ids: (Array.isArray(mediaFileIds) ? mediaFileIds : []).map(String) },
+    );
+  }
+
+  // Takes playlist_tracks ids (the entry), not media_file ids.
+  async removePlaylistTracks(playlistId, playlistTrackIds) {
+    const ids = (Array.isArray(playlistTrackIds) ? playlistTrackIds : []).map(String);
+    if (!ids.length) return null;
+    const query = ids.map((id) => `id=${encodeURIComponent(id)}`).join("&");
+    return this._nativeRequest(
+      "DELETE",
+      `/api/playlist/${encodeURIComponent(playlistId)}/tracks?${query}`,
+    );
+  }
+
   async findSongsByPath(path) {
     const songs = await this._nativeRequest(
       "GET",
