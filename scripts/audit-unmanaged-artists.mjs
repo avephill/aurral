@@ -46,6 +46,18 @@ const artists = db
   .prepare("SELECT name, json_extract(metadata_json, '$.path') AS path FROM library_artists")
   .all();
 
+// Whether Lidarr manages a folder is decided by the track files it knows about,
+// not by artist paths. A collaboration album sits in its own folder - "Johann
+// Sebastian Bach; Yo-Yo Ma" - which is under neither artist's path, so matching
+// on artist paths alone reports well-managed albums as orphans.
+const managedFolders = new Set();
+for (const row of db.prepare("SELECT path FROM library_media_files").all()) {
+  const filePath = String(row?.path || "");
+  if (!filePath.startsWith(`${LIBRARY_ROOT}/`)) continue;
+  const [folder] = filePath.slice(LIBRARY_ROOT.length + 1).split("/");
+  if (folder) managedFolders.add(folder);
+}
+
 const folderSet = new Set(folders);
 const byFolderName = new Map();
 const byNormalized = new Map();
@@ -83,7 +95,9 @@ for (const artist of artists) {
   }
 }
 
-const orphaned = folders.filter((folder) => !claimedFolders.has(folder)).sort();
+const orphaned = folders
+  .filter((folder) => !claimedFolders.has(folder) && !managedFolders.has(folder))
+  .sort();
 
 // How much music is actually stranded, so the number means something.
 const AUDIO = new Set([".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav", ".wma", ".aac", ".alac", ".aiff"]);
