@@ -248,3 +248,42 @@ test("planNavidromeLibraries creates missing libraries and assigns them to match
   const samePath = planNavidromeLibraries({ entries: [entries[0]], libraries: [], navidromeUsers, config: {} });
   assert.equal(samePath.create[0].path, "/data/music/users/mom");
 });
+
+test("materializeUserLibrary clears a self-referential symlink", async (t) => {
+  const { root, userDir } = await makeFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  // "Geologist" -> "Geologist" resolves forever, so a scanner walking it gives
+  // up with ELOOP after reporting Geologist/Geologist/Geologist/...
+  await fsp.mkdir(userDir, { recursive: true });
+  const link = path.join(userDir, "Geologist");
+  await fsp.symlink("Geologist", link, "dir");
+
+  const changes = await materializeUserLibrary(
+    userDir,
+    [{ path: path.join(userDir, "Geologist") }],
+    [],
+  );
+
+  assert.equal(changes, 1);
+  await assert.rejects(() => fsp.lstat(link), { code: "ENOENT" });
+});
+
+test("materializeUserLibrary clears symlinks whose target has gone away", async (t) => {
+  const { root, mainDir, userDir } = await makeFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const artist = { path: path.join(mainDir, "Radiohead") };
+  await materializeUserLibrary(userDir, [artist], []);
+  const link = path.join(userDir, "Radiohead");
+  assert.ok((await fsp.lstat(link)).isSymbolicLink());
+
+  // The artist folder is renamed in the main library, so the link dangles.
+  await fsp.rename(path.join(mainDir, "Radiohead"), path.join(mainDir, "Radiohead (renamed)"));
+
+  const changes = await materializeUserLibrary(userDir, [artist], []);
+
+  assert.equal(changes, 1);
+  assert.equal(fs.existsSync(link), false);
+  await assert.rejects(() => fsp.lstat(link), { code: "ENOENT" });
+});

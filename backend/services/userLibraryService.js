@@ -389,7 +389,9 @@ async function pruneStaleSymlinks(userDir, desired) {
     if (target) {
       try {
         const currentTarget = path.resolve(userDir, await fsp.readlink(linkPath));
-        if (currentTarget === path.resolve(target)) continue;
+        // A link whose target has since been renamed or removed stays dangling
+        // forever otherwise, and every scan reports it as an invalid symlink.
+        if (currentTarget === path.resolve(target) && fs.existsSync(currentTarget)) continue;
       } catch {}
     }
     try {
@@ -418,6 +420,18 @@ export async function materializeUserLibrary(userDir, memberArtists, mappings) {
     const localPath = resolveLocalPath(remotePath, mappings);
     const linkName = path.basename(localPath.replace(/[\\/]+$/, ""));
     if (!linkName || linkName === "." || linkName === "..") continue;
+    // A target inside the farm itself would produce a symlink pointing at its
+    // own path - "Geologist" -> "Geologist" - which resolves forever and makes
+    // a scanner give up with ELOOP. It means Lidarr's artist path is already
+    // inside a personal library, so there is nothing here worth linking.
+    const relativeToUserDir = path.relative(userDir, localPath);
+    if (relativeToUserDir && !relativeToUserDir.startsWith("..") && !path.isAbsolute(relativeToUserDir)) {
+      logger.warn(
+        "library",
+        `[UserLibraries] Skipping ${localPath}: artist folder is inside the personal library`,
+      );
+      continue;
+    }
     desired.set(linkName, localPath);
   }
 
