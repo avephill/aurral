@@ -1373,6 +1373,9 @@ export class LidarrClient {
             if (result?.records && Array.isArray(result.records)) return result.records;
             return [];
           } catch (error) {
+            // A single unreachable artist must not abort a whole library scan,
+            // but a caller that asked for errors still gets them.
+            if (throwOnError) throw error;
             console.error(`Lidarr bulk track fetch failed for artist ${artistId}:`, error.message);
             return [];
           }
@@ -1409,6 +1412,9 @@ export class LidarrClient {
             if (result?.records && Array.isArray(result.records)) return result.records;
             return [];
           } catch (error) {
+            // A single unreachable artist must not abort a whole library scan,
+            // but a caller that asked for errors still gets them.
+            if (throwOnError) throw error;
             console.error(`Lidarr bulk track-file fetch failed for artist ${artistId}:`, error.message);
             return [];
           }

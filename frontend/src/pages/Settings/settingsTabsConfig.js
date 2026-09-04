@@ -255,7 +255,7 @@ const SETTINGS_SEARCH_METADATA = {
     },
   },
   users: {
-    sections: ["Change password", "Local network auto-login", "Users"],
+    sections: ["Change password", "Local network auto-login", "Users", "Personal libraries"],
     services: {
       Authentication: "login password security",
       Permissions: "roles access control",
@@ -270,6 +270,10 @@ const SETTINGS_SEARCH_METADATA = {
       Password: "create edit user account",
       Permissions: "roles manage users access",
       "Plex account": "link user playback identity",
+      "Personal libraries": "per user navidrome library symlink farm",
+      "Libraries folder": "per user navidrome library root path symlink",
+      "Manage Navidrome libraries": "per user navidrome library create assign",
+      "Libraries folder as seen by Navidrome": "per user navidrome library container path mapping",
     },
   },
 };
