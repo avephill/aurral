@@ -11,6 +11,7 @@ import {
   getCanonicalNewlyAvailableAlbums,
 } from "./libraryQueryService.js";
 import { logger } from "./logger.js";
+import { isPlaylistNormalizeEnabled } from "../config/featureFlags.js";
 
 const RECONCILE_DEBOUNCE_MS = 3000;
 const RECONCILE_STARTUP_DELAY_MS = 20000;
@@ -672,7 +673,32 @@ async function runReconcile() {
   if (totalChanges > 0 || navidrome.created > 0) {
     await triggerNavidromeScan();
   }
-  return { skipped: false, totalChanges, users: summary, navidrome };
+  const playlists = await normalizePlaylistsIfEnabled(config);
+  return { skipped: false, totalChanges, users: summary, navidrome, playlists };
+}
+
+// Personal libraries give every file a second id, and a playlist built while
+// browsing one points at ids nobody else can resolve. Sweeping them back onto
+// the main library here keeps that from accumulating between manual runs.
+async function normalizePlaylistsIfEnabled(config) {
+  if (!isPlaylistNormalizeEnabled() || !config.manageNavidrome) return null;
+  try {
+    const client = getNavidromeClient();
+    if (!client?.isConfigured?.()) return null;
+    const { repairAllPlaylists } = await import("./navidromePlaylistRepair.js");
+    const result = await repairAllPlaylists({
+      client,
+      navidromeRootPath: config.navidromeRootPath,
+      dryRun: false,
+    });
+    if (result.repaired > 0) {
+      logger.info("library", `[Playlists] Normalised ${result.repaired} playlist(s)`);
+    }
+    return result;
+  } catch (error) {
+    logger.warn("library", `[Playlists] Normalisation pass failed: ${error.message}`);
+    return null;
+  }
 }
 
 export async function reconcileUserLibraries() {

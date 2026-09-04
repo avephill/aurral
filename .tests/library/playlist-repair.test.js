@@ -159,3 +159,65 @@ test("a playlist generated from an .m3u or .NSP file is never rewritten", async 
   // at best and fights the file at worst.
   assert.deepEqual(client.state.calls, []);
 });
+
+test("the sweep skips empty and file-backed playlists and reports what it wrote", async () => {
+  const tracksByPlaylist = {
+    manual: [track("e1", "personal:a.mp3", 4, "a.mp3"), track("e2", "shared:a.mp3", 1, "a.mp3")],
+    clean: [track("e3", "shared:b.mp3", 1, "b.mp3")],
+  };
+  const fetched = [];
+  const client = {
+    isConfigured: () => true,
+    getLibraries: async () => [
+      { id: 1, name: "Music Library", path: "/music" },
+      { id: 4, name: "avery", path: "/music-root/users/avery" },
+    ],
+    getPlaylists: async () => [
+      { id: "manual", name: "Manual", songCount: 2 },
+      { id: "clean", name: "Already fine", songCount: 1 },
+      { id: "empty", name: "Empty", songCount: 0 },
+      { id: "m3u", name: "Album", songCount: 9, path: "/music-root/users/avery/X.m3u", sync: true },
+    ],
+    getPlaylistTracks: async (id) => {
+      fetched.push(id);
+      return (tracksByPlaylist[id] || []).map((t) => ({ ...t }));
+    },
+    findSongsByPath: async (path) => [{ id: `shared:${path}`, libraryId: 1, path }],
+    removePlaylistTracks: async () => {},
+    addPlaylistTracks: async (id) => {
+      tracksByPlaylist[id] = [track("n1", "shared:a.mp3", 1, "a.mp3")];
+    },
+  };
+
+  const { repairAllPlaylists } = await import("../../backend/services/navidromePlaylistRepair.js");
+  const result = await repairAllPlaylists({
+    client,
+    navidromeRootPath: "/music-root/users",
+    dryRun: false,
+  });
+
+  assert.equal(result.canonicalLibraryId, 1, "should normalise onto the main library");
+  assert.equal(result.repaired, 1);
+  assert.deepEqual(result.playlists.map((p) => p.playlistId), ["manual"]);
+  // An empty playlist has nothing to fix and a file-backed one is re-synced from
+  // disk, so neither should cost a track fetch.
+  assert.ok(!fetched.includes("empty"));
+  assert.ok(!fetched.includes("m3u"));
+});
+
+test("the sweep writes nothing when every playlist already resolves", async () => {
+  const calls = [];
+  const client = {
+    isConfigured: () => true,
+    getLibraries: async () => [{ id: 1, name: "Music Library", path: "/music" }],
+    getPlaylists: async () => [{ id: "clean", name: "Clean", songCount: 1 }],
+    getPlaylistTracks: async () => [track("e1", "shared:b.mp3", 1, "b.mp3")],
+    findSongsByPath: async () => [],
+    removePlaylistTracks: async (...args) => calls.push(["remove", args]),
+    addPlaylistTracks: async (...args) => calls.push(["add", args]),
+  };
+  const { repairAllPlaylists } = await import("../../backend/services/navidromePlaylistRepair.js");
+  const result = await repairAllPlaylists({ client, navidromeRootPath: "/music-root/users", dryRun: false });
+  assert.equal(result.repaired, 0);
+  assert.deepEqual(calls, [], "an idempotent sweep must not write on a clean library");
+});

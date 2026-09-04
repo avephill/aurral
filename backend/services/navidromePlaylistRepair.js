@@ -16,7 +16,10 @@
 // and restored on failure, and nothing is written unless every entry maps.
 
 import { logger } from "./logger.js";
-import { resolveSharedEquivalents } from "./navidromePlaylistPortability.js";
+import {
+  resolveCanonicalLibraryId,
+  resolveSharedEquivalents,
+} from "./navidromePlaylistPortability.js";
 
 /**
  * Works out the final ordered track list for one playlist.
@@ -163,4 +166,48 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, dry
     );
   }
   return summary;
+}
+
+/**
+ * Sweeps every hand-made playlist onto the canonical library.
+ *
+ * Idempotent: a playlist that already resolves everywhere plans no change and
+ * is never written, so this is safe to run on a schedule.
+ */
+export async function repairAllPlaylists({
+  client,
+  navidromeRootPath,
+  canonicalLibraryId = null,
+  dryRun = true,
+} = {}) {
+  if (!client?.isConfigured?.()) return { configured: false, repaired: 0, playlists: [] };
+
+  const libraries = await client.getLibraries();
+  const canonical = Number(canonicalLibraryId ?? resolveCanonicalLibraryId(libraries, navidromeRootPath));
+  if (!Number.isFinite(canonical)) {
+    logger.warn("library", "[Playlists] No canonical library to normalise onto; skipping");
+    return { configured: true, repaired: 0, playlists: [] };
+  }
+
+  const results = [];
+  let repaired = 0;
+  for (const playlist of await client.getPlaylists()) {
+    // Nothing in an empty playlist can be pointing at the wrong library, and
+    // skipping them keeps the sweep from fetching tracks for all of them.
+    if (!playlist?.songCount) continue;
+    try {
+      const summary = await repairPlaylist({
+        client,
+        playlist,
+        canonicalLibraryId: canonical,
+        dryRun,
+      });
+      if (summary.skipped || (!summary.changed && !summary.applied)) continue;
+      results.push(summary);
+      if (summary.applied) repaired += 1;
+    } catch (error) {
+      logger.warn("library", `[Playlists] Could not repair "${playlist.name}": ${error.message}`);
+    }
+  }
+  return { configured: true, canonicalLibraryId: canonical, repaired, playlists: results };
 }

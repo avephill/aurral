@@ -18,6 +18,17 @@ import { logger } from "./logger.js";
 const normalizePath = (value) => String(value || "").replace(/\/+$/, "");
 
 /**
+ * The library every playlist entry should point at: the oldest library that is
+ * not a personal one, which is the main collection. Ordering by id rather than
+ * by size keeps the answer stable as farms grow.
+ */
+export function resolveCanonicalLibraryId(libraries, navidromeRootPath) {
+  const { shared } = classifyLibraries(libraries, navidromeRootPath);
+  const ids = shared.map((library) => Number(library.id)).filter(Number.isFinite);
+  return ids.length ? ids.sort((a, b) => a - b)[0] : null;
+}
+
+/**
  * Splits libraries into the shared one(s) everybody can reach and the personal
  * ones under the user-library root. A playlist is portable when every track
  * sits in a shared library.

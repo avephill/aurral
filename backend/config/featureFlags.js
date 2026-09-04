@@ -33,3 +33,12 @@ export const isLibraryRecommendationsEnabled = () =>
 // the library per-user fetch on request and never wait for it.
 export const isDiscoveryRefreshEnabled = () =>
   isDiscoveryEnabled() && isLibraryRecommendationsEnabled();
+
+// AURRAL_PLAYLIST_NORMALIZE_ENABLED=true rewrites hand-made Navidrome playlists
+// onto the main library after each user-library reconcile, so a playlist built
+// while browsing a personal library stops being invisible to everyone else.
+//
+// Opt-in rather than opt-out: it edits playlists people made by hand, and an
+// install without personal libraries has nothing for it to fix.
+export const isPlaylistNormalizeEnabled = () =>
+  process.env.AURRAL_PLAYLIST_NORMALIZE_ENABLED === "true";
