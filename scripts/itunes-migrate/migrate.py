@@ -23,13 +23,14 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections import Counter
 
-from itunes_match import is_music, load_itunes, load_navidrome, match_all, summarize, write_unmatched_csv
+from itunes_match import is_music, load_itunes, load_navidrome, match_all, norm_album, norm_artist, summarize, write_unmatched_csv
 
 MARKER = "[itunes-migrate]"
 TRACK_BATCH = 1000
@@ -55,6 +56,7 @@ MECHANICAL_PLAYLISTS = {
     "songs without a rating",
     "songs that have no rating",
 }
+RATING_LIST = re.compile(r"\b(rated|top rated)\b", re.I)
 
 
 # --------------------------------------------------------------------------- Navidrome client
@@ -153,10 +155,26 @@ def select_playlists(playlists, itunes, results, args):
             reason = "excluded by --exclude"
         elif not args.all_playlists and pl["kind"] == "smart" and key in MECHANICAL_PLAYLISTS:
             reason = "mechanical view of the library or listening history"
-        elif not args.all_playlists and pl["kind"] == "smart" and len(resolved) > 0.8 * library_size:
+        elif not args.all_playlists and pl["kind"] == "smart" and len(resolved) > 0.7 * library_size:
             reason = f"covers {len(resolved) / library_size:.0%} of the library"
         if not reason and not resolved:
             reason = "no resolvable tracks"
+        older = bool(pl["exported"] and newest_export and pl["exported"] < newest_export)
+        if not reason and older and not args.all_playlists:
+            # A list that survives only in an older export was deleted or renamed
+            # since. Rating-derived ones are stale next to the ratings being
+            # migrated; a renamed one still exists under its new name.
+            if RATING_LIST.search(name):
+                reason = "rating-based list from an older export, superseded by the migrated ratings"
+            else:
+                mine = set(resolved)
+                for other in playlists.values():
+                    if other["exported"] != newest_export:
+                        continue
+                    theirs = {results[p]["nav_id"] for p in other["items"] if p in itunes and results[p]["nav_id"]}
+                    if theirs and len(mine & theirs) / len(mine | theirs) >= 0.8:
+                        reason = f"renamed to {other['name']!r} in a newer export"
+                        break
         # The same rule exported twice under 'Alternative - Folk' and 'Alternative Folk'
         # differs only in sort order.
         shape = (re.sub(r"[^a-z0-9]", "", key), frozenset(resolved))
@@ -190,19 +208,31 @@ def plan_ratings(itunes, results, nav):
     ratings = {}
     loved = set()
     album_votes = {}
+    # iTunes stamps an album rating on every track. Its 'Computed' flag is not
+    # trustworthy across Music.app versions: in every export here most album
+    # ratings without the flag still equal the rounded mean of the album's track
+    # ratings. Only a value that differs from that mean shows a hand was involved.
+    itunes_albums = {}
+    for t in itunes.values():
+        if t.get("Rating") and not t.get("Rating Computed"):
+            itunes_albums.setdefault((norm_artist(t.get("Album Artist") or t.get("Artist")), norm_album(t.get("Album"))), []).append(t["Rating"])
+    implied = {key: round(sum(v) / len(v) / 20) for key, v in itunes_albums.items()}
+
     for pid, t in itunes.items():
         nav_id = results[pid]["nav_id"]
         if not nav_id:
             continue
         rating = t.get("Rating") or 0
-        if rating and not t.get("Rating Computed"):
-            ratings[nav_id] = max(ratings.get(nav_id, 0), stars(rating))
+        # Tracks arrive newest export first, so the first rating seen for a
+        # Navidrome song is the most recent one; duplicate copies of a file in
+        # older exports must not override it.
+        if rating and not t.get("Rating Computed") and nav_id not in ratings:
+            ratings[nav_id] = stars(rating)
         if t.get("Loved"):
             loved.add(nav_id)
-        # iTunes stamps the album rating on every track; 'Computed' means it was
-        # derived from track ratings rather than set by hand.
         album_rating = t.get("Album Rating") or 0
-        if album_rating and not t.get("Album Rating Computed") and album_of.get(nav_id):
+        key = (norm_artist(t.get("Album Artist") or t.get("Artist")), norm_album(t.get("Album")))
+        if album_rating and not t.get("Album Rating Computed") and album_of.get(nav_id) and stars(album_rating) != implied.get(key):
             album_votes.setdefault(album_of[nav_id], Counter())[stars(album_rating)] += 1
     # Tracks from one iTunes album can land on two Navidrome albums (or vice versa); majority wins.
     album_ratings = {album_id: votes.most_common(1)[0][0] for album_id, votes in album_votes.items()}
@@ -267,7 +297,21 @@ def apply_playlists(nd, chosen, public, replace_existing=False, delete_file_back
         print(f"  created {e['name']!r} with {len(ids)} tracks")
 
 
-def apply_ratings(nd, ratings, loved, album_ratings):
+def apply_ratings(nd, ratings, loved, album_ratings, db_path):
+    # Album ratings on this account come only from this tool, so any it set on an
+    # earlier run that the current plan no longer includes are cleared.
+    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    stale = [
+        item_id
+        for (item_id,) in con.execute("select item_id from annotation where user_id=? and item_type='album' and rating>0", (nd.user_id,))
+        if item_id not in album_ratings
+    ]
+    con.close()
+    for item_id in stale:
+        nd.subsonic("setRating", id=item_id, rating=0)
+    if stale:
+        print(f"  cleared {len(stale)} album ratings no longer in the plan")
+
     for label, table in (("songs", ratings), ("albums", album_ratings)):
         done = 0
         for item_id, value in table.items():
@@ -346,7 +390,7 @@ def main():
         apply_playlists(nd, chosen, args.public, args.replace_existing, args.delete_file_backed)
     if not args.skip_ratings:
         print("ratings:")
-        apply_ratings(nd, ratings, loved, album_ratings)
+        apply_ratings(nd, ratings, loved, album_ratings, args.db)
     print("done")
 
 

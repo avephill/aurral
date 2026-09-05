@@ -23,6 +23,7 @@ import sqlite3
 import unicodedata
 from collections import Counter, defaultdict
 from difflib import SequenceMatcher
+from urllib.parse import unquote, urlparse
 
 # --------------------------------------------------------------------------- normalisation
 
@@ -119,34 +120,49 @@ def classify_playlist(pl):
     return "user"
 
 
+def track_identity(t):
+    """Persistent IDs are regenerated when a library moves to a new Music.app
+    generation, so they cannot tie exports together. iTunes always files a track
+    as <Artist or Compilations>/<Album>/<file>, and that tail survives every
+    Music Folder relocation this library went through."""
+    loc = t.get("Location")
+    if loc:
+        parts = unquote(urlparse(loc).path).split("/")
+        return "path:" + "/".join(parts[-3:])
+    return "meta:" + "|".join(
+        [norm_artist(t.get("Artist")), norm_album(t.get("Album")), norm(t.get("Name")), str(round((t.get("Total Time") or 0) / 1000))]
+    )
+
+
 def load_itunes(export_paths):
-    """Union of the exports keyed by Persistent ID; the first export listed wins."""
+    """Union of the exports; the first export listed wins for a track or playlist
+    that appears in more than one, so list the newest first."""
     tracks = {}
     playlists = {}
     for path in export_paths:
         with open(path, "rb") as fh:
             lib = plistlib.load(fh)
-        id_to_pid = {}
+        id_to_key = {}
         for t in lib["Tracks"].values():
-            pid = t.get("Persistent ID")
-            if not pid:
-                continue
-            id_to_pid[t["Track ID"]] = pid
-            if pid not in tracks:
-                tracks[pid] = t
+            key = track_identity(t)
+            id_to_key[t["Track ID"]] = key
+            if key not in tracks:
+                tracks[key] = t
         for pl in lib.get("Playlists", []):
             kind = classify_playlist(pl)
             if kind in ("master", "system", "folder"):
                 continue
-            key = pl.get("Playlist Persistent ID") or pl.get("Name")
-            if key in playlists:
+            name = pl.get("Name") or ""
+            items = [id_to_key[i["Track ID"]] for i in pl.get("Playlist Items", []) if i["Track ID"] in id_to_key]
+            existing = playlists.get(name)
+            if existing and (existing["source"] != path or len(existing["items"]) >= len(items)):
                 continue
-            playlists[key] = {
-                "name": pl.get("Name"),
+            playlists[name] = {
+                "name": name,
                 "kind": kind,
                 "source": path,
                 "exported": lib.get("Date"),
-                "items": [id_to_pid[i["Track ID"]] for i in pl.get("Playlist Items", []) if i["Track ID"] in id_to_pid],
+                "items": items,
             }
     return tracks, playlists
 
