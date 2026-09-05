@@ -1,8 +1,9 @@
 """Turn missing-tracks.csv into rsync file lists for copying the originals out of
 iTunes Media, split by where they should land:
 
-  artists.list       Music/<Artist>/<Album>/<file>  -> Lidarr import (artist must exist in Lidarr)
-  compilations.list  Compilations/<Album>/<file>    -> the unmanaged folder Navidrome scans
+  artists.list       <Artist>/<Album>/<file>      -> Lidarr import (artist must exist in Lidarr)
+  compilations.list  Compilations/<Album>/<file>  -> Lidarr import under its Various Artists entry,
+                                                     or an unmanaged folder Navidrome scans
   drm.list           Protected AAC (.m4p), listed only; nothing can import them
 
 Paths are relative to the 'iTunes Media/Music' folder, which is the one part of
