@@ -26,6 +26,18 @@ def media_dir(t):
     return os.path.dirname(unquote(urlparse(loc).path)) if loc else ""
 
 
+def disc_folder(t):
+    """iTunes files a rip as Music/<Artist>/<Album>/ or Music/Compilations/<Album>/, so
+    everything sharing those two folder names came off one disc regardless of how the
+    tracks are tagged. Only the last two components count: this library has the same
+    tree nested twice."""
+    d = media_dir(t)
+    if not d:
+        return None
+    parts = d.rstrip("/").split("/")
+    return (parts[-2], parts[-1]) if len(parts) >= 2 else None
+
+
 def build(itunes, results, nav):
     nav_artists = set()
     nav_albums = set()
@@ -40,14 +52,20 @@ def build(itunes, results, nav):
         nav_album_counts[(r["n_album_artist"] or r["n_artist"], r["n_album"])] += 1
 
     album_total = Counter()
+    folder_total = Counter()
     for t in itunes.values():
         album_total[(norm_artist(t.get("Album Artist") or t.get("Artist")), norm_album(t.get("Album")))] += 1
+        if t.get("Track Type") == "File" and disc_folder(t):
+            folder_total[disc_folder(t)] += 1
 
     groups = defaultdict(list)  # (bucket, artist shown, album shown) -> tracks
+    folder_missing = defaultdict(list)  # disc folder -> unmatched tracks ripped into it
     for pid, r in results.items():
         if r["nav_id"]:
             continue
         t = itunes[pid]
+        if t.get("Track Type") == "File" and disc_folder(t):
+            folder_missing[disc_folder(t)].append(t)
         shown_artist = t.get("Album Artist") or t.get("Artist") or ""
         a, al = norm_artist(shown_artist), norm_album(t.get("Album"))
         if t.get("Track Type") != "File":
@@ -68,7 +86,7 @@ def build(itunes, results, nav):
         if bucket == "artist-missing" and artist not in variants:
             close = get_close_matches(norm_artist(artist), nav_keys, n=1, cutoff=0.9)
             variants[artist] = display_artist[close[0]] if close else ""
-    return groups, album_total, variants, nav_album_counts
+    return groups, album_total, variants, nav_album_counts, folder_missing, folder_total
 
 
 def source_of(tracks):
@@ -84,29 +102,35 @@ def source_of(tracks):
     return "cd-rip"
 
 
-def redigitize_list(groups, album_total, nav_album_counts):
-    """One row per album with missing tracks, ranked by how much is missing and how
-    complete dad's copy was, so whole CDs come first and single stray tracks last."""
+def most_common(values):
+    values = [v for v in values if v]
+    return Counter(values).most_common(1)[0][0] if values else ""
+
+
+def redigitize_list(folder_missing, folder_total):
+    """One row per disc folder with missing tracks, ranked by how much is missing and
+    how complete the rip was, so whole CDs come first. A compilation is one row under
+    'Various Artists' however many artists are on it."""
     rows = []
-    for (bucket, artist, album), tracks in groups.items():
-        if bucket == "apple-music-stream":
-            continue
-        key = (norm_artist(artist), norm_album(album))
-        had = album_total[key]
+    for folder, tracks in folder_missing.items():
+        artist_folder, album_folder = folder
+        had = folder_total[folder]
         disc = max((t.get("Track Count") or 0) for t in tracks) or None
-        in_nav = nav_album_counts.get(key, 0)
+        compilation = artist_folder == "Compilations" or any(t.get("Compilation") for t in tracks)
+        artist = "Various Artists" if artist_folder == "Compilations" else (most_common(t.get("Album Artist") for t in tracks) or artist_folder)
         rows.append(
             {
                 "album_artist": artist,
-                "album": album,
+                "album": most_common(t.get("Album") for t in tracks) or album_folder,
                 "year": max((t.get("Year") or 0) for t in tracks) or "",
-                "status": "whole album missing" if bucket != "tracks-missing-from-album" else f"partial: Navidrome has {in_nav}",
+                "status": "whole rip missing" if len(tracks) >= had else f"partial: {had - len(tracks)} of the rip matched",
                 "tracks_missing": len(tracks),
-                "tracks_dad_had": had,
+                "tracks_in_rip": had,
                 "tracks_on_disc": disc or "",
                 "complete_disc": bool(disc and had >= disc),
                 "source": source_of(tracks),
-                "compilation": any(t.get("Compilation") for t in tracks),
+                "compilation": compilation,
+                "artists_on_it": len({t.get("Artist") for t in tracks}),
                 "itunes_media_dirs": " | ".join(sorted({media_dir(t) for t in tracks} - {""})),
             }
         )
@@ -114,10 +138,10 @@ def redigitize_list(groups, album_total, nav_album_counts):
     return rows
 
 
-def write(groups, album_total, variants, nav_album_counts, out):
+def write(groups, album_total, variants, folder_missing, folder_total, out):
     order = ["artist-missing", "album-missing", "tracks-missing-from-album", "apple-music-stream"]
 
-    redig = redigitize_list(groups, album_total, nav_album_counts)
+    redig = redigitize_list(folder_missing, folder_total)
     with open(f"{out}/albums-to-redigitize.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(redig[0].keys()) if redig else [])
         w.writeheader()
@@ -147,32 +171,34 @@ def write(groups, album_total, variants, nav_album_counts, out):
                 w.writerow([bucket, artist, album, t.get("Track Number") or "", t.get("Name"), t.get("Artist"), t.get("Kind"), round((t.get("Total Time") or 0) / 1000), unquote(urlparse(loc).path) if loc else ""])
 
     lines = ["# Music in the iTunes library that Navidrome does not have", ""]
-    whole = [r for r in redig if r["status"] == "whole album missing"]
+    whole = [r for r in redig if r["status"] == "whole rip missing"]
     cds = [r for r in whole if r["complete_disc"] and r["source"] == "cd-rip"]
+    comps = [r for r in whole if r["compilation"]]
     purchases = [r for r in whole if r["source"] in ("itunes-purchase", "drm-purchase")]
     lines += [
-        "## Albums to re-digitize",
+        "## Discs to re-digitize",
         "",
-        f"{len(whole)} albums are missing outright; {len(cds)} of them were complete CD rips (find the disc), "
-        f"{len(purchases)} were iTunes Store purchases (no disc: the only copy is the file under iTunes Media). "
-        f"Rows with one or two tracks were never a full album in iTunes.",
+        "One row per folder iTunes ripped a disc into, so a compilation is a single row no matter how many "
+        f"artists are on it. {len(whole)} rips are missing entirely, {len(comps)} of them compilations; "
+        f"{len(cds)} were complete CD rips (find the disc), {len(purchases)} were iTunes Store purchases "
+        f"(no disc: the only copy is the file under iTunes Media). Single stray tracks are left out here but are in the CSV.",
         "",
-        "| missing | had / disc | source | artist — album (year) | note |",
+        "| missing | in rip / on disc | source | artist — album (year) | note |",
         "|---:|---:|---|---|---|",
     ]
     for r in redig:
-        if r["tracks_missing"] < 2 and r["status"] == "whole album missing":
-            continue  # a single stray track is not an album to rip; it is still in the CSV
+        if r["tracks_missing"] < 2 and r["status"] == "whole rip missing":
+            continue
         note = []
-        if r["status"] != "whole album missing":
+        if r["status"] != "whole rip missing":
             note.append(r["status"])
         if r["compilation"]:
-            note.append("compilation")
+            note.append(f"compilation, {r['artists_on_it']} artists")
         if r["complete_disc"]:
             note.append("complete disc")
         year = f" ({r['year']})" if r["year"] else ""
         lines.append(
-            f"| {r['tracks_missing']} | {r['tracks_dad_had']} / {r['tracks_on_disc'] or '?'} | {r['source']} | "
+            f"| {r['tracks_missing']} | {r['tracks_in_rip']} / {r['tracks_on_disc'] or '?'} | {r['source']} | "
             f"{r['album_artist'] or '(no artist)'} — **{r['album'] or '(no album)'}**{year} | {', '.join(note)} |"
         )
     lines.append("")
@@ -221,9 +247,9 @@ def main():
     itunes = {pid: t for pid, t in tracks.items() if is_music(t)}
     nav = load_navidrome(args.db, args.library_id)
     results = match_all(itunes, nav)
-    groups, album_total, variants, nav_album_counts = build(itunes, results, nav)
+    groups, album_total, variants, _nav_album_counts, folder_missing, folder_total = build(itunes, results, nav)
     os.makedirs(args.out, exist_ok=True)
-    write(groups, album_total, variants, nav_album_counts, args.out)
+    write(groups, album_total, variants, folder_missing, folder_total, args.out)
     print(f"wrote {args.out}/missing-report.md, albums-to-redigitize.csv, missing-albums.csv, missing-tracks.csv")
 
 
