@@ -29,6 +29,7 @@ def media_dir(t):
 def build(itunes, results, nav):
     nav_artists = set()
     nav_albums = set()
+    nav_album_counts = Counter()
     display_artist = {}
     for r in nav:
         for a, shown in ((r["n_artist"], r["artist"]), (r["n_album_artist"], r["artist"])):
@@ -36,6 +37,7 @@ def build(itunes, results, nav):
                 nav_artists.add(a)
                 display_artist.setdefault(a, shown)
                 nav_albums.add((a, r["n_album"]))
+        nav_album_counts[(r["n_album_artist"] or r["n_artist"], r["n_album"])] += 1
 
     album_total = Counter()
     for t in itunes.values():
@@ -66,11 +68,60 @@ def build(itunes, results, nav):
         if bucket == "artist-missing" and artist not in variants:
             close = get_close_matches(norm_artist(artist), nav_keys, n=1, cutoff=0.9)
             variants[artist] = display_artist[close[0]] if close else ""
-    return groups, album_total, variants
+    return groups, album_total, variants, nav_album_counts
 
 
-def write(groups, album_total, variants, out):
+def source_of(tracks):
+    """Where the files came from decides what 'missing' means: a CD rip can be
+    ripped again, an iTunes Store purchase only exists as the file in iTunes Media."""
+    kinds = Counter(t.get("Kind") or "" for t in tracks)
+    if any(k == DRM for k in kinds):
+        return "drm-purchase"
+    if all(k.startswith("Purchased") or k.startswith("Matched") for k in kinds):
+        return "itunes-purchase"
+    if any(k.startswith("Purchased") for k in kinds):
+        return "mixed"
+    return "cd-rip"
+
+
+def redigitize_list(groups, album_total, nav_album_counts):
+    """One row per album with missing tracks, ranked by how much is missing and how
+    complete dad's copy was, so whole CDs come first and single stray tracks last."""
+    rows = []
+    for (bucket, artist, album), tracks in groups.items():
+        if bucket == "apple-music-stream":
+            continue
+        key = (norm_artist(artist), norm_album(album))
+        had = album_total[key]
+        disc = max((t.get("Track Count") or 0) for t in tracks) or None
+        in_nav = nav_album_counts.get(key, 0)
+        rows.append(
+            {
+                "album_artist": artist,
+                "album": album,
+                "year": max((t.get("Year") or 0) for t in tracks) or "",
+                "status": "whole album missing" if bucket != "tracks-missing-from-album" else f"partial: Navidrome has {in_nav}",
+                "tracks_missing": len(tracks),
+                "tracks_dad_had": had,
+                "tracks_on_disc": disc or "",
+                "complete_disc": bool(disc and had >= disc),
+                "source": source_of(tracks),
+                "compilation": any(t.get("Compilation") for t in tracks),
+                "itunes_media_dirs": " | ".join(sorted({media_dir(t) for t in tracks} - {""})),
+            }
+        )
+    rows.sort(key=lambda r: (-r["tracks_missing"], not r["complete_disc"], r["album_artist"].lower(), r["album"].lower()))
+    return rows
+
+
+def write(groups, album_total, variants, nav_album_counts, out):
     order = ["artist-missing", "album-missing", "tracks-missing-from-album", "apple-music-stream"]
+
+    redig = redigitize_list(groups, album_total, nav_album_counts)
+    with open(f"{out}/albums-to-redigitize.csv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(redig[0].keys()) if redig else [])
+        w.writeheader()
+        w.writerows(redig)
     titles = {
         "artist-missing": "Artists with nothing in Navidrome",
         "album-missing": "Albums missing from artists Navidrome has",
@@ -96,6 +147,35 @@ def write(groups, album_total, variants, out):
                 w.writerow([bucket, artist, album, t.get("Track Number") or "", t.get("Name"), t.get("Artist"), t.get("Kind"), round((t.get("Total Time") or 0) / 1000), unquote(urlparse(loc).path) if loc else ""])
 
     lines = ["# Music in the iTunes library that Navidrome does not have", ""]
+    whole = [r for r in redig if r["status"] == "whole album missing"]
+    cds = [r for r in whole if r["complete_disc"] and r["source"] == "cd-rip"]
+    purchases = [r for r in whole if r["source"] in ("itunes-purchase", "drm-purchase")]
+    lines += [
+        "## Albums to re-digitize",
+        "",
+        f"{len(whole)} albums are missing outright; {len(cds)} of them were complete CD rips (find the disc), "
+        f"{len(purchases)} were iTunes Store purchases (no disc: the only copy is the file under iTunes Media). "
+        f"Rows with one or two tracks were never a full album in iTunes.",
+        "",
+        "| missing | had / disc | source | artist — album (year) | note |",
+        "|---:|---:|---|---|---|",
+    ]
+    for r in redig:
+        if r["tracks_missing"] < 2 and r["status"] == "whole album missing":
+            continue  # a single stray track is not an album to rip; it is still in the CSV
+        note = []
+        if r["status"] != "whole album missing":
+            note.append(r["status"])
+        if r["compilation"]:
+            note.append("compilation")
+        if r["complete_disc"]:
+            note.append("complete disc")
+        year = f" ({r['year']})" if r["year"] else ""
+        lines.append(
+            f"| {r['tracks_missing']} | {r['tracks_dad_had']} / {r['tracks_on_disc'] or '?'} | {r['source']} | "
+            f"{r['album_artist'] or '(no artist)'} — **{r['album'] or '(no album)'}**{year} | {', '.join(note)} |"
+        )
+    lines.append("")
     for bucket in order:
         entries = {k: v for k, v in groups.items() if k[0] == bucket}
         if not entries:
@@ -141,10 +221,10 @@ def main():
     itunes = {pid: t for pid, t in tracks.items() if is_music(t)}
     nav = load_navidrome(args.db, args.library_id)
     results = match_all(itunes, nav)
-    groups, album_total, variants = build(itunes, results, nav)
+    groups, album_total, variants, nav_album_counts = build(itunes, results, nav)
     os.makedirs(args.out, exist_ok=True)
-    write(groups, album_total, variants, args.out)
-    print(f"wrote {args.out}/missing-report.md, missing-albums.csv, missing-tracks.csv")
+    write(groups, album_total, variants, nav_album_counts, args.out)
+    print(f"wrote {args.out}/missing-report.md, albums-to-redigitize.csv, missing-albums.csv, missing-tracks.csv")
 
 
 if __name__ == "__main__":

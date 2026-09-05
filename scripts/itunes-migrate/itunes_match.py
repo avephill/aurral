@@ -210,6 +210,21 @@ def _pick(cands, it, tol):
     return best, ambiguous
 
 
+_CREDIT_SPLIT = re.compile(r"\s+(?:and|&|with|feat\.?|ft\.?|featuring|y)\s+|\s*[/,;+]\s*", re.I)
+
+
+def artist_variants(s):
+    """'Neko Case and her Boyfriends' or 'Vampire Weekend/Dr. Dog' as iTunes credited
+    them may be filed under 'Neko Case' or 'Dr. Dog' after MusicBrainz tagging."""
+    full = norm_artist(s)
+    out = []
+    for part in _CREDIT_SPLIT.split(s or ""):
+        alt = norm_artist(part)
+        if alt and alt != full and alt not in out:
+            out.append(alt)
+    return out
+
+
 def itunes_key(t):
     return {
         "dur": (t.get("Total Time") or 0) / 1000.0,
@@ -217,6 +232,7 @@ def itunes_key(t):
         "l_title": norm_loose(t.get("Name")),
         "b_title": norm_bare(t.get("Name")),
         "n_artist": norm_artist(t.get("Artist")),
+        "artist_variants": artist_variants(t.get("Artist")),
         "n_album_artist": norm_artist(t.get("Album Artist")),
         "n_album": norm_album(t.get("Album")),
         "n_comment": norm_comment(t.get("Comments")),
@@ -253,6 +269,8 @@ def match_all(itunes, nav):
             ("T1 artist+album+title", [c for c in by_artist_title[(it["n_artist"], it["n_title"])] if c["n_album"] == it["n_album"]], 3),
             ("T2 artist+title", by_artist_title[(it["n_artist"], it["n_title"])], 3),
             ("T2 albumartist+title", by_artist_title[(it["n_album_artist"], it["n_title"])] if it["n_album_artist"] else [], 3),
+            ("T2 artist variant+title", [c for alt in it["artist_variants"] for c in by_artist_title[(alt, it["n_title"])]], 3),
+            ("T3 artist variant+bare title", [c for alt in it["artist_variants"] for c in by_artist_btitle[(alt, it["b_title"])]] if it["b_title"] else [], 3),
             ("T3 artist+loose title", by_artist_ltitle[(it["n_artist"], it["l_title"])], 3),
             ("T3 artist+bare title", by_artist_btitle[(it["n_artist"], it["b_title"])] if it["b_title"] else [], 3),
             ("T3 albumartist+bare title", by_artist_btitle[(it["n_album_artist"], it["b_title"])] if it["n_album_artist"] and it["b_title"] else [], 3),
