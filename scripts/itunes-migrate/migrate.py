@@ -23,7 +23,6 @@ import json
 import os
 import re
 import secrets
-import sqlite3
 import sys
 import urllib.error
 import urllib.parse
@@ -258,7 +257,25 @@ def print_plan(chosen, skipped, ratings, loved, album_ratings):
 
 # --------------------------------------------------------------------------- applying
 
-def apply_playlists(nd, chosen, public, replace_existing=False, delete_file_backed=False):
+def load_state(path):
+    """What an earlier --apply wrote, so this run undoes only its own work and
+    skips what has not changed. Accepts a plan.json from before state files existed."""
+    if not path or not os.path.exists(path):
+        return {"playlists": {}, "ratings": {}, "album_ratings": {}, "loved": []}
+    with open(path) as fh:
+        raw = json.load(fh)
+    playlists = raw.get("playlists") or {}
+    if isinstance(playlists, list):
+        playlists = {e["name"]: e.get("resolved", []) for e in playlists}
+    return {
+        "playlists": playlists,
+        "ratings": raw.get("ratings") or {},
+        "album_ratings": raw.get("album_ratings") or {},
+        "loved": raw.get("loved") or [],
+    }
+
+
+def apply_playlists(nd, chosen, public, previous, replace_existing=False, delete_file_backed=False):
     existing = nd.native("GET", "/api/playlist?_end=2000") or []
     mine = [pl for pl in existing if pl.get("ownerId") == nd.user_id]
 
@@ -275,7 +292,19 @@ def apply_playlists(nd, chosen, public, replace_existing=False, delete_file_back
     for pl in mine:
         mine_by_name.setdefault(pl["name"], []).append(pl)
 
+    wanted = {e["name"] for e in chosen}
+    for name in previous["playlists"]:
+        if name in wanted:
+            continue
+        for pl in mine_by_name.get(name, []):
+            if (pl.get("comment") or "").startswith(MARKER):
+                nd.native("DELETE", f"/api/playlist/{pl['id']}")
+                print(f"  removed {name!r}: created by an earlier run, no longer in the plan")
+
     for e in chosen:
+        ours = [pl for pl in mine_by_name.get(e["name"], []) if (pl.get("comment") or "").startswith(MARKER)]
+        if ours and previous["playlists"].get(e["name"]) == e["resolved"]:
+            continue  # same tracks as last time; leave it alone
         for pl in mine_by_name.get(e["name"], []):
             if replace_existing or (pl.get("comment") or "").startswith(MARKER):
                 nd.native("DELETE", f"/api/playlist/{pl['id']}")
@@ -297,32 +326,29 @@ def apply_playlists(nd, chosen, public, replace_existing=False, delete_file_back
         print(f"  created {e['name']!r} with {len(ids)} tracks")
 
 
-def apply_ratings(nd, ratings, loved, album_ratings, db_path):
-    # Album ratings on this account come only from this tool, so any it set on an
-    # earlier run that the current plan no longer includes are cleared.
-    con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-    stale = [
-        item_id
-        for (item_id,) in con.execute("select item_id from annotation where user_id=? and item_type='album' and rating>0", (nd.user_id,))
-        if item_id not in album_ratings
-    ]
-    con.close()
-    for item_id in stale:
-        nd.subsonic("setRating", id=item_id, rating=0)
-    if stale:
-        print(f"  cleared {len(stale)} album ratings no longer in the plan")
-
-    for label, table in (("songs", ratings), ("albums", album_ratings)):
+def apply_ratings(nd, ratings, loved, album_ratings, previous):
+    """Only touches what changed since the last run, and only undoes ratings and
+    stars this tool set itself: anything the user rates in Navidrome later is
+    theirs, so ratings are never cleared wholesale from the account."""
+    for label, table, before in (("songs", ratings, previous["ratings"]), ("albums", album_ratings, previous["album_ratings"])):
+        stale = [item_id for item_id in before if item_id not in table]
+        for item_id in stale:
+            nd.subsonic("setRating", id=item_id, rating=0)
+        changed = {item_id: value for item_id, value in table.items() if before.get(item_id) != value}
         done = 0
-        for item_id, value in table.items():
+        for item_id, value in changed.items():
             nd.subsonic("setRating", id=item_id, rating=value)
             done += 1
             if done % 1000 == 0:
-                print(f"  rated {done}/{len(table)} {label}", flush=True)
-        print(f"  rated {done}/{len(table)} {label}")
-    if loved:
-        nd.subsonic("star", id=loved)
-        print(f"  starred {len(loved)}")
+                print(f"  rated {done}/{len(changed)} {label}", flush=True)
+        print(f"  {label}: {len(changed)} ratings set, {len(stale)} cleared, {len(table) - len(changed)} unchanged")
+    unstar = [item_id for item_id in previous["loved"] if item_id not in loved]
+    if unstar:
+        nd.subsonic("unstar", id=unstar)
+    star = [item_id for item_id in loved if item_id not in previous["loved"]]
+    if star:
+        nd.subsonic("star", id=star)
+    print(f"  stars: {len(star)} set, {len(unstar)} cleared")
 
 
 # --------------------------------------------------------------------------- main
@@ -335,6 +361,7 @@ def main():
     ap.add_argument("--url", default="http://127.0.0.1:4533", help="Navidrome base URL")
     ap.add_argument("--user", required=True, help="Navidrome user to migrate into; password from ND_PASS")
     ap.add_argument("--out", default=".", help="directory for plan.json, match.json and unmatched.csv")
+    ap.add_argument("--state", help="what the last --apply wrote (default OUT/applied.json); re-runs undo only their own earlier work")
     ap.add_argument("--apply", action="store_true", help="write to Navidrome (default is a dry run)")
     ap.add_argument("--public", action="store_true", help="create playlists as public")
     ap.add_argument("--replace-existing", action="store_true", help="also replace same-named playlists this tool did not create")
@@ -382,16 +409,23 @@ def main():
     password = os.environ.get("ND_PASS")
     if not password:
         sys.exit("ND_PASS must hold the Navidrome password for --user")
+    state_path = args.state or f"{args.out}/applied.json"
+    previous = load_state(state_path)
     nd = Navidrome(args.url, args.user, password)
     nd._login()
-    print(f"\nlogged in as {args.user} ({nd.user_id})")
+    print(f"\nlogged in as {args.user} ({nd.user_id}); previous run state: {state_path if os.path.exists(state_path) else 'none'}")
+    applied = dict(previous)
     if not args.skip_playlists:
         print("playlists:")
-        apply_playlists(nd, chosen, args.public, args.replace_existing, args.delete_file_backed)
+        apply_playlists(nd, chosen, args.public, previous, args.replace_existing, args.delete_file_backed)
+        applied["playlists"] = {e["name"]: e["resolved"] for e in chosen if not e.get("skipped")}
     if not args.skip_ratings:
         print("ratings:")
-        apply_ratings(nd, ratings, loved, album_ratings, args.db)
-    print("done")
+        apply_ratings(nd, ratings, loved, album_ratings, previous)
+        applied.update({"ratings": ratings, "album_ratings": album_ratings, "loved": loved})
+    with open(f"{args.out}/applied.json", "w") as fh:
+        json.dump(applied, fh)
+    print(f"done; state written to {args.out}/applied.json")
 
 
 if __name__ == "__main__":
