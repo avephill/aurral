@@ -330,25 +330,37 @@ def apply_ratings(nd, ratings, loved, album_ratings, previous):
     """Only touches what changed since the last run, and only undoes ratings and
     stars this tool set itself: anything the user rates in Navidrome later is
     theirs, so ratings are never cleared wholesale from the account."""
+    def rate(item_id, value):
+        """A rescan can retire a song row a previous run rated (a file Lidarr
+        replaced, a duplicate merged); Navidrome answers 'data not found'."""
+        try:
+            nd.subsonic("setRating", id=item_id, rating=value)
+            return True
+        except RuntimeError as error:
+            if "'code': 70" in str(error) or "not found" in str(error).lower():
+                return False
+            raise
+
     for label, table, before in (("songs", ratings, previous["ratings"]), ("albums", album_ratings, previous["album_ratings"])):
         stale = [item_id for item_id in before if item_id not in table]
-        for item_id in stale:
-            nd.subsonic("setRating", id=item_id, rating=0)
+        gone = sum(1 for item_id in stale if not rate(item_id, 0))
         changed = {item_id: value for item_id, value in table.items() if before.get(item_id) != value}
         done = 0
         for item_id, value in changed.items():
-            nd.subsonic("setRating", id=item_id, rating=value)
+            if not rate(item_id, value):
+                gone += 1
             done += 1
             if done % 1000 == 0:
                 print(f"  rated {done}/{len(changed)} {label}", flush=True)
-        print(f"  {label}: {len(changed)} ratings set, {len(stale)} cleared, {len(table) - len(changed)} unchanged")
-    unstar = [item_id for item_id in previous["loved"] if item_id not in loved]
-    if unstar:
-        nd.subsonic("unstar", id=unstar)
-    star = [item_id for item_id in loved if item_id not in previous["loved"]]
-    if star:
-        nd.subsonic("star", id=star)
-    print(f"  stars: {len(star)} set, {len(unstar)} cleared")
+        print(f"  {label}: {len(changed)} ratings set, {len(stale)} cleared, {len(table) - len(changed)} unchanged, {gone} rows gone from Navidrome")
+    for endpoint, ids in (("unstar", [i for i in previous["loved"] if i not in loved]), ("star", [i for i in loved if i not in previous["loved"]])):
+        for item_id in ids:
+            try:
+                nd.subsonic(endpoint, id=item_id)
+            except RuntimeError as error:
+                if "'code': 70" not in str(error):
+                    raise
+    print(f"  stars: {len([i for i in loved if i not in previous['loved']])} set, {len([i for i in previous['loved'] if i not in loved])} cleared")
 
 
 # --------------------------------------------------------------------------- main
