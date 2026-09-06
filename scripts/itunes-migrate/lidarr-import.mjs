@@ -180,14 +180,27 @@ async function add(folders, state) {
 
 // ---------------------------------------------------------------- evaluate
 
+// Lidarr's rejections are written for automatic imports of whole releases.
+// Here most folders deliberately complete an album Lidarr already has, so a
+// partial import is the point, and a file Lidarr already holds is simply left out.
+const ACCEPTABLE = /^has missing tracks$/i;
+const ALREADY_HAVE = /^not an upgrade for existing/i;
+
 function classify(items, files) {
   const audio = items.filter((item) => AUDIO.test(item.path || ""));
   const reasons = new Set();
-  if (!audio.length) reasons.add("lidarr listed no audio files");
+  if (!audio.length) return { status: "absent", reasons: ["lidarr listed no audio files"], audio: [], importable: [] };
   const albumIds = new Set();
   const trackIds = new Set();
+  const importable = [];
   let duplicateTrack = false;
+  let alreadyHave = 0;
   for (const item of audio) {
+    const rejections = (item.rejections || []).map((r) => r.reason || String(r));
+    if (rejections.some((r) => ALREADY_HAVE.test(r))) {
+      alreadyHave += 1;
+      continue;
+    }
     if (!item.album?.id) reasons.add("no album match");
     else albumIds.add(item.album.id);
     if (!item.artist?.id) reasons.add("no artist match");
@@ -196,78 +209,94 @@ function classify(items, files) {
       if (trackIds.has(track.id)) duplicateTrack = true;
       trackIds.add(track.id);
     }
-    for (const rejection of item.rejections || []) reasons.add(rejection.reason || String(rejection));
+    for (const r of rejections) if (!ACCEPTABLE.test(r)) reasons.add(r);
+    importable.push(item);
   }
   if (albumIds.size > 1) reasons.add("files matched more than one album");
   if (duplicateTrack) reasons.add("two files matched the same track");
   if (audio.length < files.filter((f) => AUDIO.test(f)).length) reasons.add("lidarr listed fewer audio files than staged");
-  return { status: reasons.size ? "review" : "clean", reasons: [...reasons], audio };
+  if (!importable.length) return { status: "have-all", reasons: [`lidarr already has all ${alreadyHave} files`], audio, importable };
+  return { status: reasons.size ? "review" : "clean", reasons: [...reasons], audio, importable, alreadyHave };
+}
+
+const CONCURRENCY = Number(process.env.CONCURRENCY || 3);
+
+async function evaluateFolder(folder, state, { va, byMbid, byName }) {
+  // Hand-set statuses in state.json: "va" files the folder under Various
+  // Artists (Putumayo, soundtracks), "skip" leaves it for the UI, and
+  // "useExisting" names a Lidarr artist to import under (typos, joint credits).
+  const known = state.artists[folder.artistFolder];
+  if (known?.status === "skip") return "skipped";
+  let artistId = null;
+  if (folder.kind === "compilation" || known?.status === "va") {
+    artistId = va?.id ?? null;
+  } else if (known?.useExisting) {
+    artistId = byName.get(normalize(known.useExisting))?.id ?? null;
+  } else {
+    artistId = known?.lidarrId ?? byMbid.get(known?.mbid)?.id ?? byName.get(normalize(folder.artistFolder))?.id ?? null;
+  }
+  const lidarrPath = `${IMPORT_ROOT}/${folder.artistFolder}/${folder.albumFolder}`;
+  const query = new URLSearchParams({ folder: lidarrPath, filterExistingFiles: "true" });
+  if (artistId) query.set("artistId", String(artistId));
+  try {
+    const items = await lidarrClient.request(`/manualimport?${query.toString()}`);
+    const result = classify(Array.isArray(items) ? items : [], folder.files);
+    state.evaluation[folder.key] = {
+      kind: folder.kind,
+      status: result.status,
+      reasons: result.reasons,
+      artistId,
+      album: result.audio[0]?.album?.title || null,
+      alreadyHave: result.alreadyHave || 0,
+      files: result.importable.map((item) => ({
+        path: item.path,
+        artistId: item.artist?.id,
+        albumId: item.album?.id,
+        albumReleaseId: item.albumReleaseId,
+        trackIds: (item.tracks || []).map((t) => t.id),
+        quality: item.quality,
+        rejections: (item.rejections || []).map((r) => r.reason || String(r)),
+      })),
+    };
+    return result.status;
+  } catch (error) {
+    state.evaluation[folder.key] = { kind: folder.kind, status: "error", reasons: [String(error.message).split("\n")[0].slice(0, 160)], artistId };
+    return "error";
+  }
 }
 
 async function evaluate(folders, state) {
   const { byMbid, byName } = await lidarrArtists();
-  const va = byMbid.get(VA_MBID);
+  const context = { va: byMbid.get(VA_MBID), byMbid, byName };
+  const counts = { clean: 0, review: 0, "have-all": 0, absent: 0, skipped: 0, error: 0 };
+  const queue = [...folders.values()].filter((folder) => !state.imported[folder.key]);
   let n = 0;
-  const counts = { clean: 0, review: 0, error: 0 };
-  for (const folder of folders.values()) {
-    n += 1;
-    if (state.imported[folder.key]) continue;
-    // Hand-set statuses in state.json: "va" files the folder under Various
-    // Artists (Putumayo, soundtracks), "skip" leaves it for the UI, and
-    // "useExisting" names a Lidarr artist to import under (typos, joint credits).
-    const known = state.artists[folder.artistFolder];
-    if (known?.status === "skip") continue;
-    let artistId = null;
-    if (folder.kind === "compilation" || known?.status === "va") {
-      artistId = va?.id ?? null;
-    } else if (known?.useExisting) {
-      artistId = byName.get(normalize(known.useExisting))?.id ?? null;
-    } else {
-      artistId = known?.lidarrId ?? byMbid.get(known?.mbid)?.id ?? byName.get(normalize(folder.artistFolder))?.id ?? null;
+  const worker = async () => {
+    while (queue.length) {
+      const folder = queue.shift();
+      const status = await evaluateFolder(folder, state, context);
+      counts[status] = (counts[status] || 0) + 1;
+      n += 1;
+      if (n % 25 === 0) {
+        console.log(`  evaluated ${n}/${folders.size}: ${JSON.stringify(counts)}`);
+        await saveState(state);
+      }
     }
-    const lidarrPath = `${IMPORT_ROOT}/${folder.artistFolder}/${folder.albumFolder}`;
-    const query = new URLSearchParams({ folder: lidarrPath, filterExistingFiles: "true" });
-    if (artistId) query.set("artistId", String(artistId));
-    try {
-      const items = await lidarrClient.request(`/manualimport?${query.toString()}`);
-      const result = classify(Array.isArray(items) ? items : [], folder.files);
-      state.evaluation[folder.key] = {
-        kind: folder.kind,
-        status: result.status,
-        reasons: result.reasons,
-        artistId,
-        album: result.audio[0]?.album?.title || null,
-        files: result.audio.map((item) => ({
-          path: item.path,
-          artistId: item.artist?.id,
-          albumId: item.album?.id,
-          albumReleaseId: item.albumReleaseId,
-          trackIds: (item.tracks || []).map((t) => t.id),
-          quality: item.quality,
-        })),
-      };
-      counts[result.status] += 1;
-    } catch (error) {
-      state.evaluation[folder.key] = { kind: folder.kind, status: "error", reasons: [String(error.message).split("\n")[0].slice(0, 160)], artistId };
-      counts.error += 1;
-    }
-    if (n % 25 === 0) {
-      console.log(`  evaluated ${n}/${folders.size}: ${JSON.stringify(counts)}`);
-      await saveState(state);
-    }
-  }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   await saveState(state);
   console.log(`evaluated ${folders.size} folders: ${JSON.stringify(counts)}`);
   const reasonCounts = {};
   const report = [];
   for (const [key, e] of Object.entries(state.evaluation)) {
-    if (e.status === "clean") continue;
-    for (const r of e.reasons) reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+    if (!["review", "error"].includes(e.status)) continue;
+    for (const r of e.reasons) reasonCounts[r.replace(/\[.*$/, "").trim()] = (reasonCounts[r.replace(/\[.*$/, "").trim()] || 0) + 1;
     report.push(`${e.status.padEnd(7)} ${key}  ->  ${e.reasons.join("; ")}`);
   }
-  console.log("reasons:", JSON.stringify(reasonCounts, null, 1));
+  console.log("review reasons:", JSON.stringify(reasonCounts, null, 1));
   await fs.writeFile(`${LISTS_DIR}/evaluate.txt`, report.sort().join("\n") + "\n");
-  console.log(`clean folders: ${counts.clean} (${Object.values(state.evaluation).filter((e) => e.status === "clean").reduce((s, e) => s + e.files.length, 0)} files); review list in ${LISTS_DIR}/evaluate.txt`);
+  const clean = Object.values(state.evaluation).filter((e) => e.status === "clean");
+  console.log(`clean folders: ${clean.length} (${clean.reduce((s, e) => s + e.files.length, 0)} files to import, ${clean.reduce((s, e) => s + (e.alreadyHave || 0), 0)} already held); review list in ${LISTS_DIR}/evaluate.txt`);
 }
 
 // ---------------------------------------------------------------- import
