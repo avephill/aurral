@@ -451,6 +451,22 @@ async function trim(folders, state) {
     if (!albumCache.has(artistId)) albumCache.set(artistId, (await lidarrClient.request(`/album?artistId=${artistId}`)) || []);
     return albumCache.get(artistId);
   };
+  // Same-titled albums live under other artists too (dad's 'Celtic Christmas'
+  // is a different record from Eden's Bridge's 'Celtic Christmas'); list them
+  // so the reader can judge, with the file count each already has.
+  const everyAlbum = (await lidarrClient.request("/album")) || [];
+  const byTitle = new Map();
+  for (const a of everyAlbum) {
+    const k = normalize(a.title);
+    if (!byTitle.has(k)) byTitle.set(k, []);
+    byTitle.get(k).push(a);
+  }
+  const elsewhere = (folder, artistId) => {
+    const wanted = normalize(folder.albumFolder.replace(/_/g, " "));
+    return (byTitle.get(wanted) || [])
+      .filter((a) => a.artistId !== artistId)
+      .map((a) => `'${a.title}' by ${byId.get(a.artistId)?.artistName} ${a.statistics?.trackFileCount ?? 0}/${a.statistics?.totalTrackCount ?? "?"}`);
+  };
   const groups = { complete: [], partial: [], absent: [] };
   for (const folder of folders.values()) {
     const e = state.evaluation[folder.key];
@@ -475,7 +491,8 @@ async function trim(folders, state) {
         albums.find((a) => a.id === albumId);
     }
     const staged = folder.files.filter((f) => AUDIO.test(f)).length;
-    const line = `${folder.key}  (${staged} staged files)`;
+    const others = elsewhere(folder, artistId);
+    const line = `${folder.key}  (${staged} staged files)` + (others.length ? `  [same title under other artists: ${others.join("; ")}]` : "");
     if (!album) {
       groups.absent.push(`${line}  ->  ${e.reasons.join("; ")}`);
       continue;
