@@ -465,12 +465,14 @@ async function trim(folders, state) {
     let album = null;
     if (artistId) {
       const albums = await albumsOf(artistId);
+      // The name comes first: a folder is in review because Lidarr's guess at
+      // its release was poor, so that guess (e.albumId) is only a last resort.
       const albumId = e.albumId ?? e.files?.[0]?.albumId;
       const wanted = normalize(folder.albumFolder.replace(/_/g, " "));
       album =
-        albums.find((a) => a.id === albumId) ||
         albums.find((a) => normalize(a.title) === wanted) ||
-        albums.find((a) => normalize(a.title).startsWith(wanted) || wanted.startsWith(normalize(a.title)));
+        albums.find((a) => normalize(a.title).startsWith(wanted) || wanted.startsWith(normalize(a.title))) ||
+        albums.find((a) => a.id === albumId);
     }
     const staged = folder.files.filter((f) => AUDIO.test(f)).length;
     const line = `${folder.key}  (${staged} staged files)`;

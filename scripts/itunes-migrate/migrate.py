@@ -197,6 +197,34 @@ def select_playlists(playlists, itunes, results, args):
     return chosen, skipped
 
 
+def apply_overrides(path, results, nav):
+    """Hand-made one-off links: a CSV with an itunes_track column holding the
+    <Artist>/<Album>/<file> tail of the iTunes path and a navidrome_path_to_use
+    column holding the library-relative path of the song it should count as.
+    A candidate cell copied verbatim ('path (207s, sim 1.00)') is accepted."""
+    import csv
+    import unicodedata
+
+    nfc = lambda s: unicodedata.normalize("NFC", s or "")
+    by_path = {nfc(r["path"]): r["id"] for r in nav}
+    applied = unresolved = 0
+    with open(path, newline="") as fh:
+        for row in csv.DictReader(fh):
+            target = nfc(row.get("navidrome_path_to_use", "")).strip()
+            if not target:
+                continue
+            target = target.split(" (")[0].strip()
+            key = "path:" + nfc(row["itunes_track"]).strip()
+            nav_id = by_path.get(target)
+            if key in results and nav_id:
+                results[key] = {"nav_id": nav_id, "tier": "manual override", "ambiguous": False}
+                applied += 1
+            else:
+                unresolved += 1
+                print(f"  override not applied: {row['itunes_track']} -> {target} ({'unknown iTunes track' if key not in results else 'no such library path'})")
+    print(f"overrides: {applied} applied, {unresolved} not applied")
+
+
 def stars(rating):
     """iTunes stores 20 per star; this library has no half stars."""
     return min(5, max(1, round(rating / 20)))
@@ -374,6 +402,7 @@ def main():
     ap.add_argument("--user", required=True, help="Navidrome user to migrate into; password from ND_PASS")
     ap.add_argument("--out", default=".", help="directory for plan.json, match.json and unmatched.csv")
     ap.add_argument("--state", help="what the last --apply wrote (default OUT/applied.json); re-runs undo only their own earlier work")
+    ap.add_argument("--overrides", help="CSV of hand-made links: itunes_track (<Artist>/<Album>/<file>) -> navidrome_path_to_use")
     ap.add_argument("--apply", action="store_true", help="write to Navidrome (default is a dry run)")
     ap.add_argument("--public", action="store_true", help="create playlists as public")
     ap.add_argument("--replace-existing", action="store_true", help="also replace same-named playlists this tool did not create")
@@ -390,6 +419,8 @@ def main():
     itunes = {pid: t for pid, t in tracks.items() if is_music(t)}
     nav = load_navidrome(args.db, args.library_id)
     results = match_all(itunes, nav)
+    if args.overrides:
+        apply_overrides(args.overrides, results, nav)
     print(summarize(itunes, results, playlists))
     os.makedirs(args.out, exist_ok=True)
     with open(f"{args.out}/match.json", "w") as fh:

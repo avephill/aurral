@@ -326,6 +326,17 @@ def match_all(itunes, nav):
                 scored.sort(key=lambda sc: sc[0], reverse=True)
                 found = ("T9 same album+duration, similar title", scored[0][1], len(scored) > 1)
 
+        if not found and it["n_album"] and it["b_title"]:
+            # T10: same artist and album, near-identical title, any length. A radio
+            # edit or a different pressing of the same song is still that song for a
+            # playlist; the strict title bar keeps unrelated tracks apart.
+            pool = by_artist_album[(it["n_artist"], it["n_album"])]
+            scored = [(SequenceMatcher(None, it["b_title"], c["b_title"]).ratio(), c) for c in pool]
+            scored = [(s, c) for s, c in scored if s >= 0.8]
+            if scored:
+                scored.sort(key=lambda sc: (-sc[0], abs(sc[1]["duration"] - it["dur"])))
+                found = ("T10 same album, same title, other length", scored[0][1], len(scored) > 1 and scored[1][0] == scored[0][0])
+
         if not found and it["n_title"]:
             # T8: iTunes track is one segment of a longer 'A / B' track on another edition.
             pool = [c for c in by_artist_segment[(it["n_artist"], it["n_title"])] if c["duration"] >= it["dur"] - 3]
