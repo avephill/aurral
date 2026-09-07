@@ -436,6 +436,70 @@ async function albums(folders, state) {
   }
 }
 
+// ---------------------------------------------------------------- trim
+
+// A folder lands in review when Lidarr cannot match *dad's files* to a release;
+// that says nothing about whether Lidarr already holds the album from another
+// source. This splits the review list by what Lidarr actually has, so folders
+// whose album is already complete drop out of the to-do.
+async function trim(folders, state) {
+  const { byMbid, byName, artists } = await lidarrArtists();
+  const byId = new Map(artists.map((a) => [a.id, a]));
+  const va = byMbid.get(VA_MBID);
+  const albumCache = new Map();
+  const albumsOf = async (artistId) => {
+    if (!albumCache.has(artistId)) albumCache.set(artistId, (await lidarrClient.request(`/album?artistId=${artistId}`)) || []);
+    return albumCache.get(artistId);
+  };
+  const groups = { complete: [], partial: [], absent: [] };
+  for (const folder of folders.values()) {
+    const e = state.evaluation[folder.key];
+    if (!e || !["review", "error"].includes(e.status)) continue;
+    const known = state.artists[folder.artistFolder];
+    let artistId = e.artistId ?? null;
+    if (!artistId) {
+      if (folder.kind === "compilation" || known?.status === "va") artistId = va?.id ?? null;
+      else if (known?.useExisting) artistId = byName.get(normalize(known.useExisting))?.id ?? null;
+      else artistId = known?.lidarrId ?? byMbid.get(known?.mbid)?.id ?? byName.get(normalize(folder.artistFolder))?.id ?? null;
+    }
+    let album = null;
+    if (artistId) {
+      const albums = await albumsOf(artistId);
+      const albumId = e.albumId ?? e.files?.[0]?.albumId;
+      const wanted = normalize(folder.albumFolder.replace(/_/g, " "));
+      album =
+        albums.find((a) => a.id === albumId) ||
+        albums.find((a) => normalize(a.title) === wanted) ||
+        albums.find((a) => normalize(a.title).startsWith(wanted) || wanted.startsWith(normalize(a.title)));
+    }
+    const staged = folder.files.filter((f) => AUDIO.test(f)).length;
+    const line = `${folder.key}  (${staged} staged files)`;
+    if (!album) {
+      groups.absent.push(`${line}  ->  ${e.reasons.join("; ")}`);
+      continue;
+    }
+    const have = album.statistics?.trackFileCount ?? 0;
+    const total = album.statistics?.totalTrackCount ?? album.statistics?.trackCount ?? 0;
+    const tag = `Lidarr has ${have}/${total} of '${album.title}'${album.monitored ? "" : " (unmonitored)"} under ${byId.get(artistId)?.artistName}`;
+    if (total && have >= total) groups.complete.push(`${line}  ->  ${tag}`);
+    else if (have > 0) groups.partial.push(`${line}  ->  ${tag}  |  ${e.reasons.join("; ")}`);
+    else groups.absent.push(`${line}  ->  ${tag}  |  ${e.reasons.join("; ")}`);
+  }
+  const out = [
+    `# NEEDS IMPORT — album absent or empty in Lidarr (${groups.absent.length})`,
+    ...groups.absent.sort(),
+    "",
+    `# PARTIAL — Lidarr has some tracks; dad's folder may fill the rest (${groups.partial.length})`,
+    ...groups.partial.sort(),
+    "",
+    `# ALREADY COMPLETE IN LIDARR — nothing to import (${groups.complete.length})`,
+    ...groups.complete.sort(),
+    "",
+  ].join("\n");
+  await fs.writeFile(`${LISTS_DIR}/review-trimmed.txt`, out);
+  console.log(`review folders: needs import ${groups.absent.length}, partial ${groups.partial.length}, already complete ${groups.complete.length} -> ${LISTS_DIR}/review-trimmed.txt`);
+}
+
 // ---------------------------------------------------------------- import
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -519,7 +583,7 @@ async function doImport(folders, state) {
 const folders = await readLists();
 const state = await loadState();
 console.log(`${folders.size} album folders in the lists (${[...folders.values()].filter((f) => f.kind === "compilation").length} compilations); stage: ${STAGE}`);
-const stages = { resolve, add, evaluate, albums, import: doImport };
+const stages = { resolve, add, evaluate, albums, trim, import: doImport };
 if (!stages[STAGE]) {
   console.error(`unknown STAGE ${STAGE}; use ${Object.keys(stages).join("|")}`);
   process.exit(2);
