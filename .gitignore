@@ -16,3 +16,6 @@ coverage/
 /.maintainer/
 /AGENTS.md
 /.agents/
+
+# Python bytecode from scripts/itunes-migrate
+__pycache__/
