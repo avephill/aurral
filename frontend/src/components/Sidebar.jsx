@@ -77,10 +77,12 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   }, [user?.id]);
 
   const isIcons = mode === "icons" && isDesktop;
-  // The iTunes theme is a source list: every section's views stay listed
-  // under a heading, as in iTunes, instead of unfolding only for the active
-  // section. Same links, same targets; only which rows are visible changes.
+  // The iTunes theme is a source list: the Library section's views stay
+  // listed under a heading, as in iTunes, instead of unfolding only while
+  // it is the active section. Same links, same targets; only which rows
+  // are visible changes. Other sections still unfold when active.
   const isSourceList = useThemeId() === ITUNES_THEME_ID && !isIcons;
+  const isPinnedOpen = (item) => isSourceList && item.section === "library";
   const isOnSettings = location.pathname.startsWith("/settings");
   const isOnLibrary = location.pathname === "/library" || location.pathname.startsWith("/library/");
   const isOnShows = location.pathname.startsWith("/shows");
@@ -257,7 +259,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";
 
   const renderSubnav = (item, activeId) => {
-    if (isIcons || (!isSourceList && !isNavItemActive(item))) {
+    if (isIcons || (!isPinnedOpen(item) && !isNavItemActive(item))) {
       return null;
     }
     if (!item.subnav?.length && item.section !== "discover") {
@@ -348,7 +350,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       classes.push("sidebar-nav-group--discover");
     }
     const hasSubnav = item.subnav?.length || item.section === "discover";
-    if ((active || isSourceList) && hasSubnav && !isIcons) {
+    if ((active || isPinnedOpen(item)) && hasSubnav && !isIcons) {
       classes.push("is-expanded");
     } else if (active) {
       classes.push("is-active-row");
@@ -471,7 +473,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         {canAccessSettings && (
           <div
             className={`sidebar-settings-group${
-              isIcons || settingsMode ? "" : isOnSettings || isSourceList ? " sidebar-nav-group is-expanded" : ""
+              isIcons || settingsMode ? "" : isOnSettings ? " sidebar-nav-group is-expanded" : ""
             }`}
           >
             {settingsMode ? (
@@ -530,7 +532,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
                   </span>
                 </Link>
 
-                {(isOnSettings || isSourceList) && (
+                {isOnSettings && (
                   <nav className="sidebar-subnav" aria-label="Settings sections">
                     {settingsTabs.map((tab) => {
                       const tabActive = activeSettingsTab === tab.id;
