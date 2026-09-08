@@ -119,6 +119,18 @@
   justify-content: center;
 }
 
+/* The iTunes source list has no logo. The row stays as a blank stretch of
+   title bar so the bar runs unbroken across sidebar and content, the way
+   the iTunes window chrome does. The icon rail keeps its logo, which is
+   the only home link it has. */
+:root[data-theme-id="itunes"] .sidebar-shell--full .sidebar-logo-link {
+  display: none;
+}
+
+:root[data-theme-id="itunes"] .sidebar-shell--full .sidebar-nav-wrap {
+  padding-top: 0.75rem;
+}
+
 :root[data-theme-id="itunes"] .sidebar-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -185,12 +197,17 @@
 /*
  * An expanded section works like an iTunes source-list heading ("Library",
  * "Music Playlists"): a small grey label with its views listed under it,
- * and the blue bar moves to the active view.
+ * and the blue bar moves to the active view. In this theme the sidebar
+ * keeps every section expanded, so the heading style applies whether or
+ * not the section is the active one.
  */
+:root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link,
+:root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link:hover,
 :root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link.is-active,
 :root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link.is-active:hover,
+:root[data-theme-id="itunes"] .sidebar-settings-group.is-expanded > .sidebar-link,
 :root[data-theme-id="itunes"] .sidebar-settings-group.is-expanded > .sidebar-link.is-active {
-  margin-top: 0.5rem;
+  margin-top: 0.625rem;
   min-height: 1.375rem;
   background: transparent;
   color: var(--itunes-source-heading);
@@ -200,9 +217,25 @@
   text-transform: uppercase;
 }
 
-:root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link.is-active .sidebar-link__icon,
-:root[data-theme-id="itunes"] .sidebar-settings-group.is-expanded > .sidebar-link.is-active .sidebar-link__icon {
+:root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link:hover,
+:root[data-theme-id="itunes"] .sidebar-settings-group.is-expanded > .sidebar-link:hover {
+  color: var(--aurral-text);
+}
+
+:root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-link .sidebar-link__icon,
+:root[data-theme-id="itunes"] .sidebar-settings-group.is-expanded > .sidebar-link .sidebar-link__icon {
   color: var(--itunes-source-heading);
+}
+
+/* The first heading sits flush under the top of the list. */
+:root[data-theme-id="itunes"] .sidebar-nav > .sidebar-nav-group:first-child.is-expanded > .sidebar-link {
+  margin-top: 0;
+}
+
+/* Every heading's list gets the small gap iTunes leaves between groups. */
+:root[data-theme-id="itunes"] .sidebar-nav-group.is-expanded > .sidebar-subnav,
+:root[data-theme-id="itunes"] .sidebar-settings-group.is-expanded > .sidebar-subnav {
+  padding-bottom: 0.125rem;
 }
 
 :root[data-theme-id="itunes"] .sidebar-subnav {

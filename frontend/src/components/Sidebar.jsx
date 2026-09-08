@@ -30,6 +30,8 @@ import {
 } from "../navigation/libraryNavConfig";
 import { useDiscoverRecent } from "../contexts/DiscoverRecentProvider";
 import { useStorageHealth } from "../hooks/useStorageHealth";
+import { useThemeId } from "../hooks/useThemeId";
+import { ITUNES_THEME_ID } from "../utils/theme.js";
 import SidebarStageBackdrop, {
   getSidebarStageBackdropEnabled,
   resolveSidebarStageBackdropVariant,
@@ -75,6 +77,10 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   }, [user?.id]);
 
   const isIcons = mode === "icons" && isDesktop;
+  // The iTunes theme is a source list: every section's views stay listed
+  // under a heading, as in iTunes, instead of unfolding only for the active
+  // section. Same links, same targets; only which rows are visible changes.
+  const isSourceList = useThemeId() === ITUNES_THEME_ID && !isIcons;
   const isOnSettings = location.pathname.startsWith("/settings");
   const isOnLibrary = location.pathname === "/library" || location.pathname.startsWith("/library/");
   const isOnShows = location.pathname.startsWith("/shows");
@@ -251,7 +257,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";
 
   const renderSubnav = (item, activeId) => {
-    if (isIcons || !isNavItemActive(item)) {
+    if (isIcons || (!isSourceList && !isNavItemActive(item))) {
       return null;
     }
     if (!item.subnav?.length && item.section !== "discover") {
@@ -341,7 +347,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
     if (item.section === "discover") {
       classes.push("sidebar-nav-group--discover");
     }
-    if (active && (item.subnav?.length || item.section === "discover") && !isIcons) {
+    const hasSubnav = item.subnav?.length || item.section === "discover";
+    if ((active || isSourceList) && hasSubnav && !isIcons) {
       classes.push("is-expanded");
     } else if (active) {
       classes.push("is-active-row");
@@ -464,7 +471,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         {canAccessSettings && (
           <div
             className={`sidebar-settings-group${
-              isIcons || settingsMode ? "" : isOnSettings ? " sidebar-nav-group is-expanded" : ""
+              isIcons || settingsMode ? "" : isOnSettings || isSourceList ? " sidebar-nav-group is-expanded" : ""
             }`}
           >
             {settingsMode ? (
@@ -523,7 +530,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
                   </span>
                 </Link>
 
-                {isOnSettings && (
+                {(isOnSettings || isSourceList) && (
                   <nav className="sidebar-subnav" aria-label="Settings sections">
                     {settingsTabs.map((tab) => {
                       const tabActive = activeSettingsTab === tab.id;
