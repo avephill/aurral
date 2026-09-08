@@ -3,6 +3,7 @@ export const THEME_APPEARANCE_STORAGE_KEY = "aurralThemeAppearance:v1";
 export const CUSTOM_THEMES_STORAGE_KEY = "aurralThemes:v1";
 export const THEME_FILE_VERSION = 1;
 export const DEFAULT_THEME_ID = "aurral";
+export const ITUNES_THEME_ID = "itunes";
 export const THEME_APPEARANCES = ["system", "light", "dark"];
 
 export const THEME_COLOR_ROLES = [
@@ -210,6 +211,36 @@ export const BUILT_IN_THEMES = [
         scrim: "#000000b8",
       }),
     },
+  },
+  {
+    // The flat white iTunes 12 look: grey source list, blue selection bar,
+    // small system-font text. Layout overrides live in itunesTheme.css and
+    // are scoped by the data-theme-id attribute this id sets on the root.
+    id: ITUNES_THEME_ID,
+    label: "iTunes",
+    appearance: "light",
+    colors: createThemeColors("light", "#ffffff", "#3d7ee5", {
+      chrome: "#f0f0f0",
+      surface: "#ffffff",
+      surfaceRaised: "#f6f6f6",
+      surfacePopover: "#ffffff",
+      surfaceHover: "#e8e8e8",
+      surfaceSelected: "#dce8fb",
+      text: "#1e1e1e",
+      textMuted: "#6a6a6a",
+      textSubtle: "#8f8f8f",
+      border: "#d4d4d4",
+      borderStrong: "#b8b8b8",
+      accentContrast: "#ffffff",
+      danger: "#d63b3b",
+      warning: "#c47b00",
+      success: "#2f9d4a",
+      info: "#3d7ee5",
+      ring: "#3d7ee5",
+      controlOn: "#3d7ee5",
+      controlOnContrast: "#ffffff",
+      scrim: "#00000059",
+    }),
   },
 ];
 
