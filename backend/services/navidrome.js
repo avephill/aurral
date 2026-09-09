@@ -524,6 +524,18 @@ export class NavidromeClient {
     );
   }
 
+  // Native API title search. Unlike the Subsonic search, the songs come back
+  // with their real library-relative paths, which is what path matching needs.
+  async searchSongsNative(title, { limit = 40 } = {}) {
+    const query = String(title || "").trim();
+    if (!query) return [];
+    const songs = await this._nativeRequest(
+      "GET",
+      `/api/song?_start=0&_end=${Number(limit)}&title=${encodeURIComponent(query)}`,
+    );
+    return Array.isArray(songs) ? songs : [];
+  }
+
   async findSongsByPath(path) {
     const songs = await this._nativeRequest(
       "GET",

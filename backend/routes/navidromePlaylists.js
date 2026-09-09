@@ -139,7 +139,7 @@ router.get("/:id", noCache, async (req, res) => {
   try {
     const playlist = await client.getSubsonicPlaylist(req.params.id);
     if (!playlist) return res.status(404).json({ error: "Playlist not found" });
-    const tracks = mapNavidromeEntriesToTracks(playlist.entry);
+    const tracks = await mapNavidromeEntriesToTracks(playlist.entry, { playlistId: req.params.id });
     return sendJson(res, 200, {
       ...toPlaylistSummary(playlist, client.user),
       trackCount: tracks.length,
