@@ -90,6 +90,8 @@ export const buildSharedPlaylistTrackPayload = ({
   releaseYear = null,
   durationMs = null,
   reason = null,
+  trackId = null,
+  albumId = null,
 } = {}) => ({
   artistName,
   trackName,
@@ -101,6 +103,11 @@ export const buildSharedPlaylistTrackPayload = ({
   durationMs: normalizeTrackDurationMs(durationMs),
   reason,
   artistAliases: [],
+  // Canonical library ids, when the track came from the library. A playlist
+  // store that keys on files (Navidrome) resolves these by path instead of
+  // guessing from names.
+  ...(trackId != null ? { trackId } : {}),
+  ...(albumId != null ? { albumId } : {}),
 });
 
 export const formatLifeSpan = (lifeSpan) => {

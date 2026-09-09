@@ -51,6 +51,9 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const canAccessSettings = user?.role === "admin" || !!user?.permissions?.accessSettings;
   const userLibrariesEnabled = bootstrap?.userLibrariesEnabled === true;
   const discoveryEnabled = bootstrap?.discoveryEnabled !== false;
+  // Flows and Discover playlists are Aurral's automatic playlists; with those
+  // off only hand-made playlists remain, under Library.
+  const automaticPlaylistsEnabled = bootstrap?.automaticPlaylistsEnabled !== false;
   const libraryRecommendationsEnabled = bootstrap?.libraryRecommendationsEnabled !== false;
   const { hasReview: hasReviewAlert } = useFlowWorkerActivity({
     enabled: hasFlowAccess,
@@ -223,12 +226,16 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
             },
           ]
         : []),
-      {
-        path: "/flows",
-        label: "Flows",
-        icon: AudioWaveform,
-        permission: "accessFlow",
-      },
+      ...(automaticPlaylistsEnabled
+        ? [
+            {
+              path: "/flows",
+              label: "Flows",
+              icon: AudioWaveform,
+              permission: "accessFlow",
+            },
+          ]
+        : []),
       {
         path: buildActivityPath(DEFAULT_ACTIVITY_VIEW),
         basePath: "/activity",
@@ -254,6 +261,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
     hasPermission,
     userLibrariesEnabled,
     discoveryEnabled,
+    automaticPlaylistsEnabled,
   ]);
 
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";
@@ -274,7 +282,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       // Recommended and Trending both read the whole-library recommendation
       // cache, so with that engine off they lead to a permanently empty page.
       const links = [
-        hasFlowAccess ? (
+        hasFlowAccess && automaticPlaylistsEnabled ? (
           <Link
             key="playlists"
             to="/discover/playlists"

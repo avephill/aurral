@@ -1,4 +1,4 @@
-import { isPlaylistsEnabled } from "../../config/featureFlags.js";
+import { isAutomaticPlaylistsEnabled } from "../../config/featureFlags.js";
 import { dbOps } from "../../db/helpers/index.js";
 import { getLastfmApiKey } from "../apiClients/index.js";
 import { iterateCanonicalArtistProjection } from "../libraryQueryService.js";
@@ -62,7 +62,7 @@ export const runQueuedDiscoverPlaylistBuild = async (payload = {}) => {
   if (activeToken && buildToken && activeToken !== buildToken) {
     return { skipped: true, reason: "stale_build" };
   }
-  if (!isPlaylistsEnabled()) {
+  if (!isAutomaticPlaylistsEnabled()) {
     return { skipped: true, reason: "playlists_disabled" };
   }
   if (!getLastfmApiKey()) {

@@ -589,3 +589,114 @@
     gap: 0 0.5rem;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Playlists (Navidrome-held): the source list and a striped song table. */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme-id="itunes"] .nd-playlists__list {
+  padding: 0;
+  border: 1px solid var(--itunes-box-border);
+  border-radius: 0;
+  background: var(--itunes-source-list);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__group-label {
+  padding: 0.5rem 0.75rem 0.125rem;
+  color: var(--itunes-source-heading);
+  letter-spacing: 0.02em;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__item {
+  gap: 0.5rem;
+  min-height: 1.625rem;
+  padding: 0.125rem 0.75rem;
+  border-radius: 0;
+  transition: none;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__item-name {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__item-meta {
+  display: none;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__item.is-active,
+:root[data-theme-id="itunes"] .nd-playlists__item.is-active:hover {
+  background: var(--itunes-blue);
+  color: var(--itunes-blue-text);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__item.is-active .nd-playlists__item-icon {
+  color: var(--itunes-blue-text);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__title {
+  font-weight: 600;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__tracks {
+  border: 1px solid var(--itunes-box-border);
+  background: #ffffff;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track {
+  min-height: 1.5rem;
+  padding: 0.125rem 0.5rem;
+  border-bottom: 0;
+  font-size: 0.8125rem;
+  transition: none;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track:nth-child(odd) {
+  background: var(--itunes-stripe);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track:hover {
+  background: var(--aurral-surface-hover);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current,
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current:nth-child(odd),
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current:hover {
+  background: var(--itunes-blue);
+  color: var(--itunes-blue-text);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current .nd-playlists__track-detail,
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current .nd-playlists__track-duration,
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current .nd-playlists__track-number {
+  color: var(--itunes-blue-text);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current .nd-playlists__playing {
+  background: var(--itunes-blue-text);
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track-copy {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track-detail {
+  font-size: 0.75rem;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track-play {
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 3px;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track-remove {
+  opacity: 1;
+}

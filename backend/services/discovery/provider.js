@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { isPlaylistsEnabled } from "../../config/featureFlags.js";
+import { isAutomaticPlaylistsEnabled } from "../../config/featureFlags.js";
 import { dbOps, userOps } from "../../db/helpers/index.js";
 import {
   lastfmRequest,
@@ -396,7 +396,7 @@ const scheduleDiscoverPlaylistBuild = ({
   publishUpdate = true,
   progressExtra = {},
 } = {}) => {
-  if (!isPlaylistsEnabled()) return;
+  if (!isAutomaticPlaylistsEnabled()) return;
   if (!getLastfmApiKey()) return;
 
   const buildKey = getDiscoveryPlaylistBuildKey(cacheNamespace);

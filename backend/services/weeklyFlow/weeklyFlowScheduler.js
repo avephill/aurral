@@ -1,4 +1,4 @@
-import { isPlaylistsEnabled } from "../../config/featureFlags.js";
+import { isAutomaticPlaylistsEnabled } from "../../config/featureFlags.js";
 import { downloadTracker } from "./weeklyFlowDownloadTracker.js";
 import { weeklyFlowWorker } from "./weeklyFlowWorker.js";
 import { flowPlaylistConfig } from "./weeklyFlowPlaylistConfig.js";
@@ -10,7 +10,7 @@ import {
 } from "./weeklyFlowOperations.js";
 
 export async function runScheduledRefresh() {
-  if (!isPlaylistsEnabled()) return;
+  if (!isAutomaticPlaylistsEnabled()) return;
   if (!isAnyDownloadSourceConfigured()) return;
 
   const due = flowPlaylistConfig.getDueForRefresh();

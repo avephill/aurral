@@ -42,3 +42,34 @@ export const isDiscoveryRefreshEnabled = () =>
 // install without personal libraries has nothing for it to fix.
 export const isPlaylistNormalizeEnabled = () =>
   process.env.AURRAL_PLAYLIST_NORMALIZE_ENABLED === "true";
+
+// AURRAL_AUTOMATIC_PLAYLISTS_ENABLED=false keeps hand-made playlists but turns
+// off everything Aurral generates on its own: flows (scheduled discovery
+// playlists) and the discovery playlist builders. The accessFlow permission
+// stays, so people can still make and edit their own lists; the Flows page
+// and Discover playlists disappear.
+export const isAutomaticPlaylistsEnabled = () =>
+  isPlaylistsEnabled() && process.env.AURRAL_AUTOMATIC_PLAYLISTS_ENABLED !== "false";
+
+// AURRAL_NAVIDROME_USER_AUTH=reverse-proxy makes Aurral talk to Navidrome as
+// the signed-in Aurral user, by sending Navidrome the same trusted username
+// header a reverse-proxy SSO setup sends. Navidrome has to list Aurral's
+// address in its trusted sources for this to be honoured. With it on,
+// hand-made playlists live in Navidrome and Aurral reads and edits them there,
+// so the two never need syncing; ratings and stars go the same way.
+export const NAVIDROME_USER_AUTH_MODES = ["off", "reverse-proxy"];
+export const getNavidromeUserAuthMode = () => {
+  const mode = String(process.env.AURRAL_NAVIDROME_USER_AUTH || "off").trim().toLowerCase();
+  return NAVIDROME_USER_AUTH_MODES.includes(mode) ? mode : "off";
+};
+export const isNavidromeUserAuthEnabled = () => getNavidromeUserAuthMode() !== "off";
+
+// The header Navidrome reads the username from; must match its
+// ND_EXTAUTH_USERHEADER (older releases: ND_REVERSEPROXYUSERHEADER).
+export const getNavidromeUserHeader = () =>
+  String(process.env.AURRAL_NAVIDROME_USER_HEADER || "Remote-User").trim() || "Remote-User";
+
+// Navidrome-held playlists need both the permission to make playlists and a
+// way to act as the user.
+export const isNavidromePlaylistsEnabled = () =>
+  isPlaylistsEnabled() && isNavidromeUserAuthEnabled();

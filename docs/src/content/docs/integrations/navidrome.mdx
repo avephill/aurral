@@ -117,3 +117,30 @@ This removes any missing Navidrome files, including flow entries, after a scan.
 :::
 
 For Plex and Plexamp, see [Plex](/integrations/plex/).
+
+## Playlists held in Navidrome
+
+With `AURRAL_NAVIDROME_USER_AUTH=reverse-proxy`, Library → Playlists shows the signed-in
+user's Navidrome playlists and edits them in place: New playlist, Rename, Delete, Add to
+playlist from any track, and remove from the open playlist. Every change is a Subsonic call
+made as that user, so it is visible in Navidrome and in every Subsonic client at once, and a
+playlist edited in a Navidrome client shows the change here on the next load. Aurral stores
+nothing for these playlists.
+
+Aurral matches tracks to Navidrome songs by file path. The first successful match teaches it
+where the two mount the same library; after that lookups are exact. Tracks that Navidrome has
+not indexed cannot be added, and playlist entries with no file on this server are listed but
+cannot play.
+
+Requirements:
+
+- Navidrome must trust Aurral's address for external auth. Set `ND_EXTAUTH_TRUSTEDSOURCES`
+  (older releases: `ND_REVERSEPROXYWHITELIST`) to include Aurral's container address or its
+  Docker network in CIDR form, and keep `ND_EXTAUTH_USERHEADER` in step with
+  `AURRAL_NAVIDROME_USER_HEADER` (both default to `Remote-User`).
+- Aurral usernames must equal Navidrome usernames, which an SSO setup usually guarantees.
+- The admin Navidrome connection under Settings → Playback stays in use for path lookups.
+
+Pair it with `AURRAL_AUTOMATIC_PLAYLISTS_ENABLED=false` when only hand-made playlists are
+wanted.
+

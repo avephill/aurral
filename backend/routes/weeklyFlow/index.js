@@ -1,5 +1,6 @@
 import express from "express";
 import { requireAuth, requirePermission } from "../../middleware/requirePermission.js";
+import { isAutomaticPlaylistsEnabled } from "../../config/featureFlags.js";
 import { registerStream } from "./handlers/stream.js";
 import { registerArtworkServe } from "./handlers/artworkServe.js";
 import { registerArtworkManagement } from "./handlers/artworkManagement.js";
@@ -17,6 +18,13 @@ registerArtworkServe(router);
 
 router.use(requireAuth);
 router.use(requirePermission("accessFlow"));
+
+// Flows are Aurral's automatic playlists. With those switched off the routes
+// that would create or run one are closed, while hand-made playlists stay.
+router.use("/flows", (req, res, next) => {
+  if (req.method === "GET" || isAutomaticPlaylistsEnabled()) return next();
+  return res.status(403).json({ error: "Automatic playlists are disabled on this server" });
+});
 
 registerArtworkManagement(router);
 registerFlows(router);

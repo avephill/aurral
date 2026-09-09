@@ -2262,3 +2262,47 @@ export function invalidateCanonicalLibraryCache({ persistedGenres = true } = {})
 }
 
 export { normalizeSource };
+
+/**
+ * Media files by exact path, for matching Navidrome playlist entries back to
+ * canonical tracks. Returns one row per path found: { path, trackId, albumId }.
+ */
+export function getCanonicalMediaFilesByPaths(paths = []) {
+  const values = [...new Set((Array.isArray(paths) ? paths : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean))];
+  if (!values.length) return [];
+  const rows = [];
+  const CHUNK = 500;
+  for (let index = 0; index < values.length; index += CHUNK) {
+    const chunk = values.slice(index, index + CHUNK);
+    rows.push(...db.prepare(
+      `SELECT media.path AS path, media.track_id AS trackId, media.album_id AS albumId
+       FROM library_media_files AS media
+       WHERE media.available = 1 AND media.path IN (${chunk.map(() => "?").join(",")})
+       ORDER BY media.source = 'lidarr' DESC, media.id`,
+    ).all(...chunk));
+  }
+  const seen = new Set();
+  return rows.filter((row) => {
+    if (seen.has(row.path)) return false;
+    seen.add(row.path);
+    return true;
+  });
+}
+
+/**
+ * One available media file whose path ends with the given suffix, used once
+ * to discover where Aurral's copy of a Navidrome library is mounted.
+ */
+export function findCanonicalMediaFilePathBySuffix(suffix) {
+  const value = String(suffix || "").trim();
+  if (!value) return null;
+  const escaped = value.replace(/[\\%_]/g, (char) => `\\${char}`);
+  return db.prepare(
+    `SELECT media.path AS path
+     FROM library_media_files AS media
+     WHERE media.available = 1 AND media.path LIKE ? ESCAPE '\\'
+     LIMIT 1`,
+  ).get(`%/${escaped}`)?.path || null;
+}

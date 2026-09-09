@@ -818,6 +818,8 @@ function LibraryPage() {
         trackMbid: track?.mbid || "",
         releaseYear: yearOf(album?.releaseDate),
         durationMs: trackDurationMs(track),
+        trackId: track?.id ?? null,
+        albumId: album?.id ?? null,
       });
       if (!payload.artistName || !payload.trackName) {
         showError("Track details are incomplete");

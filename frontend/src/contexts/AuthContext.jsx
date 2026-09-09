@@ -12,6 +12,7 @@ import {
   logoutApi,
 } from "../utils/api/endpoints/auth.js";
 import { clearLibraryFavoritesCache } from "../utils/api/endpoints/library.js";
+import { setPlaylistStoreMode } from "../utils/api/endpoints/playlists.js";
 import { setDateTimeFormat } from "../utils/dateTime.js";
 import { queryClient } from "../queryClient.js";
 
@@ -159,6 +160,12 @@ export const AuthProvider = ({ children }) => {
     if (user.role === "admin") return true;
     return !!user.permissions?.[perm];
   }, [user, bootstrap]);
+
+  // Hand-made playlists come from Navidrome when the server says so; the
+  // playlist API helpers route there for every menu in the app.
+  useEffect(() => {
+    setPlaylistStoreMode(bootstrap?.navidromePlaylistsEnabled === true ? "navidrome" : "aurral");
+  }, [bootstrap]);
 
   const canLogOut = !bootstrap?.proxyAuthEnabled || !!bootstrap?.proxyLogoutUrl;
 

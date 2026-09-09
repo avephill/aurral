@@ -49,6 +49,7 @@ const ReleasePage = lazy(() => import("./pages/ArtistDetails/ReleasePage"));
 const ActivityPage = lazy(() => import("./pages/ActivityPage"));
 const FlowPage = lazy(() => import("./pages/FlowPage"));
 const DiscoverPlaylistsPage = lazy(() => import("./pages/DiscoverPlaylistsPage"));
+const NavidromePlaylistsPage = lazy(() => import("./pages/NavidromePlaylistsPage"));
 const DiscoverPlaylistDetailPage = lazy(() => import("./pages/DiscoverPlaylistDetailPage"));
 const NewsPage = lazy(() => import("./pages/NewsPage"));
 
@@ -276,7 +277,11 @@ function AppContent() {
                         path="/library/playlists"
                         element={
                           <PermissionRoute permission="accessFlow">
-                            <FlowPage mode="playlists" />
+                            {bootstrap?.navidromePlaylistsEnabled === true ? (
+                              <NavidromePlaylistsPage />
+                            ) : (
+                              <FlowPage mode="playlists" />
+                            )}
                           </PermissionRoute>
                         }
                       />
@@ -287,9 +292,13 @@ function AppContent() {
                       <Route
                         path="/flows"
                         element={
-                          <PermissionRoute permission="accessFlow">
-                            <FlowPage mode="flows" />
-                          </PermissionRoute>
+                          bootstrap?.automaticPlaylistsEnabled === false ? (
+                            <Navigate to="/library/playlists" replace />
+                          ) : (
+                            <PermissionRoute permission="accessFlow">
+                              <FlowPage mode="flows" />
+                            </PermissionRoute>
+                          )
                         }
                       />
                       <Route path="/playlists" element={<Navigate to="/library/playlists" replace />} />

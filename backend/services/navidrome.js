@@ -46,6 +46,12 @@ export class NavidromeClient {
     return !!(this.url && this.user && this.password);
   }
 
+  // Extra headers for every Subsonic request. The per-user client uses this
+  // to carry the trusted username header instead of a password.
+  getRequestHeaders() {
+    return {};
+  }
+
   getAuthParams() {
     const salt = crypto.randomBytes(6).toString("hex");
     const token = crypto
@@ -77,9 +83,10 @@ export class NavidromeClient {
         }
         try {
           const endpointUrl = `${this.url}/rest/${endpoint}`;
+          const headers = this.getRequestHeaders();
           const response = endpoint === "updatePlaylist"
-            ? await axios.post(endpointUrl, query, { preserveMethodOnRedirect: true })
-            : await axios.get(`${endpointUrl}?${query}`);
+            ? await axios.post(endpointUrl, query, { preserveMethodOnRedirect: true, headers })
+            : await axios.get(`${endpointUrl}?${query}`, { headers });
 
           if (response.data["subsonic-response"]?.status === "failed") {
             const responseError = response.data["subsonic-response"].error || {};
@@ -169,6 +176,50 @@ export class NavidromeClient {
     const params = new URLSearchParams(this.getAuthParams());
     params.delete("f");
     return `${this.url}/rest/stream?id=${encodeURIComponent(songId)}&${params.toString()}`;
+  }
+
+  // Subsonic reads that carry the caller's own annotations (starred,
+  // userRating) and playlists. Used by the per-user client.
+  async getSong(id) {
+    const data = await this.request("getSong", { id });
+    return data.song || null;
+  }
+
+  async searchSongs(query, { limit = 20 } = {}) {
+    const data = await this.request("search3", {
+      query,
+      songCount: limit,
+      artistCount: 0,
+      albumCount: 0,
+    });
+    const songs = data.searchResult3?.song || [];
+    return Array.isArray(songs) ? songs : [songs];
+  }
+
+  async getSubsonicPlaylists() {
+    const data = await this.request("getPlaylists");
+    const playlists = data.playlists?.playlist || [];
+    return Array.isArray(playlists) ? playlists : [playlists];
+  }
+
+  async getSubsonicPlaylist(id) {
+    const data = await this.request("getPlaylist", { id });
+    const playlist = data.playlist || null;
+    if (!playlist) return null;
+    const entries = playlist.entry || [];
+    return { ...playlist, entry: Array.isArray(entries) ? entries : [entries] };
+  }
+
+  async setRating(id, rating) {
+    return this.request("setRating", { id, rating: Math.max(0, Math.min(5, Number(rating) || 0)) });
+  }
+
+  async star(id) {
+    return this.request("star", { id });
+  }
+
+  async unstar(id) {
+    return this.request("unstar", { id });
   }
 
   async getPlaylists() {
