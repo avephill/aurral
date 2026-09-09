@@ -198,7 +198,7 @@
 
 .nd-playlists__track {
   display: grid;
-  grid-template-columns: 2rem 2rem minmax(0, 1fr) auto auto;
+  grid-template-columns: 2rem 2rem minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 0.5rem;
   min-height: 3rem;
@@ -284,6 +284,12 @@
   white-space: nowrap;
 }
 
+.nd-playlists__track-rating {
+  display: flex;
+  justify-content: center;
+  min-width: 5.25rem;
+}
+
 .nd-playlists__track-duration {
   color: var(--aurral-text-muted);
   font-size: 0.8125rem;
@@ -353,7 +359,8 @@
     grid-template-columns: 1.5rem 2rem minmax(0, 1fr) auto;
   }
 
-  .nd-playlists__track-duration {
+  .nd-playlists__track-duration,
+  .nd-playlists__track-rating {
     display: none;
   }
 

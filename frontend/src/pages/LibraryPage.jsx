@@ -25,6 +25,7 @@ import {
 
 import ArtistImage from "../components/ArtistImage";
 import { DotLoader } from "../components/DotLoader";
+import { TrackRating } from "../components/StarRating";
 import { LibraryItemMenu, LibraryItemSubmenu } from "../components/LibraryItemMenu";
 import TooltipButton from "../components/TooltipButton";
 import { useAuth } from "../contexts/AuthContext";
@@ -411,6 +412,7 @@ function LibraryPage() {
   } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { bootstrap, hasPermission, user } = useAuth();
+  const ratingsEnabled = bootstrap?.navidromeRatingsEnabled === true;
   const { showError, showSuccess } = useToast();
   const {
     sharedPlaylists,
@@ -1463,6 +1465,8 @@ function LibraryPage() {
         durationMs: Number(track.durationMs || file?.durationMs || 0) || null,
         recordHistory: true,
         artwork: getAlbumCover(album),
+        canonicalTrackId: track.id ?? null,
+        canonicalAlbumId: album?.id ?? null,
       };
     },
     [getAlbumCover, getAlbumForTrack, getArtistForAlbum],
@@ -1677,6 +1681,7 @@ function LibraryPage() {
         <span>Artist</span>
         <span>Album</span>
         <span className="native-library-track__time">Time</span>
+        <span className="native-library-track__rating">{ratingsEnabled ? "Rating" : ""}</span>
         <span />
         <span />
       </div>
@@ -1844,6 +1849,11 @@ function LibraryPage() {
             )}
             <span className={"native-library-track__time" + (!file ? " is-missing" : "")}>
               {formatDuration(trackDurationMs(track)) || "Unavailable"}
+            </span>
+            <span className="native-library-track__rating">
+              {ratingsEnabled && file ? (
+                <TrackRating trackId={track.id} albumId={album?.id ?? null} title={track.title} size="sm" />
+              ) : null}
             </span>
             {!file ? (
               <TooltipButton

@@ -144,3 +144,14 @@ Requirements:
 Pair it with `AURRAL_AUTOMATIC_PLAYLISTS_ENABLED=false` when only hand-made playlists are
 wanted.
 
+## Ratings and stars held in Navidrome
+
+With `AURRAL_NAVIDROME_USER_AUTH` on, star ratings appear on library track rows, on the
+open playlist, and in the player bar. A rating is written to Navidrome as the signed-in user
+and read back the same way, so it is the rating every Navidrome client shows. Clicking the
+current rating clears it. Hearting a track or album in Aurral also stars it in Navidrome, and
+unhearting removes the star; that mirroring is best effort and never blocks the favourite.
+
+Ratings need the same track-to-song link as playlists, so tracks Navidrome has not indexed
+show no stars.
+

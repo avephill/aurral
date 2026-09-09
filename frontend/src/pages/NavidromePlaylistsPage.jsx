@@ -5,6 +5,7 @@ import { ListMusic, Pause, Pencil, Play, Plus, Shuffle, Trash2, X } from "lucide
 import { DotLoader } from "../components/DotLoader";
 import { CreatePlaylistModal, ModalShell } from "../components/PlaylistModals";
 import TooltipButton from "../components/TooltipButton";
+import { TrackRating } from "../components/StarRating";
 import { useAuth } from "../contexts/AuthContext";
 import { useAudioQueue } from "../contexts/audioQueueContext";
 import { useToast } from "../contexts/ToastContext";
@@ -63,6 +64,8 @@ function toPlayable(track, playlistId) {
     durationMs: track.durationMs || null,
     recordHistory: true,
     artwork: track.album?.coverUrl || "",
+    canonicalTrackId: track.trackId,
+    canonicalAlbumId: track.albumId,
   };
 }
 
@@ -421,6 +424,11 @@ export default function NavidromePlaylistsPage() {
                             {[track.artistName, track.albumTitle].filter(Boolean).join(" · ")}
                             {track.available ? "" : " · not on this server"}
                           </span>
+                        </span>
+                        <span className="nd-playlists__track-rating">
+                          {track.available ? (
+                            <TrackRating trackId={track.trackId} albumId={track.albumId} title={track.title} size="sm" />
+                          ) : null}
                         </span>
                         <span className="nd-playlists__track-duration">
                           {track.durationMs ? formatTrackDuration(track.durationMs) : ""}

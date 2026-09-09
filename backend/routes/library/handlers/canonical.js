@@ -11,6 +11,8 @@ import {
   starMany,
   unstarMany,
 } from "../../../services/subsonicLibraryService.js";
+import { mirrorFavoritesToNavidrome } from "../../../services/navidromeAnnotations.js";
+import { isNavidromeUserAuthEnabled } from "../../../config/featureFlags.js";
 import {
   getLibraryScanStatus,
   getScheduledLibraryScanJobId,
@@ -178,6 +180,11 @@ export function registerCanonical(router) {
       : unstarMany(req.user, ids);
     if (!changed) {
       return res.status(400).json({ error: "Invalid favorite target" });
+    }
+    // A heart here is a star in Navidrome for the same user. Best effort and
+    // off the request path: Aurral's own favourite has already been saved.
+    if (isNavidromeUserAuthEnabled()) {
+      mirrorFavoritesToNavidrome(req.user, ids, req.body.starred).catch(() => {});
     }
     return res.json({ changedIds: ids });
   });

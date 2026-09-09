@@ -1,0 +1,83 @@
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.0625rem;
+  padding: 0.125rem;
+  border-radius: var(--aurral-radius-sm);
+  line-height: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.star-rating:focus-visible {
+  outline: 2px solid var(--aurral-ring);
+  outline-offset: 2px;
+}
+
+.star-rating.is-disabled {
+  cursor: default;
+}
+
+.star-rating.is-loading {
+  opacity: 0.35;
+}
+
+.star-rating.is-unknown {
+  opacity: 0.25;
+}
+
+.star-rating__star {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text-subtle);
+  cursor: inherit;
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+
+.star-rating__star svg {
+  width: 1em;
+  height: 1em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.star-rating__star.is-on svg {
+  fill: currentColor;
+}
+
+.star-rating__star.is-on {
+  color: var(--aurral-warning);
+}
+
+.star-rating__star.is-hover {
+  color: var(--aurral-text);
+  transform: scale(1.12);
+}
+
+.star-rating--sm {
+  font-size: 0.75rem;
+}
+
+.star-rating--md {
+  font-size: 0.9375rem;
+}
+
+.star-rating--lg {
+  font-size: 1.25rem;
+}
+
+/* Unrated rows keep the stars faint until you hover the row or the widget. */
+.star-rating:not(.has-value) .star-rating__star {
+  opacity: 0.45;
+}
+
+.star-rating:hover .star-rating__star,
+.star-rating:focus-visible .star-rating__star,
+.native-library-track:hover .star-rating__star,
+.nd-playlists__track:hover .star-rating__star {
+  opacity: 1;
+}

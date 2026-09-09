@@ -15,6 +15,7 @@ import {
   isPlaylistsEnabled,
   isAutomaticPlaylistsEnabled,
   isNavidromePlaylistsEnabled,
+  isNavidromeUserAuthEnabled,
 } from "../config/featureFlags.js";
 import { getDefaultDiscoverLayout } from "../config/discoverLayoutDefaults.js";
 import {
@@ -261,6 +262,7 @@ function buildBootstrapPayload(req) {
     playlistsEnabled: isPlaylistsEnabled(),
     automaticPlaylistsEnabled: isAutomaticPlaylistsEnabled(),
     navidromePlaylistsEnabled: isNavidromePlaylistsEnabled(),
+    navidromeRatingsEnabled: isNavidromeUserAuthEnabled(),
     discoveryEnabled: isDiscoveryEnabled(),
     libraryRecommendationsEnabled: isLibraryRecommendationsEnabled(),
     discoverDefaultLayout: getDefaultDiscoverLayout(),

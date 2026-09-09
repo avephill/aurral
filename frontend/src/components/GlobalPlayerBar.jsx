@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useAudioQueue } from "../contexts/audioQueueContext";
 import TooltipButton from "./TooltipButton";
+import { TrackRating } from "./StarRating";
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
@@ -112,6 +113,16 @@ function GlobalPlayerBar() {
           <div className="global-player__meta">
             <div className="global-player__title-row">
               <span className="global-player__title">{currentTrack.title}</span>
+              {currentTrack.canonicalTrackId ? (
+                <TrackRating
+                  trackId={currentTrack.canonicalTrackId}
+                  albumId={currentTrack.canonicalAlbumId}
+                  title={currentTrack.title}
+                  size="sm"
+                  className="global-player__rating"
+                  hideUnknown
+                />
+              ) : null}
             </div>
             {artistLabel || albumLabel ? (
               <span className="global-player__subtitle">

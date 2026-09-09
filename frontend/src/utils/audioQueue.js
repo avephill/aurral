@@ -70,6 +70,10 @@ export function normalizeQueueTrack(track, overrides = {}) {
     durationMs: track?.durationMs ?? overrides.durationMs ?? null,
     recordHistory: track?.recordHistory === true || overrides.recordHistory === true,
     trackMbid: track?.trackMbid ?? overrides.trackMbid ?? null,
+    // Canonical library ids, when the track came from the library. Ratings
+    // and stars in the player need them; nothing else does.
+    canonicalTrackId: track?.canonicalTrackId ?? overrides.canonicalTrackId ?? null,
+    canonicalAlbumId: track?.canonicalAlbumId ?? overrides.canonicalAlbumId ?? null,
     ...overrides,
   };
   return {

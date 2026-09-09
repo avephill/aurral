@@ -38,6 +38,7 @@ import healthRouter from "./routes/health.js";
 import filesystemRouter from "./routes/filesystem.js";
 import weeklyFlowRouter from "./routes/weeklyFlow/index.js";
 import navidromePlaylistsRouter from "./routes/navidromePlaylists.js";
+import navidromeRatingsRouter from "./routes/navidromeRatings.js";
 import { bootstrapHonkerSchedules } from "./services/honkerDb.js";
 import { initializeAppRuntime } from "./services/appRuntime.js";
 import {
@@ -234,6 +235,7 @@ app.use("/api/filesystem", filesystemRouter);
 app.use("/api/feeds", lidarrFeedRouter);
 app.use("/api/playlists", weeklyFlowRouter);
 app.use("/api/navidrome-playlists", navidromePlaylistsRouter);
+app.use("/api/navidrome-ratings", navidromeRatingsRouter);
 app.use("/api/weekly-flow", (req, res) => {
   const parsed = new URL(req.originalUrl, "http://localhost");
   res.redirect(308, `/api/playlists${parsed.pathname}${parsed.search}`);

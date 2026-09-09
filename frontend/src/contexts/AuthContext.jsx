@@ -13,6 +13,7 @@ import {
 } from "../utils/api/endpoints/auth.js";
 import { clearLibraryFavoritesCache } from "../utils/api/endpoints/library.js";
 import { setPlaylistStoreMode } from "../utils/api/endpoints/playlists.js";
+import { forgetTrackRatings, setTrackRatingsEnabled } from "../hooks/useTrackRating.js";
 import { setDateTimeFormat } from "../utils/dateTime.js";
 import { queryClient } from "../queryClient.js";
 
@@ -165,7 +166,13 @@ export const AuthProvider = ({ children }) => {
   // playlist API helpers route there for every menu in the app.
   useEffect(() => {
     setPlaylistStoreMode(bootstrap?.navidromePlaylistsEnabled === true ? "navidrome" : "aurral");
+    setTrackRatingsEnabled(bootstrap?.navidromeRatingsEnabled === true);
   }, [bootstrap]);
+
+  // Ratings belong to the signed-in user; never show one person's stars to the next.
+  useEffect(() => {
+    forgetTrackRatings();
+  }, [user?.id]);
 
   const canLogOut = !bootstrap?.proxyAuthEnabled || !!bootstrap?.proxyLogoutUrl;
 

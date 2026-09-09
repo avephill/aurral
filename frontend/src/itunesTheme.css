@@ -700,3 +700,34 @@
 :root[data-theme-id="itunes"] .nd-playlists__track-remove {
   opacity: 1;
 }
+
+/* ------------------------------------------------------------------ */
+/* Ratings: the small grey stars of an iTunes song list, blue on a     */
+/* selected row.                                                       */
+/* ------------------------------------------------------------------ */
+
+:root[data-theme-id="itunes"] .star-rating__star {
+  color: #b5b5b5;
+}
+
+:root[data-theme-id="itunes"] .star-rating__star.is-on {
+  color: #7a7a7a;
+}
+
+:root[data-theme-id="itunes"] .star-rating__star.is-hover {
+  color: var(--itunes-blue);
+  transform: none;
+}
+
+:root[data-theme-id="itunes"] .star-rating--sm {
+  font-size: 0.6875rem;
+}
+
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current .star-rating__star,
+:root[data-theme-id="itunes"] .nd-playlists__track.is-current .star-rating__star.is-on {
+  color: var(--itunes-blue-text);
+}
+
+:root[data-theme-id="itunes"] .star-rating:not(.has-value) .star-rating__star {
+  opacity: 0.55;
+}
