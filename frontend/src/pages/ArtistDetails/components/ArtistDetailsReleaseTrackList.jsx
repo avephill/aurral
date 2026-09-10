@@ -3,6 +3,7 @@ import { DotLoader } from "../../../components/DotLoader";
 import SearchLibraryCheck from "../../../components/SearchLibraryCheck";
 import { TrackPlayButton } from "./TrackPlayButton";
 import { TrackPlaylistMenu } from "./TrackPlaylistMenu";
+import { TrackRating } from "../../../components/StarRating";
 import { ArtistTrackListToolbar } from "./ArtistTrackListToolbar";
 import { useAlbumTrackListToolbar } from "../../../hooks/useAlbumTrackListToolbar";
 import { useAudioQueue } from "../../../contexts/audioQueueContext";
@@ -20,6 +21,7 @@ export function ArtistDetailsReleaseTrackList({
   onAddTrackToLibrary,
   libraryTrackSavingKey,
   ownedTrackMbids = [],
+  ownedTracks = [],
   resolveMembershipTrack,
   playlists,
   playlistsLoading,
@@ -31,6 +33,24 @@ export function ArtistDetailsReleaseTrackList({
 }) {
   const rowRefs = useRef({});
   const ownedTrackSet = new Set((Array.isArray(ownedTrackMbids) ? ownedTrackMbids : []).map(String));
+  // Canonical refs for owned tracks, by MusicBrainz id first and by track
+  // number plus title as the fallback for files tagged without ids.
+  const ownedByMbid = new Map();
+  const ownedByPosition = new Map();
+  for (const owned of Array.isArray(ownedTracks) ? ownedTracks : []) {
+    if (owned?.mbid) ownedByMbid.set(String(owned.mbid), owned);
+    const key = `${owned?.trackNumber || 0}|${String(owned?.title || "").trim().toLowerCase()}`;
+    if (!ownedByPosition.has(key)) ownedByPosition.set(key, owned);
+  }
+  const canonicalRefFor = (track, index) => {
+    for (const identity of [track.mbid, track.recordingId, track.id]) {
+      const found = identity ? ownedByMbid.get(String(identity)) : null;
+      if (found) return found;
+    }
+    const number = Number(track.trackNumber || track.position || index + 1) || 0;
+    const title = String(track.title || track.trackName || "").trim().toLowerCase();
+    return ownedByPosition.get(`${number}|${title}`) || null;
+  };
   const normalizeTrack = useCallback(
     (track, index) =>
       normalizePreviewTrack(
@@ -204,6 +224,19 @@ export function ArtistDetailsReleaseTrackList({
                       onSelect={(target) => onAddTrackToPlaylist(track, release, target)}
                     />
                   ) : null}
+                  <span className="artist-track-rating">
+                    {(() => {
+                      const ref = isOwned ? canonicalRefFor(track, index) : null;
+                      return ref ? (
+                        <TrackRating
+                          trackId={ref.trackId}
+                          albumId={ref.albumId}
+                          title={track.title || track.trackName || ""}
+                          size="sm"
+                        />
+                      ) : null;
+                    })()}
+                  </span>
                   <span className="artist-track-duration">{durationLabel}</span>
                 </div>
               );

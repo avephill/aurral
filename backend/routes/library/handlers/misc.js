@@ -20,7 +20,7 @@ const canonicalAlbumLookup = (albums, reference) =>
     ),
   );
 
-const canonicalAlbumResult = (album, ownedTrackMbids = []) => ({
+const canonicalAlbumResult = (album, ownedTrackMbids = [], ownedTracks = []) => ({
   inLibrary: true,
   canonicalInLibrary: true,
   canonicalAlbumId: String(album.canonicalId ?? album.id),
@@ -39,6 +39,9 @@ const canonicalAlbumResult = (album, ownedTrackMbids = []) => ({
   trackCount: Number(album.statistics?.trackCount || 0),
   trackFileCount: Number(album.statistics?.trackFileCount || 0),
   ownedTrackMbids,
+  // Canonical ids for the owned tracks, so a release page built from
+  // MusicBrainz data can attach library features (ratings) to each row.
+  ownedTracks,
   albumName: String(album.albumName || album.title || "").trim(),
   releaseDate: String(album.releaseDate || "").trim(),
 });
@@ -241,6 +244,15 @@ export function registerMisc(router) {
               .filter((track) => track.available && track.mbid)
               .map((track) => String(track.mbid).trim())
               .filter(Boolean),
+            albumTracks
+              .filter((track) => track.available)
+              .map((track) => ({
+                trackId: track.id,
+                albumId: album.id,
+                mbid: track.mbid ? String(track.mbid).trim() : null,
+                title: String(track.title || "").trim(),
+                trackNumber: Number(track.trackNumber || 0) || null,
+              })),
           );
         }
       }
