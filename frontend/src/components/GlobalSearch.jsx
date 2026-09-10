@@ -23,6 +23,7 @@ import {
 
 import {
   AUTOCOMPLETE_DEBOUNCE_MS,
+  LIBRARY_SUGGEST_DEBOUNCE_MS,
   SUGGEST_LIMIT,
   TAG_SUGGESTIONS_LIMIT,
   ALBUM_PENDING_STATUSES,
@@ -79,7 +80,7 @@ function GlobalSearch({ settingsMode = false }) {
 
   const selectableRows = useMemo(() => {
     if (suggestionMode === "tag") return suggestionRows;
-    return suggestionRows.filter((row) => row.kind === "item");
+    return suggestionRows.filter((row) => row.kind === "item" || row.kind === "search-all");
   }, [suggestionRows, suggestionMode]);
 
   const settingsSearchResults = useMemo(() => {
@@ -224,18 +225,27 @@ function GlobalSearch({ settingsMode = false }) {
       return;
     }
 
+    // Suggestions come from the library alone: instant, and only things the
+    // person already has. The wider catalog is one Enter away.
     scheduleSuggest(async (isCurrent, signal) => {
       setLoadingSuggestions(true);
       try {
         const data = await searchUnified(trimmed, {
-          mode: "suggest",
+          mode: "library",
           limit: SUGGEST_LIMIT,
           signal,
         });
         if (!isCurrent()) return;
         setLocalSearchConfigured(!!data?.localSearchConfigured);
         const sections = buildUnifiedSuggestionSections(data);
-        setSuggestionRows(flattenSuggestionSections(sections));
+        const rows = flattenSuggestionSections(sections);
+        rows.push({
+          kind: "search-all",
+          key: "search-all",
+          query: trimmed,
+          hasLibraryRows: rows.length > 0,
+        });
+        setSuggestionRows(rows);
         setSuggestionMode("unified");
         setSuggestionIndex(-1);
       } catch {
@@ -247,7 +257,7 @@ function GlobalSearch({ settingsMode = false }) {
           setLoadingSuggestions(false);
         }
       }
-    }, AUTOCOMPLETE_DEBOUNCE_MS);
+    }, LIBRARY_SUGGEST_DEBOUNCE_MS);
 
     return cancelSuggest;
   }, [searchQuery, closeAutocomplete, lastfmConfigured, scheduleSuggest, cancelSuggest, settingsMode]);
@@ -303,7 +313,7 @@ function GlobalSearch({ settingsMode = false }) {
     (selection) => {
       if (!selection) return;
 
-      if (selection.kind === "recent") {
+      if (selection.kind === "recent" || selection.kind === "search-all") {
         navigateToSearch(selection.query);
         return;
       }
@@ -718,6 +728,30 @@ function GlobalSearch({ settingsMode = false }) {
                   return (
                     <div key={row.key} className="global-search__suggestion-group">
                       {row.label}
+                    </div>
+                  );
+                }
+                if (row.kind === "search-all") {
+                  selectableCursor += 1;
+                  const highlighted = selectableCursor === suggestionIndex;
+                  return (
+                    <div key={row.key} className="global-search__suggestion-footer">
+                      {!row.hasLibraryRows ? (
+                        <div className="global-search__suggestion-group">Nothing in your library matches</div>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleSuggestionSelect(row)}
+                        className={`global-search__suggestion global-search__suggestion--search-all${
+                          highlighted ? " is-highlighted" : ""
+                        }`}
+                      >
+                        <Search className="artist-icon-sm" aria-hidden="true" />
+                        <span>
+                          Search everywhere for “{row.query}”
+                          <small>Artists and albums not in your library</small>
+                        </span>
+                      </button>
                     </div>
                   );
                 }

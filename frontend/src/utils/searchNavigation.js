@@ -153,6 +153,12 @@ export function navigateFromSearchResult(navigate, item, { query = "" } = {}) {
     return;
   }
 
+  // Anything already in the library opens the library's own album page.
+  if ((item.type === "album" || item.type === "track") && item.source === "library" && item.canonicalAlbumId) {
+    navigate(`/library/album/${encodeURIComponent(item.canonicalAlbumId)}`);
+    return;
+  }
+
   if (item.type === "album") {
     const target = getReleaseNavigationTarget(item);
     if (target) {
@@ -455,8 +461,9 @@ export function buildUnifiedSuggestionSections(data) {
   const sections = [];
 
   const libraryArtists = dedupeItems(data.library?.artists || [], seen, seenArtistNames);
+  const libraryAlbums = dedupeItems(data.library?.albums || [], seen, seenArtistNames);
   const libraryTracks = dedupeItems(data.library?.tracks || [], seen, seenArtistNames);
-  const libraryItems = [...libraryArtists, ...libraryTracks];
+  const libraryItems = [...libraryArtists, ...libraryAlbums, ...libraryTracks];
   if (libraryItems.length > 0) {
     sections.push({ key: "library", label: "Your Library", items: libraryItems });
   }

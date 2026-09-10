@@ -6,6 +6,8 @@ import {
 import { getMetadataBaseUrl } from "./providers/brainzmashProvider.js";
 import { searchAlbums, searchArtists } from "./providers/brainzmashProvider.js";
 import { flowPlaylistConfig } from "./weeklyFlow/weeklyFlowPlaylistConfig.js";import { getCachedArtists } from "./libraryManager.js";
+import { getCanonicalSearchPage } from "./libraryQueryService.js";
+import { buildCanonicalLibraryReadModel } from "./canonicalLibraryReadAdapter.js";
 import { getDiscoveryCache } from "./discovery/index.js";
 import { compareSearchResults, getLocalMatchThreshold } from "./searchRanking.js";
 import { parsePositiveInt } from "./searchService.js";
@@ -54,6 +56,23 @@ function scorePlaylistContentMatch(query, text) {
   if (!normalizedQuery || !normalizedText) return 0;
   if (normalizedQuery === normalizedText) return 100;
   if (normalizedText.includes(normalizedQuery)) return 92;
+  return 0;
+}
+
+// People type "jpeg mafia" for JPEGMAFIA and "showmethebody" for Show Me the
+// Body. Compare with spacing removed as well, a notch below a spaced match.
+const squash = (value) => getNormalizedText(value).replace(/\s+/g, "");
+
+function scoreLibraryMatch(query, text) {
+  const spaced = scorePlaylistContentMatch(query, text);
+  if (spaced === 100) return spaced;
+  // A name that starts with what was typed beats one that merely contains it.
+  if (spaced > 0) return getNormalizedText(text).startsWith(getNormalizedText(query)) ? 95 : spaced;
+  const squashedQuery = squash(query);
+  const squashedText = squash(text);
+  if (!squashedQuery || squashedQuery.length < 3 || !squashedText) return 0;
+  if (squashedQuery === squashedText) return 96;
+  if (squashedText.includes(squashedQuery)) return 88;
   return 0;
 }
 
@@ -373,7 +392,12 @@ function pickCatalogTopFallback(catalog) {
 }
 
 function normalizeMode(value) {
-  return String(value || "").trim() === "full" ? "full" : "suggest";
+  const mode = String(value || "").trim();
+  if (mode === "full") return "full";
+  // "library" answers from the local index only: instant, and nothing from
+  // outside the collection until the person asks for it.
+  if (mode === "library") return "library";
+  return "suggest";
 }
 
 function bucketLimit(mode, requestedLimit) {
@@ -575,7 +599,7 @@ export function searchLocalFromData(
       const name = String(artist?.artistName || artist?.name || "").trim();
       const mbid = artist?.mbid || artist?.foreignArtistId || artist?.artistMbid || artist?.id || null;
       if (!name || !mbid) return null;
-      const score = scorePlaylistContentMatch(query, name);
+      const score = scoreLibraryMatch(query, name);
       if (score <= 0) return null;
       return {
         type: "artist",
@@ -600,9 +624,9 @@ export function searchLocalFromData(
       const albumTitle = String(track?.album || track?.albumTitle || "").trim();
       if (!title) return null;
       const score = Math.max(
-        scorePlaylistContentMatch(query, artistName),
-        scorePlaylistContentMatch(query, title),
-        scorePlaylistContentMatch(query, `${artistName} ${title}`.trim()),
+        scoreLibraryMatch(query, artistName),
+        scoreLibraryMatch(query, title),
+        scoreLibraryMatch(query, `${artistName} ${title}`.trim()),
       );
       if (score <= 0) return null;
       return {
@@ -626,6 +650,88 @@ export function searchLocalFromData(
     artists: artistResults,
     tracks: trackResults,
   };
+}
+
+/**
+ * Albums and tracks from the canonical library for the suggestion list.
+ * Goes through the library's own search index, so it is fast and needs no
+ * outside call. Results point at the library's album page.
+ */
+function searchLibraryCatalog(query, limit) {
+  let library;
+  try {
+    library = buildCanonicalLibraryReadModel(
+      getCanonicalSearchPage({
+        source: "all",
+        availableOnly: true,
+        query,
+        artistLimit: 0,
+        albumLimit: limit,
+        songLimit: limit,
+      }),
+    );
+  } catch (error) {
+    console.warn("[UnifiedSearch] Library catalog search failed:", error.message);
+    return { albums: [], tracks: [] };
+  }
+  const artistsById = new Map(library.artists.map((artist) => [artist.id, artist]));
+  const albumsById = new Map(library.albums.map((album) => [album.id, album]));
+  const albums = library.albums
+    .map((album) => {
+      const artist = artistsById.get(album.artistId) || null;
+      const score = Math.max(
+        scoreLibraryMatch(query, album.title),
+        scoreLibraryMatch(query, `${artist?.name || ""} ${album.title}`.trim()),
+      );
+      return {
+        type: "album",
+        source: "library",
+        id: album.releaseGroupMbid || album.mbid || `library-album:${album.id}`,
+        key: `library-album:${album.id}`,
+        canonicalAlbumId: album.id,
+        title: album.title,
+        artistName: artist?.name || album.albumArtist || "",
+        artistMbid: artist?.mbid || null,
+        releaseGroupMbid: album.releaseGroupMbid || null,
+        releaseDate: album.releaseDate || null,
+        coverUrl: album.coverUrl || null,
+        inLibrary: true,
+        score: score > 0 ? score : 80,
+      };
+    })
+    .sort(compareSearchResults)
+    .slice(0, limit);
+  const tracks = library.tracks
+    .filter((track) => track.hasFile)
+    .map((track) => {
+      const album = albumsById.get(track.albumId) || null;
+      const artist = album ? artistsById.get(album.artistId) || null : null;
+      const artistName = artist?.name || track.artistName || "";
+      const score = Math.max(
+        scoreLibraryMatch(query, track.title),
+        scoreLibraryMatch(query, `${artistName} ${track.title}`.trim()),
+      );
+      return {
+        type: "track",
+        source: "library",
+        id: `library-track:${track.id}`,
+        key: `library-track:${track.id}`,
+        canonicalTrackId: track.id,
+        canonicalAlbumId: track.albumId,
+        title: track.title,
+        artistName: artistName || "Unknown Artist",
+        artistMbid: artist?.mbid || null,
+        albumTitle: album?.title || null,
+        albumMbid: album?.releaseGroupMbid || album?.mbid || null,
+        trackMbid: track.mbid || null,
+        streamPath: `/library/canonical-stream/${encodeURIComponent(track.albumId)}/${encodeURIComponent(track.id)}`,
+        inLibrary: true,
+        score: score > 0 ? score : 80,
+      };
+    })
+    .sort(compareSearchResults)
+    .slice(0, limit);
+  return { albums, tracks };
 }
 
 async function searchLocalLibrary(query, limit, user) {
@@ -679,6 +785,24 @@ export async function searchUnified(query, { mode = "suggest", limit, user = nul
   const cacheKey = `${normalizedMode}:${perBucketLimit}:${trimmed.toLowerCase()}:${user?.id || "anon"}`;
   const cached = unifiedSearchCache.get(cacheKey);
   if (cached) return cached;
+
+  if (normalizedMode === "library") {
+    const local = await searchLocalLibrary(trimmed, perBucketLimit, user);
+    const { albums, tracks } = searchLibraryCatalog(trimmed, perBucketLimit);
+    const libraryArtists = local?.library?.artists || [];
+    const libraryTracks = [...(local?.library?.tracks || []), ...tracks].slice(0, perBucketLimit);
+    const response = {
+      query: trimmed,
+      mode: normalizedMode,
+      top: null,
+      library: { artists: libraryArtists, albums, tracks: libraryTracks },
+      catalog: { artists: [], albums: [], tracks: [] },
+      localSearchConfigured: catalogSearchConfigured,
+      filters: ["all", "artists", "albums", "singles"],
+    };
+    unifiedSearchCache.set(cacheKey, response);
+    return response;
+  }
 
   const [fetchedCatalog, local] = await Promise.all([
     searchCatalog(trimmed, perBucketLimit),

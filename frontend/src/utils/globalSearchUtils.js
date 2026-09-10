@@ -1,6 +1,8 @@
 import { getArtistRecordId } from "./artistTaste";
 
 export const AUTOCOMPLETE_DEBOUNCE_MS = 250;
+// Library-only suggestions come from the local index, so they can be quick.
+export const LIBRARY_SUGGEST_DEBOUNCE_MS = 120;
 export const SUGGEST_LIMIT = 5;
 export const TAG_SUGGESTIONS_LIMIT = 8;
 export const ALBUM_PENDING_STATUSES = new Set([
