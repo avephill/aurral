@@ -149,6 +149,11 @@ export function navigateFromSearchResult(navigate, item, { query = "" } = {}) {
       });
       return;
     }
+    // A library artist with no MusicBrainz id still has a library page.
+    if (item.source === "library" && item.canonicalArtistId) {
+      navigate(`/library/artist/${encodeURIComponent(item.canonicalArtistId)}`);
+      return;
+    }
     navigate(`/search?q=${encodeURIComponent(item.name || query)}&filter=artists`);
     return;
   }

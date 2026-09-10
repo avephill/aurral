@@ -653,32 +653,65 @@ export function searchLocalFromData(
 }
 
 /**
- * Albums and tracks from the canonical library for the suggestion list.
- * Goes through the library's own search index, so it is fast and needs no
- * outside call. Results point at the library's album page.
+ * Artists, albums and tracks from the canonical library for the suggestion
+ * list. Goes through the library's own search index, so it is fast and needs
+ * no outside call. Albums and tracks point at the library's album page.
+ *
+ * getCanonicalSearchPage returns raw artists plus one library object each for
+ * albums and tracks; the read adapter turns those into rows with file state.
  */
 function searchLibraryCatalog(query, limit) {
-  let library;
+  const runPage = (value) => getCanonicalSearchPage({
+    source: "all",
+    availableOnly: true,
+    query: value,
+    artistLimit: limit,
+    albumLimit: limit,
+    songLimit: limit,
+  });
+  const pageIsEmpty = (value) =>
+    !value.artists?.length && !value.albums?.albums?.length && !value.tracks?.tracks?.length;
+  let page;
   try {
-    library = buildCanonicalLibraryReadModel(
-      getCanonicalSearchPage({
-        source: "all",
-        availableOnly: true,
-        query,
-        artistLimit: 0,
-        albumLimit: limit,
-        songLimit: limit,
-      }),
-    );
+    page = runPage(query);
+    // The index filters on the typed text as well as its trigrams, so
+    // "jpeg mafia" misses JPEGMAFIA there. Try again without the spaces.
+    const squashedQuery = squash(query);
+    if (pageIsEmpty(page) && squashedQuery.length >= 3 && squashedQuery !== getNormalizedText(query)) {
+      page = runPage(squashedQuery);
+    }
   } catch (error) {
     console.warn("[UnifiedSearch] Library catalog search failed:", error.message);
-    return { albums: [], tracks: [] };
+    return { artists: [], albums: [], tracks: [] };
   }
-  const artistsById = new Map(library.artists.map((artist) => [artist.id, artist]));
-  const albumsById = new Map(library.albums.map((album) => [album.id, album]));
-  const albums = library.albums
+
+  const artists = (Array.isArray(page.artists) ? page.artists : [])
+    .map((artist) => {
+      const name = String(artist?.name || "").trim();
+      if (!name) return null;
+      const score = scoreLibraryMatch(query, name);
+      return {
+        type: "artist",
+        source: "library",
+        id: artist.mbid || null,
+        key: `library-artist:${artist.mbid || artist.id}`,
+        canonicalArtistId: artist.id,
+        name,
+        sortName: artist.sortName || name,
+        inLibrary: true,
+        hasMbid: Boolean(artist.mbid),
+        score: score > 0 ? score : 80,
+      };
+    })
+    .filter(Boolean)
+    .sort(compareSearchResults)
+    .slice(0, limit);
+
+  const albumModel = buildCanonicalLibraryReadModel(page.albums || { artists: [], albums: [], tracks: [] });
+  const albumArtists = new Map(albumModel.artists.map((artist) => [artist.id, artist]));
+  const albums = albumModel.albums
     .map((album) => {
-      const artist = artistsById.get(album.artistId) || null;
+      const artist = albumArtists.get(album.artistId) || null;
       const score = Math.max(
         scoreLibraryMatch(query, album.title),
         scoreLibraryMatch(query, `${artist?.name || ""} ${album.title}`.trim()),
@@ -701,11 +734,15 @@ function searchLibraryCatalog(query, limit) {
     })
     .sort(compareSearchResults)
     .slice(0, limit);
-  const tracks = library.tracks
+
+  const trackModel = buildCanonicalLibraryReadModel(page.tracks || { artists: [], albums: [], tracks: [] });
+  const trackArtists = new Map(trackModel.artists.map((artist) => [artist.id, artist]));
+  const trackAlbums = new Map(trackModel.albums.map((album) => [album.id, album]));
+  const tracks = trackModel.tracks
     .filter((track) => track.hasFile)
     .map((track) => {
-      const album = albumsById.get(track.albumId) || null;
-      const artist = album ? artistsById.get(album.artistId) || null : null;
+      const album = trackAlbums.get(track.albumId) || null;
+      const artist = album ? trackArtists.get(album.artistId) || null : null;
       const artistName = artist?.name || track.artistName || "";
       const score = Math.max(
         scoreLibraryMatch(query, track.title),
@@ -731,7 +768,8 @@ function searchLibraryCatalog(query, limit) {
     })
     .sort(compareSearchResults)
     .slice(0, limit);
-  return { albums, tracks };
+
+  return { artists, albums, tracks };
 }
 
 async function searchLocalLibrary(query, limit, user) {
@@ -788,9 +826,15 @@ export async function searchUnified(query, { mode = "suggest", limit, user = nul
 
   if (normalizedMode === "library") {
     const local = await searchLocalLibrary(trimmed, perBucketLimit, user);
-    const { albums, tracks } = searchLibraryCatalog(trimmed, perBucketLimit);
-    const libraryArtists = local?.library?.artists || [];
-    const libraryTracks = [...(local?.library?.tracks || []), ...tracks].slice(0, perBucketLimit);
+    const { artists, albums, tracks } = searchLibraryCatalog(trimmed, perBucketLimit);
+    // The canonical index is the source of truth; the cached provider list
+    // only adds artists it does not have (it is empty until a refresh runs).
+    const seenArtists = new Set(artists.map((artist) => getNormalizedText(artist.name)));
+    const libraryArtists = [
+      ...artists,
+      ...(local?.library?.artists || []).filter((artist) => !seenArtists.has(getNormalizedText(artist.name))),
+    ].slice(0, perBucketLimit);
+    const libraryTracks = [...tracks, ...(local?.library?.tracks || [])].slice(0, perBucketLimit);
     const response = {
       query: trimmed,
       mode: normalizedMode,

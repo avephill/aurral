@@ -243,6 +243,30 @@ export async function resolveNavidromeSongId(track, { client = getAdminNavidrome
 }
 
 /**
+ * Every Navidrome copy of one canonical track, the main-library copy first.
+ * A file symlinked into personal libraries is a separate song in each, and
+ * annotations (ratings, stars) attach to a copy, so a rating set through
+ * Aurral goes on all of them to read the same in every library view.
+ */
+export async function resolveNavidromeSongCopies(track, { client = getAdminNavidromeClient() } = {}) {
+  const primary = await resolveNavidromeSongId(track, { client });
+  if (!primary) return [];
+  const absolute = normalizePath(track.path);
+  const relative = state.aurralRoot ? relativeToRoot(absolute, state.aurralRoot) : null;
+  if (!relative || !client) return [primary];
+  let candidates = [];
+  try {
+    candidates = await client.findSongsByPath(relative);
+  } catch {
+    return [primary];
+  }
+  const ids = candidates
+    .filter((song) => songPath(song) === relative && song?.id)
+    .map((song) => String(song.id));
+  return [primary, ...ids.filter((id) => id !== String(primary))];
+}
+
+/**
  * Navidrome song id for a track we only know by name, such as one picked from
  * search results. Exact title and artist, album preferred. Goes through the
  * user's Subsonic search when given, so only songs they can see qualify.

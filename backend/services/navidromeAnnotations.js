@@ -1,6 +1,10 @@
 import { isNavidromeUserAuthEnabled } from "../config/featureFlags.js";
 import { createNavidromeUserClient, isNavidromeAuthError } from "./navidromeUserClient.js";
-import { describeCanonicalTrack, resolveNavidromeSongId } from "./navidromeTrackResolver.js";
+import {
+  describeCanonicalTrack,
+  resolveNavidromeSongCopies,
+  resolveNavidromeSongId,
+} from "./navidromeTrackResolver.js";
 import { getCanonicalTrack } from "./libraryQueryService.js";
 import { logger } from "./logger.js";
 
@@ -44,6 +48,13 @@ async function songIdForRef(ref) {
   const canonical = describeCanonicalTrack(ref);
   if (!canonical) return null;
   return resolveNavidromeSongId(canonical);
+}
+
+// All copies of the track across libraries, main library first.
+async function songIdsForRef(ref) {
+  const canonical = describeCanonicalTrack(ref);
+  if (!canonical) return [];
+  return resolveNavidromeSongCopies(canonical);
 }
 
 function annotationFromSong(song) {
@@ -96,10 +107,13 @@ export async function setTrackRating(user, ref, rating) {
   if (!normalized) throw Object.assign(new Error("trackId is required"), { status: 400 });
   const client = createNavidromeUserClient(user);
   if (!client) throw Object.assign(new Error("Navidrome not configured"), { status: 503 });
-  const songId = await songIdForRef(normalized);
+  const songIds = await songIdsForRef(normalized);
+  const songId = songIds[0];
   if (!songId) throw Object.assign(new Error("Navidrome has not indexed this track"), { status: 404 });
   const value = clampRating(rating);
-  await client.setRating(songId, value);
+  // Every copy of the file, so the rating reads the same whichever library
+  // view a Navidrome client is filtered to.
+  for (const id of songIds) await client.setRating(id, value);
   const song = await client.getSong(songId).catch(() => null);
   return { trackId: normalized.trackId, songId, rating: song ? clampRating(song.userRating) : value, starred: Boolean(song?.starred) };
 }
@@ -112,10 +126,13 @@ export async function setTrackStarred(user, ref, starred) {
   if (!normalized) throw Object.assign(new Error("trackId is required"), { status: 400 });
   const client = createNavidromeUserClient(user);
   if (!client) throw Object.assign(new Error("Navidrome not configured"), { status: 503 });
-  const songId = await songIdForRef(normalized);
+  const songIds = await songIdsForRef(normalized);
+  const songId = songIds[0];
   if (!songId) throw Object.assign(new Error("Navidrome has not indexed this track"), { status: 404 });
-  if (starred) await client.star(songId);
-  else await client.unstar(songId);
+  for (const id of songIds) {
+    if (starred) await client.star(id);
+    else await client.unstar(id);
+  }
   return { trackId: normalized.trackId, songId, starred: Boolean(starred) };
 }
 
@@ -149,12 +166,12 @@ export async function mirrorFavoritesToNavidrome(user, ids = [], starred) {
     if (!parsed || parsed.kind === "artist") continue;
     try {
       const library = getCanonicalTrack({ trackId: parsed.kind === "song" ? parsed.key : "", availableOnly: true });
-      let songId = null;
+      let songIds = [];
       let albumStar = false;
       if (parsed.kind === "song") {
         const track = library.tracks[0];
         if (!track) continue;
-        songId = await songIdForRef({ trackId: track.id, albumId: track.albums?.[0]?.albumId || null });
+        songIds = await songIdsForRef({ trackId: track.id, albumId: track.albums?.[0]?.albumId || null });
       } else {
         albumStar = true;
         const { getCanonicalLibraryForAlbumReferences } = await import("./libraryQueryService.js");
@@ -162,17 +179,23 @@ export async function mirrorFavoritesToNavidrome(user, ids = [], starred) {
         const track = albumLibrary.tracks.find((entry) => entry.available) || albumLibrary.tracks[0];
         const album = albumLibrary.albums[0];
         if (!track || !album) continue;
-        songId = await songIdForRef({ trackId: track.id, albumId: album.id });
+        songIds = await songIdsForRef({ trackId: track.id, albumId: album.id });
       }
-      if (!songId) continue;
-      let targetId = songId;
-      if (albumStar) {
-        const song = await client.getSong(songId);
-        if (!song?.albumId) continue;
-        targetId = song.albumId;
+      if (!songIds.length) continue;
+      const targets = new Set();
+      for (const songId of songIds) {
+        if (!albumStar) {
+          targets.add(songId);
+          continue;
+        }
+        const song = await client.getSong(songId).catch(() => null);
+        if (song?.albumId) targets.add(song.albumId);
       }
-      if (starred) await client.star(targetId);
-      else await client.unstar(targetId);
+      if (!targets.size) continue;
+      for (const targetId of targets) {
+        if (starred) await client.star(targetId);
+        else await client.unstar(targetId);
+      }
       mirrored += 1;
     } catch (error) {
       logger.warn("library", `[Navidrome] Could not mirror favourite ${value}: ${error.message}`);
