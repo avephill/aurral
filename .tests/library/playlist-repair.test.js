@@ -252,7 +252,7 @@ test("a playlist is moved into its owner's personal library when every track has
   assert.deepEqual(writes.find(([kind]) => kind === "add")[1][1], ["avery:a.mp3", "avery:b.mp3"]);
 });
 
-test("a playlist with a track missing from the owner's library stays on the shared library", async () => {
+test("a track missing from the owner's library keeps its shared copy while the rest move", async () => {
   const tracksByPlaylist = {
     mixed: [track("e1", "shared:a.mp3", 1, "a.mp3"), track("e2", "shared:b.mp3", 1, "b.mp3")],
   };
@@ -277,8 +277,19 @@ test("a playlist with a track missing from the owner's library stays on the shar
   };
   const { repairAllPlaylists } = await import("../../backend/services/navidromePlaylistRepair.js");
   const result = await repairAllPlaylists({ client, navidromeRootPath: "/music-root/users", dryRun: false });
-  // Moving it would drop b.mp3, so it is left where every entry resolves.
-  assert.equal(result.repaired, 0);
-  assert.deepEqual(result.playlists, []);
-  assert.deepEqual(writes, []);
+  assert.equal(result.repaired, 1);
+  assert.equal(result.playlists[0].targetLibraryId, 4);
+  assert.equal(result.playlists[0].onFallback, 1);
+  // a.mp3 moves to the personal copy; b.mp3 has none and stays on the shared one.
+  assert.deepEqual(writes.find(([kind]) => kind === "add")[1][1], ["avery:a.mp3", "shared:b.mp3"]);
+});
+
+test("a track with no copy in either library still makes the plan unsafe", () => {
+  const plan = planPlaylistRepair({
+    tracks: [track("e1", "old:a.mp3", 9, "a.mp3")],
+    canonicalLibraryId: 4,
+    fallbackLibraryId: 1,
+  });
+  assert.equal(plan.safe, false);
+  assert.equal(plan.unmapped.length, 1);
 });

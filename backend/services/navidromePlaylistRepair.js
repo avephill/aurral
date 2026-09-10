@@ -23,24 +23,41 @@ import { resolveCanonicalLibraryId, resolveSharedEquivalents, resolvePersonalLib
  *
  * Pure: no Navidrome, so the ordering and de-duplication rules are testable.
  */
-export function planPlaylistRepair({ tracks, canonicalLibraryId, canonicalIdByPath = new Map() }) {
+export function planPlaylistRepair({
+  tracks,
+  canonicalLibraryId,
+  canonicalIdByPath = new Map(),
+  // Optional second home: an entry with no copy in the target library may
+  // stay on (or move to) this library instead of making the plan unsafe.
+  fallbackLibraryId = null,
+  fallbackIdByPath = new Map(),
+}) {
   const canonical = Number(canonicalLibraryId);
+  const fallback = fallbackLibraryId === null || fallbackLibraryId === undefined ? null : Number(fallbackLibraryId);
   const desiredIds = [];
   const seenPaths = new Set();
   const unmapped = [];
   let remapped = 0;
   let duplicatesRemoved = 0;
+  let onFallback = 0;
 
   for (const track of Array.isArray(tracks) ? tracks : []) {
     let mediaFileId = track?.mediaFileId;
     if (Number(track?.libraryId) !== canonical) {
       const replacement = canonicalIdByPath.get(track?.path);
-      if (!replacement) {
+      if (replacement) {
+        mediaFileId = replacement;
+        remapped += 1;
+      } else if (fallback !== null && Number(track?.libraryId) === fallback) {
+        onFallback += 1;
+      } else if (fallback !== null && fallbackIdByPath.get(track?.path)) {
+        mediaFileId = fallbackIdByPath.get(track?.path);
+        remapped += 1;
+        onFallback += 1;
+      } else {
         unmapped.push(track);
         continue;
       }
-      mediaFileId = replacement;
-      remapped += 1;
     }
     // De-duplication is by path, not by id: the same file has a different id in
     // every library it appears in, so identical ids would only catch copies
@@ -63,15 +80,16 @@ export function planPlaylistRepair({ tracks, canonicalLibraryId, canonicalIdByPa
     desiredIds,
     remapped,
     duplicatesRemoved,
+    onFallback,
     unmapped,
-    // A playlist is only rewritten when every entry has a home in a shared
-    // library. Dropping tracks to make the rest portable is not a repair.
+    // A playlist is only rewritten when every entry has a home. Dropping
+    // tracks to make the rest fit is not a repair.
     safe: unmapped.length === 0,
     changed: unmapped.length === 0 && changed,
   };
 }
 
-export async function repairPlaylist({ client, playlist, canonicalLibraryId, dryRun = true }) {
+export async function repairPlaylist({ client, playlist, canonicalLibraryId, fallbackLibraryId = null, dryRun = true }) {
   // A playlist with a path is generated from a file on disk (.m3u) or from
   // smart-playlist rules (.NSP), and Navidrome re-syncs it from that source.
   // Rewriting its tracks would be undone on the next scan at best, and fight
@@ -89,19 +107,28 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, dry
 
   const tracks = await client.getPlaylistTracks(playlist.id);
   const canonical = Number(canonicalLibraryId);
+  const fallback = fallbackLibraryId === null || fallbackLibraryId === undefined ? null : Number(fallbackLibraryId);
   const foreign = tracks.filter((track) => Number(track?.libraryId) !== canonical);
 
   const canonicalIdByPath = new Map();
+  const fallbackIdByPath = new Map();
   if (foreign.length) {
-    const { mapped } = await resolveSharedEquivalents({
+    const { mapped, unmapped } = await resolveSharedEquivalents({
       client,
       foreign,
       sharedLibraryIds: [canonical],
     });
     for (const entry of mapped) canonicalIdByPath.set(entry.path, entry.sharedMediaFileId);
+    // Whatever has no copy in the target library may still have one in the
+    // fallback library; entries already there need no lookup.
+    const needFallback = unmapped.filter((track) => fallback !== null && Number(track?.libraryId) !== fallback);
+    if (needFallback.length) {
+      const second = await resolveSharedEquivalents({ client, foreign: needFallback, sharedLibraryIds: [fallback] });
+      for (const entry of second.mapped) fallbackIdByPath.set(entry.path, entry.sharedMediaFileId);
+    }
   }
 
-  const plan = planPlaylistRepair({ tracks, canonicalLibraryId, canonicalIdByPath });
+  const plan = planPlaylistRepair({ tracks, canonicalLibraryId, canonicalIdByPath, fallbackLibraryId: fallback, fallbackIdByPath });
   const summary = {
     playlistId: playlist.id,
     name: playlist.name,
@@ -109,6 +136,7 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, dry
     after: plan.desiredIds.length,
     remapped: plan.remapped,
     duplicatesRemoved: plan.duplicatesRemoved,
+    onFallback: plan.onFallback,
     unmapped: plan.unmapped.length,
     safe: plan.safe,
     changed: plan.changed,
@@ -118,7 +146,7 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, dry
   if (!plan.safe) {
     logger.warn(
       "library",
-      `[Playlists] "${playlist.name}" left alone: ${plan.unmapped.length} track(s) exist only in a personal library`,
+      `[Playlists] "${playlist.name}" left alone: ${plan.unmapped.length} track(s) have no copy in the target libraries`,
     );
     return summary;
   }
@@ -169,10 +197,10 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, dry
  * Sweeps every hand-made playlist into its home library.
  *
  * A playlist lives in its owner's personal library when they have one, so it
- * shows up in a Navidrome view filtered to that library alone. When a track
- * has no copy there (the artist is not in that person's library) the whole
- * playlist falls back to the shared library instead, which every member can
- * reach; dropping tracks is never an option. Playlists with no owner library
+ * shows up in a Navidrome view filtered to that library alone. Entry by
+ * entry: a track with no copy there (its artist is not in that person's
+ * library) keeps the shared copy, which every member can reach, so the
+ * playlist is never shortened. Playlists whose owner has no personal library
  * go to the shared library.
  *
  * Idempotent: a playlist that already resolves plans no change and is never
@@ -201,23 +229,15 @@ export async function repairAllPlaylists({
     if (!playlist?.songCount) continue;
     try {
       const personal = resolvePersonalLibraryId(libraries, playlist?.ownerName, navidromeRootPath);
-      let summary = null;
-      if (personal !== null && personal !== canonical) {
-        summary = await repairPlaylist({ client, playlist, canonicalLibraryId: personal, dryRun });
-        if (summary.safe === false) {
-          logger.info(
-            "library",
-            `[Playlists] "${playlist.name}" has ${summary.unmapped} track(s) outside ${playlist.ownerName}'s library; using the shared library instead`,
-          );
-          summary = null;
-        } else if (!summary.skipped) {
-          summary.targetLibraryId = personal;
-        }
-      }
-      if (!summary) {
-        summary = await repairPlaylist({ client, playlist, canonicalLibraryId: canonical, dryRun });
-        if (!summary.skipped) summary.targetLibraryId = canonical;
-      }
+      const target = personal !== null && personal !== canonical ? personal : canonical;
+      const summary = await repairPlaylist({
+        client,
+        playlist,
+        canonicalLibraryId: target,
+        fallbackLibraryId: target === canonical ? null : canonical,
+        dryRun,
+      });
+      if (!summary.skipped) summary.targetLibraryId = target;
       if (summary.skipped || (!summary.changed && !summary.applied)) continue;
       results.push(summary);
       if (summary.applied) repaired += 1;
