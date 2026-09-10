@@ -1781,6 +1781,53 @@ textarea {
   position: relative;
 }
 
+.app-profile-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.app-profile-menu__name {
+  max-width: 10rem;
+  overflow: hidden;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-profile-menu__trigger:hover .app-profile-menu__name,
+.app-profile-menu__trigger.is-open .app-profile-menu__name {
+  color: var(--aurral-text);
+}
+
+.app-profile-menu__signed-in {
+  display: grid;
+  gap: 0.125rem;
+  padding: 0.625rem 0.875rem 0.5rem;
+  border-bottom: 1px solid var(--aurral-border);
+  color: var(--aurral-text-subtle);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.app-profile-menu__signed-in strong {
+  color: var(--aurral-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .app-profile-menu__name {
+    display: none;
+  }
+}
+
 .app-profile-menu__trigger:hover,
 .app-profile-menu__trigger.is-open {
   background: var(--aurral-surface-raised);
@@ -2498,6 +2545,39 @@ textarea {
 
 .global-search__suggestion-actions .artist-relative {
   flex-shrink: 0;
+}
+
+.global-search__suggestion-footer {
+  border-top: 1px solid var(--aurral-border);
+}
+
+.global-search__suggestion--search-all {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.625rem 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.global-search__suggestion--search-all span {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.global-search__suggestion--search-all small {
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+}
+
+.global-search__suggestion--search-all:hover,
+.global-search__suggestion--search-all.is-highlighted {
+  background: var(--aurral-surface-hover);
 }
 
 .global-search__suggestion--message {
@@ -3558,7 +3638,7 @@ textarea {
 
 .artist-track-row {
   display: grid;
-  grid-template-columns: 28px 28px minmax(0, 1fr) auto auto;
+  grid-template-columns: 28px 28px minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem;
@@ -3572,8 +3652,24 @@ textarea {
 }
 
 .artist-track-row--compact {
-  grid-template-columns: 24px 28px minmax(0, 1fr) auto auto;
+  grid-template-columns: 24px 28px minmax(0, 1fr) auto auto auto;
   padding: 0.375rem 0.5rem;
+}
+
+.artist-track-rating {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.artist-track-rating:empty {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .artist-track-rating {
+    display: none;
+  }
 }
 
 .artist-track-row--preview {
