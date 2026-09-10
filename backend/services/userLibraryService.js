@@ -703,6 +703,13 @@ async function normalizePlaylistsIfEnabled(config) {
   try {
     const client = getNavidromeClient();
     if (!client?.isConfigured?.()) return null;
+    // The scan just triggered above holds Navidrome's database; rewriting
+    // playlists into it now fails with "database is locked".
+    const scan = await client.waitForScanToFinish();
+    if (scan.scanning) {
+      logger.warn("library", "[Playlists] Navidrome is still scanning; skipping normalisation this round");
+      return null;
+    }
     const { repairAllPlaylists } = await import("./navidromePlaylistRepair.js");
     const result = await repairAllPlaylists({
       client,

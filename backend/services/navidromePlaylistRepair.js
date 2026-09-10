@@ -15,7 +15,62 @@
 // destructive if it fails halfway, so the original entries are captured first
 // and restored on failure, and nothing is written unless every entry maps.
 
+import fs from "node:fs";
+import path from "node:path";
 import { logger } from "./logger.js";
+import { resolveAurralDataDir } from "../config/data-dir.js";
+
+// Overridable so tests need not wait; comma-separated milliseconds.
+const DEFAULT_WRITE_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 15_000];
+function writeRetryDelays() {
+  const raw = String(process.env.AURRAL_PLAYLIST_WRITE_RETRY_MS || "").trim();
+  if (!raw) return DEFAULT_WRITE_RETRY_DELAYS_MS;
+  const parsed = raw.split(",").map((value) => Number(value)).filter((value) => Number.isFinite(value) && value >= 0);
+  return parsed.length ? parsed : DEFAULT_WRITE_RETRY_DELAYS_MS;
+}
+
+// Navidrome answers 500 when its database is locked by a scan or another
+// write. That clears in seconds, so writes are retried before giving up.
+function isTransientWriteError(error) {
+  const status = Number(error?.response?.status);
+  const message = String(error?.message || "").toLowerCase();
+  return status >= 500 || message.includes("locked") || message.includes("busy");
+}
+
+async function withWriteRetry(label, action) {
+  const delays = writeRetryDelays();
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      if (!isTransientWriteError(error) || attempt >= delays.length) throw error;
+      const delay = delays[attempt];
+      logger.warn("library", `[Playlists] ${label} failed (${error.message}); retrying in ${delay / 1000}s`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+// When a rewrite fails and the restore fails too, the original entries are
+// written to disk so nothing depends on a log line surviving.
+function writeRecoveryFile(playlist, originalIds) {
+  try {
+    const dir = path.join(resolveAurralDataDir(), "playlist-recovery");
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${String(playlist.id).replace(/[^A-Za-z0-9_-]/g, "_")}.json`);
+    fs.writeFileSync(file, JSON.stringify({
+      playlistId: playlist.id,
+      name: playlist.name,
+      owner: playlist.ownerName || null,
+      savedAt: new Date().toISOString(),
+      mediaFileIds: originalIds,
+    }, null, 2));
+    return file;
+  } catch (error) {
+    logger.error("library", `[Playlists] Could not write recovery file for "${playlist.name}": ${error.message}`);
+    return null;
+  }
+}
 import { resolveCanonicalLibraryId, resolveSharedEquivalents, resolvePersonalLibraryId } from "./navidromePlaylistPortability.js";
 
 /**
@@ -154,23 +209,33 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, fal
 
   const originalIds = tracks.map((track) => track.mediaFileId);
   const originalEntryIds = tracks.map((track) => track.id);
+  let removed = false;
   try {
-    await client.removePlaylistTracks(playlist.id, originalEntryIds);
-    await client.addPlaylistTracks(playlist.id, plan.desiredIds);
+    await withWriteRetry(`Clearing "${playlist.name}"`, () => client.removePlaylistTracks(playlist.id, originalEntryIds));
+    removed = true;
+    await withWriteRetry(`Refilling "${playlist.name}"`, () => client.addPlaylistTracks(playlist.id, plan.desiredIds));
   } catch (error) {
+    if (!removed) {
+      // Nothing was changed; the playlist is exactly as it was.
+      logger.warn("library", `[Playlists] Rewrite of "${playlist.name}" did not start (${error.message}); left unchanged`);
+      throw error;
+    }
     logger.error(
       "library",
       `[Playlists] Rewrite of "${playlist.name}" failed (${error.message}); restoring original entries`,
     );
     try {
       const remaining = await client.getPlaylistTracks(playlist.id);
-      await client.removePlaylistTracks(playlist.id, remaining.map((track) => track.id));
-      await client.addPlaylistTracks(playlist.id, originalIds);
+      if (remaining.length) {
+        await withWriteRetry(`Clearing "${playlist.name}" for restore`, () => client.removePlaylistTracks(playlist.id, remaining.map((track) => track.id)));
+      }
+      await withWriteRetry(`Restoring "${playlist.name}"`, () => client.addPlaylistTracks(playlist.id, originalIds));
       logger.info("library", `[Playlists] Restored "${playlist.name}" to its original ${originalIds.length} entries`);
     } catch (restoreError) {
+      const file = writeRecoveryFile(playlist, originalIds);
       logger.error(
         "library",
-        `[Playlists] Could not restore "${playlist.name}": ${restoreError.message}. Original media file ids: ${originalIds.join(",")}`,
+        `[Playlists] Could not restore "${playlist.name}": ${restoreError.message}. Original entries saved to ${file || "(nowhere: see log)"}. Original media file ids: ${originalIds.join(",")}`,
       );
     }
     throw error;

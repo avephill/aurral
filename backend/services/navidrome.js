@@ -544,6 +544,29 @@ export class NavidromeClient {
     return Array.isArray(songs) ? songs : [];
   }
 
+  async getScanStatus() {
+    const data = await this.request("getScanStatus");
+    const status = data.scanStatus || {};
+    return { scanning: status.scanning === true || status.scanning === "true", count: Number(status.count || 0) };
+  }
+
+  // Navidrome's SQLite database locks up under a scan; playlist rewrites made
+  // at the same time fail. Callers that write a lot wait for it first.
+  async waitForScanToFinish({ timeoutMs = 10 * 60 * 1000, intervalMs = 5_000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      let status;
+      try {
+        status = await this.getScanStatus();
+      } catch {
+        return { waited: false, scanning: null };
+      }
+      if (!status.scanning) return { waited: true, scanning: false };
+      if (Date.now() >= deadline) return { waited: true, scanning: true };
+      await wait(intervalMs);
+    }
+  }
+
   async scanLibrary() {
     if (!this.isConfigured()) return null;
     try {

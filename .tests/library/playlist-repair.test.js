@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+process.env.AURRAL_PLAYLIST_WRITE_RETRY_MS = "5,5,5,5,5,5";
+
 import { planPlaylistRepair, repairPlaylist } from "../../backend/services/navidromePlaylistRepair.js";
 
 const CANONICAL = 1;
@@ -293,3 +295,35 @@ test("a track with no copy in either library still makes the plan unsafe", () =>
   assert.equal(plan.safe, false);
   assert.equal(plan.unmapped.length, 1);
 });
+
+test("a locked database is retried and the rewrite then succeeds", async () => {
+  const state = { tracks: [track("e1", "shared:a.mp3", 1, "a.mp3")], removeFailures: 2, calls: [] };
+  const locked = () => Object.assign(new Error("Request failed with status code 500"), { response: { status: 500 } });
+  const client = {
+    getPlaylistTracks: async () => state.tracks.map((t) => ({ ...t })),
+    findSongsByPath: async (path) => [{ id: `avery:${path}`, libraryId: 4, path }],
+    removePlaylistTracks: async () => {
+      state.calls.push("remove");
+      if (state.removeFailures > 0) {
+        state.removeFailures -= 1;
+        throw locked();
+      }
+      state.tracks = [];
+    },
+    addPlaylistTracks: async (_id, ids) => {
+      state.calls.push("add");
+      state.tracks = ids.map((mediaFileId, index) => track(`n${index}`, mediaFileId, 4, "a.mp3"));
+    },
+  };
+  const { repairPlaylist } = await import("../../backend/services/navidromePlaylistRepair.js");
+  const summary = await repairPlaylist({
+    client,
+    playlist: { id: "p", name: "Retry", songCount: 1 },
+    canonicalLibraryId: 4,
+    dryRun: false,
+  });
+  assert.equal(summary.applied, true);
+  assert.deepEqual(state.calls, ["remove", "remove", "remove", "add"]);
+  assert.deepEqual(state.tracks.map((t) => t.mediaFileId), ["avery:a.mp3"]);
+});
+
