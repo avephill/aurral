@@ -533,6 +533,10 @@ function ArtistDetailsPage() {
         userLibrary={userLibrary}
       />
 
+      {/* "Popular" is a shop window for an artist you do not have yet. For one
+          already in the library it only gets in the way of the albums, so it
+          stays hidden, and it waits for the library check rather than flash. */}
+      {!existsInLibrary && !loadingLibrary ? (
       <ArtistDetailsPreviewTracks
         mbid={mbid}
         artistName={artist?.name || artistNameFromNav || ""}
@@ -552,6 +556,7 @@ function ArtistDetailsPage() {
         getDefaultPlaylistName={getDefaultTrackPlaylistName}
         onLoadPlaylists={loadSharedPlaylists}
       />
+      ) : null}
 
       <ArtistDetailsDownloadTargets
         releaseGroups={artist?.["release-groups"] || []}
