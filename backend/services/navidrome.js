@@ -7,6 +7,8 @@ const PLAYLIST_LIBRARY_NAME = "Aurral Playlists";
 const LEGACY_LIBRARY_NAMES = new Set(["Aurral Weekly Flow"]);
 const PLAYLIST_SONG_BATCH_SIZE = 50;
 const NAVIDROME_SONG_PAGE_SIZE = 1_000;
+const NAVIDROME_PLAYLIST_TRACK_PAGE_SIZE = 1_000;
+const NAVIDROME_PLAYLIST_WRITE_CHUNK = 500;
 const NAVIDROME_RATE_LIMIT_RETRIES = 2;
 const NAVIDROME_RATE_LIMIT_DELAY_MS = 250;
 const NAVIDROME_RATE_LIMIT_MAX_DELAY_MS = 5_000;
@@ -491,13 +493,23 @@ export class NavidromeClient {
     return Array.isArray(playlists) ? playlists : [];
   }
 
-  // Navidrome pages this endpoint; playlists here run to thousands of tracks.
-  async getPlaylistTracks(playlistId, { limit = 5000 } = {}) {
-    const tracks = await this._nativeRequest(
-      "GET",
-      `/api/playlist/${encodeURIComponent(playlistId)}/tracks?_end=${Number(limit)}`,
-    );
-    return Array.isArray(tracks) ? tracks : [];
+  // Navidrome pages this endpoint and playlists here run past ten thousand
+  // tracks, so read page after page until one comes back short. Anything
+  // that rewrites a playlist depends on seeing all of it.
+  async getPlaylistTracks(playlistId, { limit = 200_000, pageSize = NAVIDROME_PLAYLIST_TRACK_PAGE_SIZE } = {}) {
+    const tracks = [];
+    for (let start = 0; start < limit; ) {
+      const end = Math.min(start + pageSize, limit);
+      const page = await this._nativeRequest(
+        "GET",
+        `/api/playlist/${encodeURIComponent(playlistId)}/tracks?_start=${start}&_end=${end}&_sort=id&_order=ASC`,
+      );
+      if (!Array.isArray(page) || page.length === 0) break;
+      tracks.push(...page);
+      if (page.length < end - start) break;
+      start = end;
+    }
+    return tracks;
   }
 
   // A file's path is stored relative to its library root, so the same file
@@ -506,22 +518,32 @@ export class NavidromeClient {
   // id deliberately prepends the library id, so it cannot be used for this.
   // Appends in payload order.
   async addPlaylistTracks(playlistId, mediaFileIds) {
-    return this._nativeRequest(
-      "POST",
-      `/api/playlist/${encodeURIComponent(playlistId)}/tracks`,
-      { ids: (Array.isArray(mediaFileIds) ? mediaFileIds : []).map(String) },
-    );
+    const ids = (Array.isArray(mediaFileIds) ? mediaFileIds : []).map(String);
+    let last = null;
+    for (let index = 0; index < ids.length; index += NAVIDROME_PLAYLIST_WRITE_CHUNK) {
+      last = await this._nativeRequest(
+        "POST",
+        `/api/playlist/${encodeURIComponent(playlistId)}/tracks`,
+        { ids: ids.slice(index, index + NAVIDROME_PLAYLIST_WRITE_CHUNK) },
+      );
+    }
+    return last;
   }
 
-  // Takes playlist_tracks ids (the entry), not media_file ids.
+  // Takes playlist_tracks ids (the entry), not media_file ids. Chunked: the
+  // ids travel in the query string, and thousands of them exceed URL limits.
   async removePlaylistTracks(playlistId, playlistTrackIds) {
     const ids = (Array.isArray(playlistTrackIds) ? playlistTrackIds : []).map(String);
     if (!ids.length) return null;
-    const query = ids.map((id) => `id=${encodeURIComponent(id)}`).join("&");
-    return this._nativeRequest(
-      "DELETE",
-      `/api/playlist/${encodeURIComponent(playlistId)}/tracks?${query}`,
-    );
+    let last = null;
+    for (let index = 0; index < ids.length; index += NAVIDROME_PLAYLIST_WRITE_CHUNK) {
+      const query = ids.slice(index, index + NAVIDROME_PLAYLIST_WRITE_CHUNK).map((id) => `id=${encodeURIComponent(id)}`).join("&");
+      last = await this._nativeRequest(
+        "DELETE",
+        `/api/playlist/${encodeURIComponent(playlistId)}/tracks?${query}`,
+      );
+    }
+    return last;
   }
 
   // Native API title search. Unlike the Subsonic search, the songs come back
