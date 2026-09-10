@@ -532,8 +532,18 @@ export class NavidromeClient {
 
   // Takes playlist_tracks ids (the entry), not media_file ids. Chunked: the
   // ids travel in the query string, and thousands of them exceed URL limits.
+  //
+  // Navidrome renumbers the remaining entries to 1..N after every delete, so
+  // the chunks go from the highest ids down: removing the tail never changes
+  // the ids of what is still ahead of it.
   async removePlaylistTracks(playlistId, playlistTrackIds) {
-    const ids = (Array.isArray(playlistTrackIds) ? playlistTrackIds : []).map(String);
+    const ids = [...new Set((Array.isArray(playlistTrackIds) ? playlistTrackIds : []).map(String))]
+      .sort((a, b) => {
+        const left = Number(a);
+        const right = Number(b);
+        if (Number.isFinite(left) && Number.isFinite(right)) return right - left;
+        return b.localeCompare(a);
+      });
     if (!ids.length) return null;
     let last = null;
     for (let index = 0; index < ids.length; index += NAVIDROME_PLAYLIST_WRITE_CHUNK) {

@@ -58,3 +58,34 @@ test("large adds and deletes go out in chunks", async () => {
     assert.equal(await client.removePlaylistTracks("p1", []), null);
   });
 });
+
+test("deletes run from the highest id down so Navidrome's renumbering cannot skip entries", async () => {
+  // A fake that renumbers like Navidrome: after each delete the survivors
+  // become 1..N again.
+  let entries = Array.from({ length: 1201 }, (_, i) => ({ id: String(i + 1), mediaFileId: `mf-${i + 1}` }));
+  const deletes = [];
+  const server = http.createServer((req, res) => {
+    const url = new URL(req.url, "http://127.0.0.1");
+    const send = (status, body) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
+    if (url.pathname === "/auth/login") return send(200, { token: "t" });
+    if (req.method === "DELETE") {
+      const ids = new Set(url.searchParams.getAll("id"));
+      const missing = [...ids].filter((id) => !entries.some((entry) => entry.id === id));
+      if (missing.length) return send(404, { error: "data not found" });
+      deletes.push(ids.size);
+      entries = entries.filter((entry) => !ids.has(entry.id)).map((entry, index) => ({ ...entry, id: String(index + 1) }));
+      return send(200, {});
+    }
+    return send(404, {});
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const client = new NavidromeClient(`http://127.0.0.1:${server.address().port}`, "admin", "pw");
+    await client.removePlaylistTracks("p1", Array.from({ length: 1201 }, (_, i) => String(i + 1)));
+    assert.deepEqual(deletes, [500, 500, 201]);
+    assert.equal(entries.length, 0, "every entry must be gone");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+

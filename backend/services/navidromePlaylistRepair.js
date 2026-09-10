@@ -245,10 +245,12 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, fal
   summary.applied = true;
   summary.verifiedCount = after.length;
   if (after.length !== plan.desiredIds.length) {
-    logger.warn(
+    const file = writeRecoveryFile(playlist, originalIds);
+    logger.error(
       "library",
-      `[Playlists] "${playlist.name}" has ${after.length} tracks after rewrite, expected ${plan.desiredIds.length}`,
+      `[Playlists] "${playlist.name}" has ${after.length} tracks after rewrite, expected ${plan.desiredIds.length}; original entries saved to ${file || "(nowhere)"}`,
     );
+    summary.countMismatch = true;
   } else {
     logger.info(
       "library",
