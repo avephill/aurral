@@ -1,6 +1,6 @@
 import { dbOps } from "../db/helpers/index.js";
 import { NavidromeClient } from "./navidrome.js";
-import { resolveCanonicalLibraryId } from "./navidromePlaylistPortability.js";
+import { resolveCanonicalLibraryId, resolvePersonalLibraryId } from "./navidromePlaylistPortability.js";
 import { getUserLibrariesSettings } from "./userLibraryService.js";
 import {
   deriveRoots,
@@ -43,6 +43,8 @@ import { logger } from "./logger.js";
 const SONG_ID_CACHE_LIMIT = 5000;
 const ROOT_LEARNING_ATTEMPTS = 8;
 
+const LIBRARIES_TTL_MS = 10 * 60 * 1000;
+
 const state = {
   signature: null,
   adminClient: null,
@@ -50,6 +52,9 @@ const state = {
   navidromeRoot: null,
   canonicalLibraryId: null,
   canonicalLibraryPromise: null,
+  libraries: null,
+  librariesFetchedAt: 0,
+  librariesPromise: null,
   songIdByRelativePath: new Map(),
 };
 
@@ -67,7 +72,42 @@ export function resetNavidromeTrackResolver() {
   state.navidromeRoot = null;
   state.canonicalLibraryId = null;
   state.canonicalLibraryPromise = null;
+  state.libraries = null;
+  state.librariesFetchedAt = 0;
+  state.librariesPromise = null;
   state.songIdByRelativePath = new Map();
+}
+
+async function getLibraries(client) {
+  if (state.libraries && Date.now() - state.librariesFetchedAt < LIBRARIES_TTL_MS) return state.libraries;
+  if (!state.librariesPromise) {
+    state.librariesPromise = (async () => {
+      try {
+        const libraries = await client.getLibraries();
+        state.libraries = Array.isArray(libraries) ? libraries : [];
+        state.librariesFetchedAt = Date.now();
+      } catch (error) {
+        logger.warn("library", `[Navidrome] Could not list libraries: ${error.message}`);
+        state.libraries = state.libraries || [];
+      } finally {
+        state.librariesPromise = null;
+      }
+      return state.libraries;
+    })();
+  }
+  return state.librariesPromise;
+}
+
+/**
+ * The Navidrome library that belongs to one user, or null. A playlist made
+ * by that user is aimed at copies in this library so a Navidrome view
+ * filtered to it shows the playlist in full.
+ */
+export async function getPersonalLibraryIdForUser(username, { client = getAdminNavidromeClient() } = {}) {
+  if (!client || !username) return null;
+  const libraries = await getLibraries(client);
+  const settings = getUserLibrariesSettings();
+  return resolvePersonalLibraryId(libraries, username, settings.navidromeRootPath || settings.rootPath);
 }
 
 export function getAdminNavidromeClient(settings = dbOps.getSettings()) {
@@ -87,7 +127,7 @@ async function getCanonicalLibraryId(client) {
   if (!state.canonicalLibraryPromise) {
     state.canonicalLibraryPromise = (async () => {
       try {
-        const libraries = await client.getLibraries();
+        const libraries = await getLibraries(client);
         const id = resolveCanonicalLibraryId(libraries, getUserLibrariesSettings().navidromeRootPath);
         state.canonicalLibraryId = id ?? null;
       } catch (error) {
@@ -184,23 +224,30 @@ export function describeCanonicalTrack({ trackId, albumId } = {}) {
 const songPath = (song) => normalizePath(song?.path);
 
 /**
- * Navidrome song id for one canonical track (by its absolute path). Learns
- * the library roots on the first hit via a native title search, then uses
- * exact path lookups.
+ * Navidrome song for one canonical track (by its absolute path), as
+ * { id, libraryId }. Learns the library roots on the first hit via a native
+ * title search, then uses exact path lookups.
+ *
+ * With `preferLibraryId` the copy in that library wins when it exists;
+ * otherwise the main-library copy; otherwise any copy.
  */
-export async function resolveNavidromeSongId(track, { client = getAdminNavidromeClient() } = {}) {
+export async function resolveNavidromeSong(track, { client = getAdminNavidromeClient(), preferLibraryId = null } = {}) {
   if (!client || !track?.path) return null;
   const absolute = normalizePath(track.path);
 
   const canonicalLibraryId = await getCanonicalLibraryId(client);
-  const preferCanonical = (songs) =>
-    songs.find((song) => canonicalLibraryId !== null && Number(song?.libraryId) === canonicalLibraryId)
+  const preferred = preferLibraryId === null || preferLibraryId === undefined ? null : Number(preferLibraryId);
+  const pick = (songs) =>
+    (preferred !== null ? songs.find((song) => Number(song?.libraryId) === preferred) : null)
+    || songs.find((song) => canonicalLibraryId !== null && Number(song?.libraryId) === canonicalLibraryId)
     || songs[0]
     || null;
+  const asResult = (song) => (song?.id ? { id: String(song.id), libraryId: Number(song.libraryId) || null } : null);
+  const cacheKey = (relative) => `${preferred ?? "main"}:${relative}`;
 
   let relative = state.aurralRoot ? relativeToRoot(absolute, state.aurralRoot) : null;
-  if (relative && state.songIdByRelativePath.has(relative)) {
-    return state.songIdByRelativePath.get(relative);
+  if (relative && state.songIdByRelativePath.has(cacheKey(relative))) {
+    return state.songIdByRelativePath.get(cacheKey(relative));
   }
 
   if (relative) {
@@ -210,10 +257,10 @@ export async function resolveNavidromeSongId(track, { client = getAdminNavidrome
     } catch (error) {
       logger.warn("library", `[Navidrome] Path lookup failed for ${relative}: ${error.message}`);
     }
-    const match = preferCanonical(candidates.filter((song) => songPath(song) === relative));
-    if (match?.id) {
-      rememberSongId(relative, match.id);
-      return match.id;
+    const match = asResult(pick(candidates.filter((song) => songPath(song) === relative)));
+    if (match) {
+      rememberSongId(cacheKey(relative), match);
+      return match;
     }
   }
 
@@ -234,12 +281,18 @@ export async function resolveNavidromeSongId(track, { client = getAdminNavidrome
     .filter((entry) => entry.roots && normalizePath(joinRoot(entry.roots.aurralRoot, entry.roots.relative)) === absolute)
     .sort((a, b) => b.roots.relative.length - a.roots.relative.length);
   if (!matches.length) return null;
-  const best = preferCanonical(matches.map((entry) => entry.song));
+  const best = pick(matches.map((entry) => entry.song));
   const bestEntry = matches.find((entry) => entry.song === best);
   if (!state.aurralRoot) setRoots(bestEntry.roots);
   relative = relativeToRoot(absolute, state.aurralRoot) || bestEntry.roots.relative;
-  rememberSongId(relative, best.id);
-  return best.id;
+  const result = asResult(best);
+  rememberSongId(cacheKey(relative), result);
+  return result;
+}
+
+export async function resolveNavidromeSongId(track, options = {}) {
+  const song = await resolveNavidromeSong(track, options);
+  return song?.id || null;
 }
 
 /**
@@ -302,13 +355,29 @@ export async function resolveNavidromeSongIdByMetadata(
 export async function resolveNavidromeSongIds(payloads = [], options = {}) {
   const resolved = [];
   const unresolved = [];
+  const preferred = options.preferLibraryId === null || options.preferLibraryId === undefined
+    ? null
+    : Number(options.preferLibraryId);
   for (const payload of Array.isArray(payloads) ? payloads : []) {
-    let id = null;
+    let song = null;
     const canonical = describeCanonicalTrack(payload);
-    if (canonical) id = await resolveNavidromeSongId(canonical, options);
-    if (!id) id = await resolveNavidromeSongIdByMetadata(payload, options);
-    if (id) resolved.push({ payload, songId: id });
-    else unresolved.push(payload);
+    if (canonical) song = await resolveNavidromeSong(canonical, options);
+    if (!song) {
+      const id = await resolveNavidromeSongIdByMetadata(payload, options);
+      if (id) song = { id, libraryId: null };
+    }
+    if (song) {
+      resolved.push({
+        payload,
+        songId: song.id,
+        libraryId: song.libraryId,
+        // True when the person has a library of their own but this track is
+        // not in it, so the entry points at the shared copy.
+        outsidePreferredLibrary: preferred !== null && song.libraryId !== null && song.libraryId !== preferred,
+      });
+    } else {
+      unresolved.push(payload);
+    }
   }
   return { resolved, unresolved };
 }

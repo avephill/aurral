@@ -205,3 +205,30 @@ test("payload resolution falls back to a name search for tracks outside the libr
   assert.equal(unresolved.length, 1);
   assert.equal(unresolved[0].trackName, "Nowhere");
 });
+
+test("a preferred library wins over the main-library copy when it has one", async () => {
+  const relative = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
+  const client = fakeAdminClient({
+    songsByTitle: {
+      "A New Day Yesterday": [
+        { id: "nd-main", title: "A New Day Yesterday", path: relative, libraryId: 1 },
+        { id: "nd-avery", title: "A New Day Yesterday", path: relative, libraryId: 2 },
+      ],
+    },
+    songsByPath: {
+      [relative]: [
+        { id: "nd-main", path: relative, libraryId: 1 },
+        { id: "nd-avery", path: relative, libraryId: 2 },
+      ],
+    },
+  });
+  const canonical = resolver.describeCanonicalTrack({ trackId: track.id, albumId: album.id });
+  assert.deepEqual(await resolver.resolveNavidromeSong(canonical, { client, preferLibraryId: 2 }), { id: "nd-avery", libraryId: 2 });
+  assert.deepEqual(await resolver.resolveNavidromeSong(canonical, { client }), { id: "nd-main", libraryId: 1 });
+  // A library with no copy falls back to the main one and says so.
+  const { resolved } = await resolver.resolveNavidromeSongIds([{ trackId: track.id, albumId: album.id }], { client, preferLibraryId: 9 });
+  assert.equal(resolved[0].songId, "nd-main");
+  assert.equal(resolved[0].outsidePreferredLibrary, true);
+  assert.equal(await resolver.getPersonalLibraryIdForUser("avery", { client }), 2);
+  assert.equal(await resolver.getPersonalLibraryIdForUser("nobody", { client }), null);
+});

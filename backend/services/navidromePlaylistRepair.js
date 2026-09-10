@@ -16,10 +16,7 @@
 // and restored on failure, and nothing is written unless every entry maps.
 
 import { logger } from "./logger.js";
-import {
-  resolveCanonicalLibraryId,
-  resolveSharedEquivalents,
-} from "./navidromePlaylistPortability.js";
+import { resolveCanonicalLibraryId, resolveSharedEquivalents, resolvePersonalLibraryId } from "./navidromePlaylistPortability.js";
 
 /**
  * Works out the final ordered track list for one playlist.
@@ -169,10 +166,17 @@ export async function repairPlaylist({ client, playlist, canonicalLibraryId, dry
 }
 
 /**
- * Sweeps every hand-made playlist onto the canonical library.
+ * Sweeps every hand-made playlist into its home library.
  *
- * Idempotent: a playlist that already resolves everywhere plans no change and
- * is never written, so this is safe to run on a schedule.
+ * A playlist lives in its owner's personal library when they have one, so it
+ * shows up in a Navidrome view filtered to that library alone. When a track
+ * has no copy there (the artist is not in that person's library) the whole
+ * playlist falls back to the shared library instead, which every member can
+ * reach; dropping tracks is never an option. Playlists with no owner library
+ * go to the shared library.
+ *
+ * Idempotent: a playlist that already resolves plans no change and is never
+ * written, so this is safe to run on a schedule.
  */
 export async function repairAllPlaylists({
   client,
@@ -196,12 +200,24 @@ export async function repairAllPlaylists({
     // skipping them keeps the sweep from fetching tracks for all of them.
     if (!playlist?.songCount) continue;
     try {
-      const summary = await repairPlaylist({
-        client,
-        playlist,
-        canonicalLibraryId: canonical,
-        dryRun,
-      });
+      const personal = resolvePersonalLibraryId(libraries, playlist?.ownerName, navidromeRootPath);
+      let summary = null;
+      if (personal !== null && personal !== canonical) {
+        summary = await repairPlaylist({ client, playlist, canonicalLibraryId: personal, dryRun });
+        if (summary.safe === false) {
+          logger.info(
+            "library",
+            `[Playlists] "${playlist.name}" has ${summary.unmapped} track(s) outside ${playlist.ownerName}'s library; using the shared library instead`,
+          );
+          summary = null;
+        } else if (!summary.skipped) {
+          summary.targetLibraryId = personal;
+        }
+      }
+      if (!summary) {
+        summary = await repairPlaylist({ client, playlist, canonicalLibraryId: canonical, dryRun });
+        if (!summary.skipped) summary.targetLibraryId = canonical;
+      }
       if (summary.skipped || (!summary.changed && !summary.applied)) continue;
       results.push(summary);
       if (summary.applied) repaired += 1;

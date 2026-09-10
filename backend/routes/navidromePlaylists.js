@@ -8,6 +8,7 @@ import {
 import { createNavidromeUserClient, isNavidromeAuthError } from "../services/navidromeUserClient.js";
 import {
   getAdminNavidromeClient,
+  getPersonalLibraryIdForUser,
   mapNavidromeEntriesToTracks,
   resolveNavidromeSongIds,
 } from "../services/navidromeTrackResolver.js";
@@ -158,12 +159,14 @@ router.post("/", noCache, async (req, res) => {
   const name = String(req.body?.name || "").trim();
   if (!name) return res.status(400).json({ error: "Playlist name is required" });
   try {
-    const { resolved, unresolved } = await resolveNavidromeSongIds(normalizeTrackPayloads(req.body));
+    const preferLibraryId = await getPersonalLibraryIdForUser(req.user.username);
+    const { resolved, unresolved } = await resolveNavidromeSongIds(normalizeTrackPayloads(req.body), { preferLibraryId });
     const created = await client.createPlaylist(name, resolved.map((entry) => entry.songId));
     const playlist = created?.id ? await client.getSubsonicPlaylist(created.id) : created;
     return res.status(201).json({
       playlist: playlist ? toPlaylistSummary(playlist, client.user) : null,
       added: resolved.length,
+      sharedCopies: resolved.filter((entry) => entry.outsidePreferredLibrary).length,
       unresolved: unresolved.map((track) => ({ trackName: track.trackName, artistName: track.artistName })),
     });
   } catch (error) {
@@ -177,7 +180,8 @@ router.post("/:id/tracks", noCache, async (req, res) => {
   const payloads = normalizeTrackPayloads(req.body);
   if (!payloads.length) return res.status(400).json({ error: "tracks are required" });
   try {
-    const { resolved, unresolved } = await resolveNavidromeSongIds(payloads);
+    const preferLibraryId = await getPersonalLibraryIdForUser(req.user.username);
+    const { resolved, unresolved } = await resolveNavidromeSongIds(payloads, { preferLibraryId });
     if (!resolved.length) {
       return res.status(404).json({
         error: "Track not found in Navidrome",
@@ -190,6 +194,7 @@ router.post("/:id/tracks", noCache, async (req, res) => {
     return res.json({
       playlist: playlist ? toPlaylistSummary(playlist, client.user) : null,
       added: resolved.length,
+      sharedCopies: resolved.filter((entry) => entry.outsidePreferredLibrary).length,
       unresolved: unresolved.map((track) => ({ trackName: track.trackName, artistName: track.artistName })),
     });
   } catch (error) {

@@ -221,3 +221,64 @@ test("the sweep writes nothing when every playlist already resolves", async () =
   assert.equal(result.repaired, 0);
   assert.deepEqual(calls, [], "an idempotent sweep must not write on a clean library");
 });
+
+test("a playlist is moved into its owner's personal library when every track has a copy there", async () => {
+  const tracksByPlaylist = {
+    mine: [track("e1", "shared:a.mp3", 1, "a.mp3"), track("e2", "shared:b.mp3", 1, "b.mp3")],
+  };
+  const writes = [];
+  const client = {
+    isConfigured: () => true,
+    getLibraries: async () => [
+      { id: 1, name: "Music Library", path: "/music" },
+      { id: 4, name: "avery", path: "/music-root/users/avery" },
+    ],
+    getPlaylists: async () => [{ id: "mine", name: "Mine", songCount: 2, ownerName: "avery" }],
+    getPlaylistTracks: async (id) => (tracksByPlaylist[id] || []).map((t) => ({ ...t })),
+    findSongsByPath: async (path) => [
+      { id: `shared:${path}`, libraryId: 1, path },
+      { id: `avery:${path}`, libraryId: 4, path },
+    ],
+    removePlaylistTracks: async (...args) => writes.push(["remove", args]),
+    addPlaylistTracks: async (id, ids) => {
+      writes.push(["add", [id, ids]]);
+      tracksByPlaylist[id] = ids.map((mediaFileId, index) => track(`n${index}`, mediaFileId, 4, mediaFileId.split(":")[1]));
+    },
+  };
+  const { repairAllPlaylists } = await import("../../backend/services/navidromePlaylistRepair.js");
+  const result = await repairAllPlaylists({ client, navidromeRootPath: "/music-root/users", dryRun: false });
+  assert.equal(result.repaired, 1);
+  assert.equal(result.playlists[0].targetLibraryId, 4);
+  assert.deepEqual(writes.find(([kind]) => kind === "add")[1][1], ["avery:a.mp3", "avery:b.mp3"]);
+});
+
+test("a playlist with a track missing from the owner's library stays on the shared library", async () => {
+  const tracksByPlaylist = {
+    mixed: [track("e1", "shared:a.mp3", 1, "a.mp3"), track("e2", "shared:b.mp3", 1, "b.mp3")],
+  };
+  const writes = [];
+  const client = {
+    isConfigured: () => true,
+    getLibraries: async () => [
+      { id: 1, name: "Music Library", path: "/music" },
+      { id: 4, name: "avery", path: "/music-root/users/avery" },
+    ],
+    getPlaylists: async () => [{ id: "mixed", name: "Mixed", songCount: 2, ownerName: "avery" }],
+    getPlaylistTracks: async (id) => (tracksByPlaylist[id] || []).map((t) => ({ ...t })),
+    // b.mp3 exists only in the shared library.
+    findSongsByPath: async (path) => (path === "b.mp3"
+      ? [{ id: `shared:${path}`, libraryId: 1, path }]
+      : [{ id: `shared:${path}`, libraryId: 1, path }, { id: `avery:${path}`, libraryId: 4, path }]),
+    removePlaylistTracks: async (...args) => writes.push(["remove", args]),
+    addPlaylistTracks: async (id, ids) => {
+      writes.push(["add", [id, ids]]);
+      tracksByPlaylist[id] = ids.map((mediaFileId, index) => track(`n${index}`, mediaFileId, 1, mediaFileId.split(":")[1]));
+    },
+  };
+  const { repairAllPlaylists } = await import("../../backend/services/navidromePlaylistRepair.js");
+  const result = await repairAllPlaylists({ client, navidromeRootPath: "/music-root/users", dryRun: false });
+  // Moving it would drop b.mp3, so it is left where every entry resolves.
+  assert.equal(result.repaired, 0);
+  assert.deepEqual(result.playlists, []);
+  assert.deepEqual(writes, []);
+});

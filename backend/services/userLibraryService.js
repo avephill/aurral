@@ -706,7 +706,8 @@ async function normalizePlaylistsIfEnabled(config) {
     const { repairAllPlaylists } = await import("./navidromePlaylistRepair.js");
     const result = await repairAllPlaylists({
       client,
-      navidromeRootPath: config.navidromeRootPath,
+      // Blank means Navidrome sees the folder at the same path Aurral does.
+      navidromeRootPath: config.navidromeRootPath || config.rootPath,
       dryRun: false,
     });
     if (result.repaired > 0) {

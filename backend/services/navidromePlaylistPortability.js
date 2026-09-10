@@ -29,6 +29,32 @@ export function resolveCanonicalLibraryId(libraries, navidromeRootPath) {
 }
 
 /**
+ * The personal library that belongs to one user, by name or by folder name
+ * (personal libraries are created named after the user, in a folder named
+ * after the user). Null when the user has none.
+ */
+export function resolvePersonalLibraryId(libraries, username, navidromeRootPath) {
+  const wanted = String(username || "").trim().toLowerCase();
+  if (!wanted) return null;
+  const folder = wanted.replace(/[^\p{L}\p{N}._ -]/gu, "_").replace(/^\.+/, "").trim();
+  // With a known root, personal libraries are the ones under it. Without one
+  // (Navidrome mounts the folder at the same path Aurral does, so nothing was
+  // configured), anything but the main library is a candidate.
+  const { personal } = classifyLibraries(libraries, navidromeRootPath);
+  const canonical = resolveCanonicalLibraryId(libraries, navidromeRootPath);
+  const candidates = normalizePath(navidromeRootPath)
+    ? personal
+    : (Array.isArray(libraries) ? libraries : []).filter((library) => Number(library?.id) !== canonical);
+  const match = candidates.find((library) => {
+    const name = String(library?.name || "").trim().toLowerCase();
+    const base = normalizePath(library?.path).split("/").pop()?.toLowerCase() || "";
+    return name === wanted || base === wanted || (folder && base === folder);
+  });
+  const id = Number(match?.id);
+  return Number.isFinite(id) ? id : null;
+}
+
+/**
  * Splits libraries into the shared one(s) everybody can reach and the personal
  * ones under the user-library root. A playlist is portable when every track
  * sits in a shared library.
