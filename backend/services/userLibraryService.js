@@ -706,8 +706,12 @@ async function normalizePlaylistsIfEnabled(config) {
     // The scan just triggered above holds Navidrome's database; rewriting
     // playlists into it now fails with "database is locked".
     const scan = await client.waitForScanToFinish();
-    if (scan.scanning) {
-      logger.warn("library", "[Playlists] Navidrome is still scanning; skipping normalisation this round");
+    // Unknown means the scan check itself failed, so it is not safe to assume
+    // the database is free. Both unknown and still-scanning wait for the next
+    // round rather than rewriting playlists into a locked database.
+    if (scan.scanning !== false) {
+      const state = scan.scanning === null ? "could not be read" : "is still running";
+      logger.warn("library", `[Playlists] Navidrome scan state ${state}; skipping normalisation this round`);
       return null;
     }
     const { repairAllPlaylists } = await import("./navidromePlaylistRepair.js");

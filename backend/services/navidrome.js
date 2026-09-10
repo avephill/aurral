@@ -576,10 +576,39 @@ export class NavidromeClient {
     return Array.isArray(songs) ? songs : [];
   }
 
+  // The native library list reports scan state and authenticates the same way
+  // the rest of the admin calls here do, so it keeps working when the stored
+  // Subsonic password does not.
+  async getScanStatusNative() {
+    const libraries = await this._nativeRequest("GET", "/api/library");
+    const rows = Array.isArray(libraries) ? libraries : [];
+    const scanning = rows.some((library) => {
+      if (library?.fullScanInProgress === true) return true;
+      // A quick scan sets lastScanStartedAt and only moves lastScanAt once it
+      // finishes. An idle library reports the zero time for the start.
+      const started = Date.parse(library?.lastScanStartedAt || "");
+      if (!Number.isFinite(started) || started <= 0) return false;
+      const finished = Date.parse(library?.lastScanAt || "");
+      return !Number.isFinite(finished) || finished < started;
+    });
+    return { scanning, count: rows.length };
+  }
+
   async getScanStatus() {
-    const data = await this.request("getScanStatus");
-    const status = data.scanStatus || {};
-    return { scanning: status.scanning === true || status.scanning === "true", count: Number(status.count || 0) };
+    try {
+      return await this.getScanStatusNative();
+    } catch (nativeError) {
+      try {
+        const data = await this.request("getScanStatus");
+        const status = data.scanStatus || {};
+        return {
+          scanning: status.scanning === true || status.scanning === "true",
+          count: Number(status.count || 0),
+        };
+      } catch {
+        throw nativeError;
+      }
+    }
   }
 
   // Navidrome's SQLite database locks up under a scan; playlist rewrites made
