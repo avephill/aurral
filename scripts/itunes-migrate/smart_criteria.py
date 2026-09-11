@@ -32,8 +32,14 @@ integers big-endian.
 
 A text rule ends at its terminating zero and the next begins two bytes later.
 A number or date rule is a fixed 67 bytes from the first number. A rule whose
-field is zero opens a nested group, which this reader reports rather than
-converts, because Aurral's editor cannot show one.
+field is zero opens a group: it says how many rules belong to it and whether
+they are joined by and or or, and those rules follow it.
+
+iTunes writes nearly every smart playlist the same way: a rule saying the
+media kind is music, and a group holding what the person actually asked for.
+Navidrome holds only music, so that rule is dropped, and a group whose join
+matches its parent's is flattened into it. What is left is usually a plain
+list of rules, which is what the editor in Aurral can show.
 """
 
 import base64
@@ -126,12 +132,19 @@ DATE_FIELDS = {
 }
 DATE_FIELDS_UNSUPPORTED = {0x45: "Last Skipped"}
 
+MEDIA_KIND_FIELD = 0x3C
+# The media kinds that mean "music". A Navidrome library holds nothing else,
+# so a rule asking for one of these says nothing and is dropped.
+MEDIA_KINDS_MUSIC = {0x01, 0x1021B1}
+
+GROUP_COUNT = 61      # how many rules belong to a group - relative to its start
+GROUP_LOGIC = 68      # whether they are joined by and or or - relative to its start
+
 BOOLEAN_FIELDS = {0x9A: "loved"}
 BOOLEAN_FIELDS_UNSUPPORTED = {
     0x25: "Has Artwork",
     0x29: "Purchased",
     0x1D: "Checked",
-    0x3C: "Media Kind",
     0x28: "Playlist",
     0x86: "iCloud Status",
     0x85: "Location",
@@ -210,19 +223,61 @@ def parse_info(info):
     }
 
 
+def _simplify(node):
+    """Fold away the scaffolding iTunes writes around every playlist.
+
+    A group holding one rule, or joined the same way as the group above it,
+    says nothing extra, so its rules move up. An empty group disappears.
+    """
+    conditions = []
+    for child in node["conditions"]:
+        if "match" not in child:
+            conditions.append(child)
+            continue
+        child = _simplify(child)
+        if not child["conditions"]:
+            continue
+        if len(child["conditions"]) == 1 or child["match"] == node["match"]:
+            conditions.extend(child["conditions"])
+            continue
+        conditions.append(child)
+    return {"match": node["match"], "conditions": conditions}
+
+
+def is_flat(rules):
+    """True when every rule stands on its own, which is what the editor shows."""
+    return all("match" not in condition for condition in rules.get("conditions", []))
+
+
 def parse_criteria(criteria):
     """Every rule in the blob, as Navidrome would put them.
 
-    Returns (match, conditions, unsupported): the last is a list of plain
-    sentences about anything that could not cross over.
+    Returns (rules, unsupported): rules is {"match", "conditions"}, where a
+    condition is either a rule or another such group; unsupported is a list of
+    plain sentences about anything that could not cross over.
     """
     if len(criteria) <= CRITERIA_FIRST_RULE:
         raise SmartCriteriaError("Smart Criteria is too short to read")
 
-    match = "any" if criteria[CRITERIA_LOGIC_TYPE] == 1 else "all"
-    conditions = []
+    root = {"match": "any" if criteria[CRITERIA_LOGIC_TYPE] == 1 else "all", "conditions": []}
+    # Each open group, with how many of its rules are still to come. The root
+    # runs to the end of the blob, so it counts nothing.
+    stack = [{"node": root, "remaining": None}]
     unsupported = []
     offset = CRITERIA_FIRST_RULE
+
+    def member_read():
+        """One rule of the innermost group has been read. A group that is now
+        complete is itself a rule of the group above it."""
+        while len(stack) > 1 and stack[-1]["remaining"] is not None:
+            stack[-1]["remaining"] -= 1
+            if stack[-1]["remaining"] > 0:
+                return
+            stack.pop()
+
+    def add(condition):
+        stack[-1]["node"]["conditions"].append(condition)
+        member_read()
 
     # A rule needs its header and, unless it is text, its numbers; anything
     # shorter than that at the end of the blob is padding.
@@ -234,10 +289,26 @@ def parse_criteria(criteria):
         negative = sign not in (SIGN_INT_POSITIVE, SIGN_STRING_POSITIVE)
 
         if field == 0:
-            # A nested group. Navidrome can hold one, the editor here cannot
-            # show one, so it is reported instead of being flattened.
-            unsupported.append("a nested group of rules")
+            count = _uint32(criteria, offset + GROUP_COUNT)
+            group = {
+                "match": "any" if criteria[offset + GROUP_LOGIC] == 1 else "all",
+                "conditions": [],
+            }
+            stack[-1]["node"]["conditions"].append(group)
+            if count > 0:
+                stack.append({"node": group, "remaining": count})
+            else:
+                member_read()
             offset += GROUP_LENGTH
+            continue
+
+        if field == MEDIA_KIND_FIELD:
+            kind = _uint32(criteria, int_a_at)
+            if kind not in MEDIA_KINDS_MUSIC:
+                unsupported.append("a rule about something other than music")
+            # Either way the slot is used up.
+            member_read()
+            offset = int_a_at + RULE_INT_LENGTH
             continue
 
         if field in TEXT_FIELDS:
@@ -249,10 +320,11 @@ def parse_criteria(criteria):
                 COMPARE_STARTS: "startsWith",
                 COMPARE_ENDS: "endsWith",
             }.get(comparison)
-            if not operator:
+            if operator:
+                add({"field": name, "operator": operator, "value": value})
+            else:
                 unsupported.append(f"{name} with a comparison this reader does not know")
-                continue
-            conditions.append({"field": name, "operator": operator, "value": value})
+                member_read()
             continue
 
         if field in NUMBER_FIELDS:
@@ -264,23 +336,16 @@ def parse_criteria(criteria):
                 number_a //= 20
                 number_b //= 20
             if comparison == COMPARE_IS:
-                conditions.append({
-                    "field": name,
-                    "operator": "isNot" if negative else "is",
-                    "value": number_a,
-                })
+                add({"field": name, "operator": "isNot" if negative else "is", "value": number_a})
             elif comparison == COMPARE_GREATER:
-                conditions.append({"field": name, "operator": "gt", "value": number_a})
+                add({"field": name, "operator": "gt", "value": number_a})
             elif comparison == COMPARE_LESS:
-                conditions.append({"field": name, "operator": "lt", "value": number_a})
+                add({"field": name, "operator": "lt", "value": number_a})
             elif comparison == COMPARE_OTHER:
-                conditions.append({
-                    "field": name,
-                    "operator": "inTheRange",
-                    "value": f"{number_a},{number_b}",
-                })
+                add({"field": name, "operator": "inTheRange", "value": f"{number_a},{number_b}"})
             else:
                 unsupported.append(f"{name} with a comparison this reader does not know")
+                member_read()
             offset = int_a_at + RULE_INT_LENGTH
             continue
 
@@ -293,7 +358,7 @@ def parse_criteria(criteria):
                 span = (struct.unpack(">I", bytes(255 - byte for byte in inverted))[0] + 1) % 2**32
                 unit_seconds = _uint32(criteria, offset + RULE_TIME_UNIT)
                 days = max(1, round(span * unit_seconds / 86400))
-                conditions.append({
+                add({
                     "field": name,
                     "operator": "notInTheLast" if negative else "inTheLast",
                     "value": days,
@@ -302,22 +367,19 @@ def parse_criteria(criteria):
                 date_a = _itunes_date(_uint32(criteria, int_a_at))
                 date_b = _itunes_date(_uint32(criteria, int_a_at + RULE_INT_B))
                 if comparison == COMPARE_GREATER:
-                    conditions.append({"field": name, "operator": "after", "value": date_a})
+                    add({"field": name, "operator": "after", "value": date_a})
                 elif comparison == COMPARE_LESS:
-                    conditions.append({"field": name, "operator": "before", "value": date_a})
+                    add({"field": name, "operator": "before", "value": date_a})
                 elif comparison in (COMPARE_IS, COMPARE_OTHER):
-                    conditions.append({
-                        "field": name,
-                        "operator": "inTheRange",
-                        "value": f"{date_a},{date_b}",
-                    })
+                    add({"field": name, "operator": "inTheRange", "value": f"{date_a},{date_b}"})
                 else:
                     unsupported.append(f"{name} with a comparison this reader does not know")
+                    member_read()
             offset = int_a_at + RULE_INT_LENGTH
             continue
 
         if field in BOOLEAN_FIELDS:
-            conditions.append({
+            add({
                 "field": BOOLEAN_FIELDS[field],
                 "operator": "is",
                 "value": _uint32(criteria, int_a_at) == 1,
@@ -335,6 +397,7 @@ def parse_criteria(criteria):
             f"{label}, which Navidrome has no rule for" if label
             else f"an iTunes field this reader does not know (code {field:#04x})"
         )
+        member_read()
         # Text fields end at their value; everything else is a fixed length. An
         # unknown field is assumed to be the latter, which is the common case.
         if field in TEXT_FIELDS_UNSUPPORTED:
@@ -342,7 +405,11 @@ def parse_criteria(criteria):
         else:
             offset = int_a_at + RULE_INT_LENGTH
 
-    return match, conditions, unsupported
+    rules = _simplify(root)
+    # A playlist whose rules all sit in one group reads better without it.
+    while len(rules["conditions"]) == 1 and "match" in rules["conditions"][0]:
+        rules = rules["conditions"][0]
+    return rules, unsupported
 
 
 def convert_smart_playlist(info_blob, criteria_blob):
@@ -356,7 +423,7 @@ def convert_smart_playlist(info_blob, criteria_blob):
     criteria = base64.b64decode(criteria_blob) if isinstance(criteria_blob, str) else bytes(criteria_blob)
 
     details = parse_info(info)
-    match, conditions, unsupported = parse_criteria(criteria)
+    parsed, unsupported = parse_criteria(criteria)
 
     if not details["usesRules"]:
         unsupported.append("the playlist takes everything, with no rules to match")
@@ -371,8 +438,8 @@ def convert_smart_playlist(info_blob, criteria_blob):
             )
 
     rules = {
-        "match": match,
-        "conditions": conditions,
+        "match": parsed["match"],
+        "conditions": parsed["conditions"],
         "sort": details["sort"] or "",
         "order": details["order"] or "asc",
         "limit": limit,
@@ -381,5 +448,9 @@ def convert_smart_playlist(info_blob, criteria_blob):
         "rules": rules,
         "unsupported": unsupported,
         "liveUpdating": details["liveUpdating"],
-        "convertible": bool(conditions) and not unsupported,
+        "convertible": bool(parsed["conditions"]) and not unsupported,
+        # Navidrome can hold a group inside a group; Aurral's editor shows
+        # only a plain list, so a playlist that keeps one is applied but
+        # cannot be opened there.
+        "editable": is_flat(rules),
     }

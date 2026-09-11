@@ -10,7 +10,9 @@ import unittest
 
 from smart_criteria import (
     CRITERIA_FIRST_RULE,
+    GROUP_LENGTH,
     convert_smart_playlist,
+    is_flat,
     parse_criteria,
     parse_info,
 )
@@ -39,6 +41,13 @@ def criteria_blob(rules, *, match="all"):
     offset = CRITERIA_FIRST_RULE
     for rule in rules:
         block = bytearray(RULE_STRIDE)
+        if rule["kind"] == "group":
+            # A group says how many rules follow it and how they are joined.
+            block[61:65] = struct.pack(">I", rule["count"])
+            block[68] = 1 if rule.get("match", "all") == "any" else 0
+            data[offset:offset + GROUP_LENGTH] = block[:GROUP_LENGTH]
+            offset += GROUP_LENGTH
+            continue
         block[0] = rule["field"]
         block[1] = rule.get("sign", 1 if rule["kind"] == "text" else 0)
         block[4] = rule.get("comparison", 0)
@@ -70,7 +79,8 @@ class TextRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "text", "field": 0x0E, "comparison": 0x02, "value": "roadtrip"},
         ])
-        match, conditions, unsupported = parse_criteria(blob)
+        rules, unsupported = parse_criteria(blob)
+        match, conditions = rules["match"], rules["conditions"]
         self.assertEqual(match, "all")
         self.assertEqual(conditions, [
             {"field": "comment", "operator": "contains", "value": "roadtrip"},
@@ -82,7 +92,8 @@ class TextRules(unittest.TestCase):
             {"kind": "text", "field": 0x04, "comparison": 0x01, "value": "Jethro Tull"},
             {"kind": "text", "field": 0x08, "comparison": 0x02, "value": "Rock"},
         ], match="any")
-        match, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        match, conditions = rules["match"], rules["conditions"]
         self.assertEqual(match, "any")
         self.assertEqual([condition["field"] for condition in conditions], ["artist", "genre"])
         self.assertEqual(conditions[0]["value"], "Jethro Tull")
@@ -91,14 +102,16 @@ class TextRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "text", "field": 0x02, "comparison": 0x02, "sign": 3, "value": "live"},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions[0]["operator"], "notContains")
 
     def test_accents_survive(self):
         blob = criteria_blob([
             {"kind": "text", "field": 0x04, "comparison": 0x01, "value": "Björk"},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions[0]["value"], "Björk")
 
 
@@ -108,14 +121,16 @@ class NumberRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "int", "field": 0x19, "comparison": 0x10, "intA": 80},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions, [{"field": "rating", "operator": "gt", "value": 4}])
 
     def test_a_range_becomes_one_between_rule(self):
         blob = criteria_blob([
             {"kind": "int", "field": 0x07, "comparison": 0x00, "intA": 1990, "intB": 1999},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions[0], {
             "field": "year", "operator": "inTheRange", "value": "1990,1999",
         })
@@ -125,7 +140,8 @@ class NumberRules(unittest.TestCase):
             {"kind": "int", "field": 0x16, "comparison": 0x10, "intA": 5},
             {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Jazz"},
         ])
-        _, conditions, unsupported = parse_criteria(blob)
+        rules, unsupported = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(unsupported, [])
         self.assertEqual(conditions, [
             {"field": "playcount", "operator": "gt", "value": 5},
@@ -138,7 +154,8 @@ class DateRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "int", "field": 0x10, "relative": True, "span": 30, "unit": 86400},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions, [
             {"field": "dateadded", "operator": "inTheLast", "value": 30},
         ])
@@ -147,7 +164,8 @@ class DateRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "int", "field": 0x17, "relative": True, "span": 2, "unit": 604800},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions[0]["value"], 14)
 
     def test_a_real_date_reads_as_a_day(self):
@@ -156,7 +174,8 @@ class DateRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "int", "field": 0x10, "comparison": 0x10, "intA": itunes_seconds},
         ])
-        _, conditions, _ = parse_criteria(blob)
+        rules, _ = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions[0], {
             "field": "dateadded", "operator": "after", "value": "2020-01-01",
         })
@@ -167,7 +186,8 @@ class UnsupportedRules(unittest.TestCase):
         blob = criteria_blob([
             {"kind": "text", "field": 0x12, "comparison": 0x02, "value": "Bach"},
         ])
-        _, conditions, unsupported = parse_criteria(blob)
+        rules, unsupported = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(conditions, [])
         self.assertEqual(len(unsupported), 1)
         self.assertIn("Composer", unsupported[0])
@@ -177,16 +197,78 @@ class UnsupportedRules(unittest.TestCase):
             {"kind": "text", "field": 0x12, "comparison": 0x02, "value": "Bach"},
             {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Classical"},
         ])
-        _, conditions, unsupported = parse_criteria(blob)
+        rules, unsupported = parse_criteria(blob)
+        conditions = rules["conditions"]
         self.assertEqual(len(unsupported), 1)
         self.assertEqual(conditions, [
             {"field": "genre", "operator": "is", "value": "Classical"},
         ])
 
-    def test_a_nested_group_is_reported(self):
-        blob = criteria_blob([{"kind": "int", "field": 0x00}])
-        _, _, unsupported = parse_criteria(blob)
-        self.assertIn("nested group", unsupported[0])
+    def test_a_media_kind_that_is_not_music_is_reported(self):
+        blob = criteria_blob([{"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x02}])
+        _, unsupported = parse_criteria(blob)
+        self.assertIn("other than music", unsupported[0])
+
+
+class Groups(unittest.TestCase):
+    """iTunes wraps nearly every playlist the same way: a rule saying the media
+    kind is music, then a group holding what the person actually asked for."""
+
+    def test_the_usual_itunes_wrapping_falls_away(self):
+        blob = criteria_blob([
+            {"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x01},
+            {"kind": "group", "count": 2, "match": "all"},
+            {"kind": "text", "field": 0x0E, "comparison": 0x02, "value": "roadtrip"},
+            {"kind": "int", "field": 0x19, "comparison": 0x10, "intA": 60},
+        ])
+        rules, unsupported = parse_criteria(blob)
+        self.assertEqual(unsupported, [])
+        self.assertTrue(is_flat(rules))
+        self.assertEqual(rules["conditions"], [
+            {"field": "comment", "operator": "contains", "value": "roadtrip"},
+            {"field": "rating", "operator": "gt", "value": 3},
+        ])
+
+    def test_a_group_joined_the_other_way_is_kept(self):
+        blob = criteria_blob([
+            {"kind": "int", "field": 0x19, "comparison": 0x10, "intA": 60},
+            {"kind": "group", "count": 2, "match": "any"},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Jazz"},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Blues"},
+        ])
+        rules, unsupported = parse_criteria(blob)
+        self.assertEqual(unsupported, [])
+        self.assertFalse(is_flat(rules), "the either-or has to stay a group")
+        self.assertEqual(rules["match"], "all")
+        self.assertEqual(rules["conditions"][0], {"field": "rating", "operator": "gt", "value": 3})
+        self.assertEqual(rules["conditions"][1], {
+            "match": "any",
+            "conditions": [
+                {"field": "genre", "operator": "is", "value": "Jazz"},
+                {"field": "genre", "operator": "is", "value": "Blues"},
+            ],
+        })
+
+    def test_a_group_holding_one_rule_is_not_worth_keeping(self):
+        blob = criteria_blob([
+            {"kind": "group", "count": 1, "match": "any"},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Folk"},
+        ])
+        rules, _ = parse_criteria(blob)
+        self.assertTrue(is_flat(rules))
+        self.assertEqual(rules["conditions"], [{"field": "genre", "operator": "is", "value": "Folk"}])
+
+    def test_rules_after_a_group_belong_to_the_playlist_again(self):
+        blob = criteria_blob([
+            {"kind": "group", "count": 2, "match": "any"},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Jazz"},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Blues"},
+            {"kind": "int", "field": 0x19, "comparison": 0x10, "intA": 80},
+        ])
+        rules, _ = parse_criteria(blob)
+        self.assertEqual(rules["match"], "all")
+        self.assertEqual(rules["conditions"][-1], {"field": "rating", "operator": "gt", "value": 4})
+        self.assertEqual(rules["conditions"][0]["match"], "any")
 
 
 class InfoBlock(unittest.TestCase):

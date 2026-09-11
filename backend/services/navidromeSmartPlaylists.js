@@ -134,6 +134,37 @@ function coerceScalar(field, rawValue, operator = null) {
   return text;
 }
 
+const MAX_DEPTH = 4;
+
+/**
+ * One rule, or a group of them. Navidrome takes a group wherever it takes a
+ * rule, which is how an iTunes playlist that says "rated highly, and either
+ * jazz or blues" comes across whole.
+ */
+function toClause(condition, index, depth) {
+  const group = Array.isArray(condition?.conditions) ? condition : null;
+  if (group) {
+    if (depth > MAX_DEPTH) throw new SmartPlaylistRuleError("Rules are nested too deeply");
+    const groupMatch = String(group.match || "all").toLowerCase();
+    if (!["all", "any"].includes(groupMatch)) throw new SmartPlaylistRuleError("Match must be all or any");
+    if (!group.conditions.length) throw new SmartPlaylistRuleError("A group needs at least one rule");
+    if (group.conditions.length > MAX_CONDITIONS) {
+      throw new SmartPlaylistRuleError(`At most ${MAX_CONDITIONS} rules in a group`);
+    }
+    return {
+      [groupMatch]: group.conditions.map((child, position) => toClause(child, position, depth + 1)),
+    };
+  }
+
+  const field = FIELD_BY_NAME.get(String(condition?.field || "").trim());
+  if (!field) throw new SmartPlaylistRuleError(`Unknown field: ${condition?.field}`);
+  const operator = String(condition?.operator || "").trim();
+  if (!OPERATORS_BY_TYPE[field.type].includes(operator)) {
+    throw new SmartPlaylistRuleError(`${field.label} cannot be asked "${operator}"`);
+  }
+  return { [operator]: { [field.name]: coerce(field, operator, condition?.value) } };
+}
+
 /**
  * An editor's rules to Navidrome's. Throws SmartPlaylistRuleError with a
  * message meant for the person who typed it.
@@ -148,17 +179,7 @@ export function toNavidromeRules(input) {
     throw new SmartPlaylistRuleError(`At most ${MAX_CONDITIONS} rules`);
   }
 
-  const clauses = conditions.map((condition) => {
-    const field = FIELD_BY_NAME.get(String(condition?.field || "").trim());
-    if (!field) throw new SmartPlaylistRuleError(`Unknown field: ${condition?.field}`);
-    const operator = String(condition?.operator || "").trim();
-    if (!OPERATORS_BY_TYPE[field.type].includes(operator)) {
-      throw new SmartPlaylistRuleError(`${field.label} cannot be asked "${operator}"`);
-    }
-    return { [operator]: { [field.name]: coerce(field, operator, condition?.value) } };
-  });
-
-  const rules = { [match]: clauses };
+  const rules = { [match]: conditions.map((condition, index) => toClause(condition, index, 1)) };
 
   const sort = String(input?.sort || "").trim();
   if (sort) {

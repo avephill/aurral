@@ -153,3 +153,58 @@ test("the catalogue offers an operator set for every field it lists", () => {
   }
   assert.ok(sortFields.includes("random"));
 });
+
+test("a group of rules crosses over whole, the way iTunes wrote it", () => {
+  // "rated above three, and either jazz or blues"
+  const rules = toNavidromeRules({
+    match: "all",
+    conditions: [
+      { field: "rating", operator: "gt", value: 3 },
+      {
+        match: "any",
+        conditions: [
+          { field: "genre", operator: "is", value: "Jazz" },
+          { field: "genre", operator: "is", value: "Blues" },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(rules, {
+    all: [
+      { gt: { rating: 3 } },
+      { any: [{ is: { genre: "Jazz" } }, { is: { genre: "Blues" } }] },
+    ],
+  });
+});
+
+test("a bad rule inside a group is refused like any other", () => {
+  assert.throws(
+    () => toNavidromeRules({
+      match: "all",
+      conditions: [{ match: "any", conditions: [{ field: "mood", operator: "is", value: "up" }] }],
+    }),
+    /Unknown field/,
+  );
+  assert.throws(
+    () => toNavidromeRules({ match: "all", conditions: [{ match: "any", conditions: [] }] }),
+    /group needs at least one rule/,
+  );
+});
+
+test("rules nested past all reason are refused rather than sent", () => {
+  let nested = { field: "title", operator: "contains", value: "a" };
+  for (let depth = 0; depth < 6; depth += 1) nested = { match: "all", conditions: [nested] };
+  assert.throws(() => toNavidromeRules({ match: "all", conditions: [nested] }), /nested too deeply/);
+});
+
+test("a playlist that keeps a group cannot be opened in the editor", () => {
+  const withGroup = toNavidromeRules({
+    match: "all",
+    conditions: [
+      { field: "rating", operator: "gt", value: 3 },
+      { match: "any", conditions: [{ field: "genre", operator: "is", value: "Jazz" }, { field: "genre", operator: "is", value: "Blues" }] },
+    ],
+  });
+  assert.equal(fromNavidromeRules(withGroup), null, "the editor says so rather than flattening it");
+});

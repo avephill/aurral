@@ -67,6 +67,9 @@ def convert_export(export_path, *, skip_common=True):
 
 
 def describe(condition):
+    if "conditions" in condition:
+        inner = "; ".join(describe(child) for child in condition["conditions"])
+        return f"({condition['match']} of: {inner})"
     return f"{condition['field']} {condition['operator']} {condition['value']}"
 
 
@@ -99,6 +102,8 @@ def main(argv=None):
             print(f"    match {rules['match']} of: " + "; ".join(describe(c) for c in rules["conditions"]))
             if rules["limit"]:
                 print(f"    limit {rules['limit']}, chosen by {rules['sort'] or 'playlist order'} {rules['order']}")
+            if not result.get("editable", True):
+                print("    keeps a group of rules, so it cannot be opened in Aurral's editor")
         for result in partial:
             print(f"\n  {result['name']}  (needs a look)")
             for reason in result["unsupported"]:
@@ -117,7 +122,14 @@ def main(argv=None):
         plan = {
             "owner": args.owner,
             "playlists": [
-                {"name": result["name"], "rules": result["rules"], "liveUpdating": result.get("liveUpdating", True)}
+                {
+                    "name": result["name"],
+                    "rules": result["rules"],
+                    "liveUpdating": result.get("liveUpdating", True),
+                    # False when the rules keep a group: Navidrome holds it,
+                    # but Aurral's editor shows only a plain list.
+                    "editable": result.get("editable", True),
+                }
                 for result in ready
             ],
             "needsAttention": [
