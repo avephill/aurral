@@ -32,15 +32,41 @@ export default defineConfig(({ mode }) => {
           directoryIndex: null,
         },
         manifest: {
-          name: "Aurral - Music Discovery",
+          // Installed on a desktop this becomes a real application: its own
+          // window, its own icon, no address bar. Keep `id` stable so an
+          // install survives later changes to the rest of the manifest.
+          id: basePath,
+          name: "Aurral Music",
           short_name: "Aurral",
-          description: "Self-hosted music discovery for the Lidarr stack",
+          description: "Your music library, playlists and ratings",
           theme_color: "#ffffff",
           background_color: "#ffffff",
           display: "standalone",
-          orientation: "portrait",
+          display_override: ["standalone", "minimal-ui"],
+          scope: basePath,
           start_url: basePath,
+          // Clicking the icon returns to the window that is already open
+          // rather than starting a second one.
+          launch_handler: { client_mode: "navigate-existing" },
           icons: [
+            {
+              src: `${basePath}icons/aurral-192.png`,
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "any",
+            },
+            {
+              src: `${basePath}icons/aurral-512.png`,
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "any",
+            },
+            {
+              src: `${basePath}icons/aurral-512-maskable.png`,
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable",
+            },
             {
               src: `${basePath}icons/aurral-icon-iOS-Default-1024x1024@1x.png`,
               sizes: "1024x1024",
