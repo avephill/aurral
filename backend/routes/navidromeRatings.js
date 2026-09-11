@@ -4,6 +4,7 @@ import { noCache } from "../middleware/cache.js";
 import { isNavidromeUserAuthEnabled } from "../config/featureFlags.js";
 import { isNavidromeAuthError } from "../services/navidromeUserClient.js";
 import {
+  importStarsFromNavidrome,
   lookupTrackAnnotations,
   setTrackRating,
   setTrackStarred,
@@ -69,6 +70,17 @@ router.put("/track/star", noCache, async (req, res) => {
     return res.json(await setTrackStarred(req.user, { trackId, albumId }, starred));
   } catch (error) {
     return sendError(res, error, "Could not update the star in Navidrome");
+  }
+});
+
+// Stars set in a Navidrome client are the same gesture as a heart here, so
+// this pulls them in. Additions only; see the service for why.
+router.post("/favorites/import", noCache, async (req, res) => {
+  if (!guard(res)) return undefined;
+  try {
+    return res.json(await importStarsFromNavidrome(req.user));
+  } catch (error) {
+    return sendError(res, error, "Could not read stars from Navidrome");
   }
 });
 

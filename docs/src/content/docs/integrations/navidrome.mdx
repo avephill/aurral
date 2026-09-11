@@ -155,3 +155,25 @@ unhearting removes the star; that mirroring is best effort and never blocks the 
 Ratings need the same track-to-song link as playlists, so tracks Navidrome has not indexed
 show no stars.
 
+Stars work in both directions. A star added in the Navidrome web player or on a phone is
+taken into Aurral's favourites the next time the favourites are read, at most once every few
+minutes per person. Only additions cross: a favourite in Aurral with no star in Navidrome may
+simply be a track Navidrome does not hold, and removing it would lose it for good. To pull
+them in at once, `POST /api/navidrome-ratings/favorites/import`.
+
+## Track identity
+
+Aurral and Navidrome index the same files, so the file is the identity. Navidrome addresses
+it by a song id, unique per library, and Aurral by an absolute path. Each link is worked out
+once, from an exact path query, and then kept in the database, so later reads cost nothing and
+a song id arriving from Navidrome, such as a star, becomes a file without asking Navidrome at
+all. Links survive restarts. A file removed and re-added on the Navidrome side gets a new id,
+and the stale one is resolved again on the next miss.
+
+Set `AURRAL_NAVIDROME_MUSIC_ROOT` to state where Navidrome's main library sits in Aurral's
+filesystem. Without it the mapping is learned from the first file matched on both sides, which
+works but costs an extra search and relies on a guess.
+
+Playlist reads prefer, in order: a link already stored, the path the player itself reported,
+and the admin connection. Navidrome only sends real paths to players configured to receive
+them, and a reported path is used only when it matches an indexed file whose title agrees.

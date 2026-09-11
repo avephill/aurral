@@ -11,7 +11,7 @@ import {
 process.env.AURRAL_NAVIDROME_USER_AUTH = "reverse-proxy";
 process.env.AURRAL_NAVIDROME_USER_HEADER = "X-Authentik-Username";
 
-const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver] =
+const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars] =
   await setupIsolatedBackend(
     "navidrome-ratings",
     "backend/config/db-sqlite.js",
@@ -19,6 +19,7 @@ const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, res
     "backend/services/libraryMediaStore.js",
     "backend/services/navidromeAnnotations.js",
     "backend/services/navidromeTrackResolver.js",
+    "backend/services/subsonicLibraryService.js",
   );
 
 const RELATIVE = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
@@ -43,6 +44,11 @@ function createFakeNavidrome() {
     };
     if (url.pathname === "/auth/login") return reply(JSON.stringify({ token: "admin-token" }));
     if (url.pathname === "/api/library") return reply(JSON.stringify([{ id: 1, name: "Music", path: "/music" }]));
+    if (url.pathname.startsWith("/api/song/")) {
+      const wantedId = url.pathname.slice("/api/song/".length);
+      if (wantedId !== "nd-1") return reply(JSON.stringify({ error: "not found" }), 404);
+      return reply(JSON.stringify({ id: "nd-1", title: "A New Day Yesterday", path: RELATIVE, libraryId: 1 }));
+    }
     if (url.pathname === "/api/song") {
       const wanted = url.searchParams.get("title") || url.searchParams.get("path");
       const song = { id: "nd-1", title: "A New Day Yesterday", path: RELATIVE, libraryId: 1, albumId: "al-1" };
@@ -77,6 +83,19 @@ function createFakeNavidrome() {
         case "/rest/star":
           state.starred.add(`${user}:${id}`);
           return reply(subsonicOk());
+        case "/rest/getStarred2":
+          return reply(subsonicOk({
+            starred2: {
+              song: [...state.starred]
+                .filter((entry) => entry.startsWith(`${user}:`))
+                .map((entry) => ({
+                  id: entry.slice(user.length + 1),
+                  title: "A New Day Yesterday",
+                  // Subsonic hands out a made-up path, as Navidrome does.
+                  path: "Jethro Tull/Stand Up/A New Day Yesterday.flac",
+                })),
+            },
+          }));
         case "/rest/unstar":
           state.starred.delete(`${user}:${id}`);
           return reply(subsonicOk());
@@ -184,4 +203,30 @@ test("an untrusted header is reported as not connected rather than as empty rati
   const result = await annotations.lookupTrackAnnotations(stranger, [{ trackId: track.id, albumId: album.id }]);
   // No username means no client at all.
   assert.equal(result.connected, false);
+});
+
+test("stars set in Navidrome come back as Aurral favourites", async () => {
+  resolver.resetNavidromeTrackResolver();
+  fake.state.starred.add("dunshill:nd-1");
+
+  const result = await annotations.importStarsFromNavidrome(user);
+  assert.equal(result.connected, true);
+  assert.equal(result.starred, 1);
+  assert.equal(result.imported, 1);
+
+  const favourites = stars.getStarredIdentityKeys(user);
+  assert.ok(favourites.has("song:a-new-day-yesterday"));
+
+  // Running it again changes nothing and does not double up.
+  const second = await annotations.importStarsFromNavidrome(user);
+  assert.equal(second.imported, 0);
+  assert.equal(stars.getStarredIdentityKeys(user).size, favourites.size);
+});
+
+test("a star on a song this server does not hold is skipped quietly", async () => {
+  resolver.resetNavidromeTrackResolver();
+  fake.state.starred.add("dunshill:nd-unknown");
+  const result = await annotations.importStarsFromNavidrome(user);
+  assert.equal(result.connected, true);
+  assert.equal(result.matched, 1, "only the song we hold matched");
 });

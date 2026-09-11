@@ -11,7 +11,10 @@ import {
   starMany,
   unstarMany,
 } from "../../../services/subsonicLibraryService.js";
-import { mirrorFavoritesToNavidrome } from "../../../services/navidromeAnnotations.js";
+import {
+  importStarsFromNavidrome,
+  mirrorFavoritesToNavidrome,
+} from "../../../services/navidromeAnnotations.js";
 import { isNavidromeUserAuthEnabled } from "../../../config/featureFlags.js";
 import {
   getLibraryScanStatus,
@@ -152,7 +155,28 @@ export function registerCanonical(router) {
     }
   });
 
-  router.get("/favorites", requireAuth, noCache, (req, res) => {
+  // Stars set in a Navidrome client are pulled in when the favourites are
+  // read, so a heart added on a phone turns up here on its own. Throttled per
+  // person, and never allowed to hold the answer up for long: whatever the
+  // pass finds after that lands in the next read.
+  const STAR_IMPORT_INTERVAL_MS = 5 * 60 * 1000;
+  const STAR_IMPORT_WAIT_MS = 2_500;
+  const lastStarImport = new Map();
+
+  router.get("/favorites", requireAuth, noCache, async (req, res) => {
+    if (isNavidromeUserAuthEnabled() && req.user?.id) {
+      const last = lastStarImport.get(req.user.id) || 0;
+      if (Date.now() - last >= STAR_IMPORT_INTERVAL_MS) {
+        lastStarImport.set(req.user.id, Date.now());
+        await Promise.race([
+          importStarsFromNavidrome(req.user).catch(() => null),
+          new Promise((resolve) => {
+            const timer = setTimeout(resolve, STAR_IMPORT_WAIT_MS);
+            timer.unref?.();
+          }),
+        ]);
+      }
+    }
     const { starred, library } = getStarredWithLibrary(req.user);
     res.json({ ...starred, library: toPublicLibrary(library) });
   });

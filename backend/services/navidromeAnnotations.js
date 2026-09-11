@@ -2,10 +2,16 @@ import { isNavidromeUserAuthEnabled } from "../config/featureFlags.js";
 import { createNavidromeUserClient, isNavidromeAuthError } from "./navidromeUserClient.js";
 import {
   describeCanonicalTrack,
+  mediaPathsForNavidromeSongIds,
   resolveNavidromeSongCopies,
   resolveNavidromeSongId,
 } from "./navidromeTrackResolver.js";
-import { getCanonicalTrack } from "./libraryQueryService.js";
+import {
+  getCanonicalMediaFilesByPaths,
+  getCanonicalTrack,
+  getCanonicalTrackIdentityKeysByIds,
+} from "./libraryQueryService.js";
+import { getStarredIdentityKeys, starMany } from "./subsonicLibraryService.js";
 import { logger } from "./logger.js";
 
 /**
@@ -203,4 +209,59 @@ export async function mirrorFavoritesToNavidrome(user, ids = [], starred) {
     }
   }
   return { mirrored };
+}
+
+/**
+ * Pull the user's Navidrome stars back in as Aurral favourites.
+ *
+ * Stars set on a phone or in the Navidrome web player are the same gesture as
+ * a heart here, so they should end up in the same place. Only additions are
+ * taken: an Aurral favourite that has no star in Navidrome may simply be a
+ * track Navidrome does not hold, and dropping it would lose it for good.
+ *
+ * Songs are matched by file, through the id store, so a repeat pass costs one
+ * Subsonic call and no path work at all.
+ */
+export async function importStarsFromNavidrome(user, { limit = 2000 } = {}) {
+  if (!isNavidromeUserAuthEnabled()) return { enabled: false, connected: false, imported: 0 };
+  const client = createNavidromeUserClient(user);
+  if (!client) return { enabled: true, connected: false, imported: 0 };
+
+  let songs = [];
+  try {
+    songs = await client.getStarredSongs({ limit });
+  } catch (error) {
+    if (isNavidromeAuthError(error)) return { enabled: true, connected: false, imported: 0 };
+    logger.warn("library", `[Navidrome] Could not read stars for ${user?.username}: ${error.message}`);
+    return { enabled: true, connected: false, imported: 0 };
+  }
+  if (!songs.length) return { enabled: true, connected: true, starred: 0, imported: 0, matched: 0 };
+
+  const paths = await mediaPathsForNavidromeSongIds(songs.map((song) => song?.id));
+  const files = getCanonicalMediaFilesByPaths([...paths.values()]);
+  const identityKeys = getCanonicalTrackIdentityKeysByIds(files.map((file) => file.trackId));
+  const wanted = new Set();
+  for (const file of files) {
+    const key = identityKeys.get(Number(file.trackId));
+    if (key) wanted.add(`song:${key}`);
+  }
+
+  const existing = getStarredIdentityKeys(user);
+  const missing = [...wanted].filter((id) => !existing.has(id));
+  let imported = 0;
+  const CHUNK = 100;
+  for (let index = 0; index < missing.length; index += CHUNK) {
+    const chunk = missing.slice(index, index + CHUNK);
+    if (starMany(user, chunk, { skipCanonicalValidation: true })) imported += chunk.length;
+  }
+  if (imported) {
+    logger.info("library", `[Navidrome] Took ${imported} star(s) into favourites for ${user?.username}`);
+  }
+  return {
+    enabled: true,
+    connected: true,
+    starred: songs.length,
+    matched: wanted.size,
+    imported,
+  };
 }
