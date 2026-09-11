@@ -177,3 +177,44 @@ works but costs an extra search and relies on a guess.
 Playlist reads prefer, in order: a link already stored, the path the player itself reported,
 and the admin connection. Navidrome only sends real paths to players configured to receive
 them, and a reported path is used only when it matches an indexed file whose title agrees.
+
+## Smart playlists
+
+A smart playlist is written as rules rather than as a list of songs, and Navidrome keeps it up
+to date. Aurral offers a rule editor: match all or any of a set of rules, each one a field, a
+comparison and a value, with an optional limit and a way of choosing which tracks fill it.
+
+The fields on offer come from the server rather than from the editor, because Navidrome answers
+a rule about a field it does not know with an empty playlist and no error, so a typo would look
+like a rule that matches nothing. Rules written elsewhere that use something the editor cannot
+show, a nested group for instance, are left alone: the playlist works, it simply cannot be
+opened here.
+
+Making one takes both connections. The playlist is created as the signed-in user, so it belongs
+to them, and the rules are attached through the admin connection, which is the only one allowed
+to write them. A smart playlist keeps no stored entries, so its tracks are looked up by id and
+its rows cannot be reordered or removed.
+
+### Bringing iTunes smart playlists across
+
+`scripts/itunes-migrate/smart_playlists.py` reads the rules out of an iTunes library export and
+writes them as a plan:
+
+```bash
+python3 smart_playlists.py --export "iTunes Library.xml" --owner dunshill --out plan.json
+```
+
+It prints what each playlist asks for, and for anything that cannot cross over it says why:
+Navidrome has no rule for Composer or Grouping, no way to limit a playlist to sixty minutes,
+and Aurral's editor does not show nested groups. Nothing is guessed at.
+
+`apply-smart-playlists.mjs` then applies the plan from inside the Aurral container, creating or
+updating one playlist per entry:
+
+```bash
+docker exec -i -e PLAN=/tmp/plan.json -e OWNER=dunshill -e APPLY=true aurral \
+  node --input-type=module - < scripts/itunes-migrate/apply-smart-playlists.mjs
+```
+
+Without `APPLY=true` it prints what it would do. A second run updates the rules on the playlist
+it made the first time rather than making another.
