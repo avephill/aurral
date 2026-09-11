@@ -218,14 +218,22 @@ export class WeeklyFlowPlaylistManager {
   async _ensurePlaylistsInternal() {
     const flows = flowPlaylistConfig.getFlows();
     const sharedPlaylists = flowPlaylistConfig.getSharedPlaylists();
-    const libraryResults = await this.destinationRegistry.run("ensureLibrary");
-    const libraryFailures = libraryResults.filter((result) => !result.ok);
-    if (libraryFailures.length) {
-      throw new Error(
-        libraryFailures
-          .map((result) => `${result.destination}: ${result.error?.message || "library setup failed"}`)
-          .join("; "),
-      );
+    // Preparing a playlist library on the destination is only worth doing when
+    // Aurral has something to write into it. A server with automatic playlists
+    // off and hand-made playlists living in Navidrome has nothing to publish,
+    // and asking the destination to register a library it cannot see failed
+    // loudly at every start.
+    const willPublish = flows.some((flow) => flow.enabled) || sharedPlaylists.length > 0;
+    if (willPublish) {
+      const libraryResults = await this.destinationRegistry.run("ensureLibrary");
+      const libraryFailures = libraryResults.filter((result) => !result.ok);
+      if (libraryFailures.length) {
+        throw new Error(
+          libraryFailures
+            .map((result) => `${result.destination}: ${result.error?.message || "library setup failed"}`)
+            .join("; "),
+        );
+      }
     }
     for (const flow of flows) {
       if (flow.enabled) {
