@@ -488,19 +488,51 @@ router.put("/:id/rules", noCache, async (req, res) => {
   }
 });
 
-// Dropping the rules leaves the songs it last held, as an ordinary playlist.
+/**
+ * Freezing a smart playlist: it keeps the songs it holds now and stops
+ * updating itself.
+ *
+ * Navidrome has no way to take rules off a playlist, and it refuses edits to
+ * one that has them, so the only way is to make a plain playlist holding the
+ * same songs and let the smart one go. The new one is made first: if anything
+ * fails after that, the worst case is two playlists rather than none, and the
+ * answer says so.
+ */
 router.delete("/:id/rules", noCache, async (req, res) => {
-  if (!isNavidromePlaylistsEnabled()) {
-    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
-  }
+  const client = userClient(req, res);
+  if (!client) return undefined;
   try {
     const admin = await adminClientForOwnedPlaylist(req, res, req.params.id);
     if (!admin) return undefined;
-    const record = await admin.getPlaylistRecord(req.params.id);
-    await admin.setPlaylistRules(req.params.id, { name: record?.name, rules: null });
-    return res.json({ smart: false });
+    const source = await client.getSubsonicPlaylist(req.params.id);
+    if (!source) return res.status(404).json({ error: "Playlist not found" });
+    const name = source.name || "Playlist";
+    const songIds = (source.entry || []).map((entry) => String(entry.id)).filter(Boolean);
+
+    const created = await client.createPlaylist(name, songIds.slice(0, 500));
+    if (!created?.id) throw new Error("Navidrome did not return a playlist id");
+    for (let index = 500; index < songIds.length; index += 500) {
+      await client.appendPlaylistSongs(created.id, songIds.slice(index, index + 500));
+    }
+
+    const check = await client.getSubsonicPlaylist(created.id);
+    if (Number(check?.songCount || 0) !== songIds.length) {
+      return res.status(502).json({
+        error: "The frozen copy is short",
+        message: `Made a copy with ${check?.songCount ?? 0} of ${songIds.length} tracks and left the original alone.`,
+        playlistId: created.id,
+      });
+    }
+
+    // The folder the old one was in belongs to the new one now.
+    const folder = getPlaylistFolders(req.user.id).get(String(req.params.id)) || "";
+    if (folder) setPlaylistFolder(req.user.id, created.id, folder);
+    await client.deletePlaylist(req.params.id);
+    forgetPlaylistFolder(req.user.id, req.params.id);
+
+    return res.json({ smart: false, playlistId: created.id, tracks: songIds.length });
   } catch (error) {
-    return sendNavidromeError(res, error, "Could not remove the rules in Navidrome");
+    return sendNavidromeError(res, error, "Could not stop the playlist updating itself");
   }
 });
 

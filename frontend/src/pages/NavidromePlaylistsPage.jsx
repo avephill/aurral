@@ -417,10 +417,12 @@ export default function NavidromePlaylistsPage() {
     if (!selectedId) return;
     setBusy("smart");
     try {
-      await clearNavidromePlaylistRules(selectedId);
+      const result = await clearNavidromePlaylistRules(selectedId);
       await refreshAll();
-      await detail.refetch();
-      showSuccess("This playlist no longer updates itself");
+      showSuccess(`Frozen with ${pluralize(result?.tracks ?? 0, "track")}`);
+      // Freezing makes a new playlist and lets the smart one go, so follow it.
+      if (result?.playlistId) select(result.playlistId);
+      else await detail.refetch();
     } catch (error) {
       showError(errorMessage(error, "Could not remove the rules"));
     } finally {
