@@ -51,9 +51,12 @@ export const generateFlowArtwork = (playlistId) =>
 export {
   PLAYLIST_STORES,
   addNavidromePlaylistTracks,
+  clearNavidromePlaylistRules,
   createNavidromePlaylist,
+  createNavidromeSmartPlaylist,
   deleteNavidromePlaylist,
   getNavidromePlaylist,
+  getNavidromePlaylistRuleFields,
   getNavidromePlaylistStatus,
   getNavidromePlaylists,
   getPlaylistStoreMode,
@@ -63,6 +66,7 @@ export {
   removeNavidromePlaylistEntries,
   removeNavidromePlaylistEntry,
   renameNavidromePlaylist,
+  setNavidromePlaylistRules,
   setPlaylistStoreMode,
 } from "../playlistProviders.js";
 

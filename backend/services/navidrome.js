@@ -596,9 +596,37 @@ export class NavidromeClient {
     );
   }
 
+  /** Every playlist record, for the owner and smart-rule fields Subsonic omits. */
+  async getPlaylistRecords({ limit = 1000 } = {}) {
+    const rows = await this._nativeRequest("GET", `/api/playlist?_start=0&_end=${Number(limit) || 1000}`);
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  /** Attach, change or clear a playlist's smart rules. */
+  async setPlaylistRules(playlistId, { name, rules }) {
+    return this._nativeRequest("PUT", `/api/playlist/${encodeURIComponent(String(playlistId))}`, {
+      name,
+      rules: rules ?? null,
+    });
+  }
+
   /** The playlist record itself, including its owner and any smart rules. */
   async getPlaylistRecord(playlistId) {
     return this._nativeRequest("GET", `/api/playlist/${encodeURIComponent(String(playlistId))}`);
+  }
+
+  /**
+   * Several songs in one native read, by id. Navidrome takes the id
+   * parameter more than once, and the answer carries the real paths.
+   */
+  async getSongsByIds(ids = []) {
+    const values = [...new Set((Array.isArray(ids) ? ids : [])
+      .map((value) => String(value ?? "").trim())
+      .filter(Boolean))];
+    if (!values.length) return [];
+    const query = values.map((id) => `id=${encodeURIComponent(id)}`).join("&");
+    const rows = await this._nativeRequest("GET", `/api/song?_start=0&_end=${values.length}&${query}`);
+    return Array.isArray(rows) ? rows : [];
   }
 
   /** One song read through the native API, which carries its real path. */

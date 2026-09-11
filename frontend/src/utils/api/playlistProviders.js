@@ -56,6 +56,19 @@ export const removeNavidromePlaylistEntry = (playlistId, index, songId = null) =
     + (songId ? `?songId=${encodeURIComponent(songId)}` : ""),
   );
 
+// Smart playlists: rules Navidrome evaluates, rather than a fixed list.
+export const getNavidromePlaylistRuleFields = ({ signal } = {}) =>
+  getData("/navidrome-playlists/rule-fields", { signal });
+
+export const createNavidromeSmartPlaylist = (payload) =>
+  postData("/navidrome-playlists/smart", payload);
+
+export const setNavidromePlaylistRules = (playlistId, rules) =>
+  putData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/rules`, { rules });
+
+export const clearNavidromePlaylistRules = (playlistId) =>
+  deleteData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/rules`);
+
 export const removeNavidromePlaylistEntries = (playlistId, entries) =>
   postData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/entries/remove`, { entries });
 

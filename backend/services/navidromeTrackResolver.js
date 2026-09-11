@@ -49,6 +49,7 @@ import { logger } from "./logger.js";
  */
 
 const SONG_ID_CACHE_LIMIT = 5000;
+const SONG_LOOKUP_BATCH = 100;
 const ROOT_LEARNING_ATTEMPTS = 8;
 
 const LIBRARIES_TTL_MS = 10 * 60 * 1000;
@@ -474,7 +475,7 @@ async function realPathsForPlaylist(playlistId, client) {
  */
 export async function mediaPathsForNavidromeSongIds(
   songIds = [],
-  { client = getAdminNavidromeClient(), maxLookups = 200 } = {},
+  { client = getAdminNavidromeClient(), maxLookups = 2000 } = {},
 ) {
   const ids = [...new Set((Array.isArray(songIds) ? songIds : [])
     .map((value) => String(value ?? "").trim())
@@ -486,22 +487,27 @@ export async function mediaPathsForNavidromeSongIds(
   if (!missing.length || !client) return known;
 
   const learned = [];
-  for (const id of missing.slice(0, maxLookups)) {
-    let song = null;
+  const wanted = missing.slice(0, maxLookups);
+  for (let index = 0; index < wanted.length; index += SONG_LOOKUP_BATCH) {
+    const batch = wanted.slice(index, index + SONG_LOOKUP_BATCH);
+    let rows = [];
     try {
-      song = await client.getSongNative(id);
+      rows = await client.getSongsByIds(batch);
     } catch (error) {
-      logger.warn("library", `[Navidrome] Could not read song ${id}: ${error.message}`);
+      logger.warn("library", `[Navidrome] Could not read ${batch.length} song(s): ${error.message}`);
       continue;
     }
-    const navidromePath = normalizePath(song?.path);
-    if (!navidromePath) continue;
-    if (!state.aurralRoot) learnRootsFromNavidromePaths([navidromePath]);
-    if (!state.aurralRoot) continue;
-    const absolute = joinRoot(state.aurralRoot, navidromeRelativePath(navidromePath, state.navidromeRoot));
-    if (!absolute) continue;
-    known.set(id, absolute);
-    learned.push({ songId: id, mediaPath: absolute, libraryId: song?.libraryId ?? null });
+    for (const song of rows) {
+      const id = String(song?.id ?? "");
+      const navidromePath = normalizePath(song?.path);
+      if (!id || !navidromePath) continue;
+      if (!state.aurralRoot) learnRootsFromNavidromePaths([navidromePath]);
+      if (!state.aurralRoot) continue;
+      const absolute = joinRoot(state.aurralRoot, navidromeRelativePath(navidromePath, state.navidromeRoot));
+      if (!absolute) continue;
+      known.set(id, absolute);
+      learned.push({ songId: id, mediaPath: absolute, libraryId: song?.libraryId ?? null });
+    }
   }
   if (learned.length) rememberNavidromeSongIds(learned);
   return known;
@@ -571,6 +577,17 @@ export async function mapNavidromeEntriesToTracks(
         learned.push({ songId: id, mediaPath: absolute, libraryId: null });
       }
     }
+  }
+
+  // A smart playlist has no stored rows for the read above to return, because
+  // its contents are worked out from its rules each time. Whatever is still
+  // unaccounted for is looked up as songs instead.
+  const stillUnknown = list
+    .map(idFor)
+    .filter((id) => id && !absoluteById.has(id));
+  if (stillUnknown.length) {
+    const byId = await mediaPathsForNavidromeSongIds(stillUnknown, { client });
+    for (const [id, mediaPath] of byId) absoluteById.set(id, mediaPath);
   }
   // What this read worked out saves the next one the same work.
   if (learned.length) rememberNavidromeSongIds(learned);

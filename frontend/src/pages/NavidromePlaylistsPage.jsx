@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   GripVertical,
   ListMusic,
+  Sparkles,
   Pause,
   Pencil,
   Play,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import { CreatePlaylistModal, ModalShell } from "../components/PlaylistModals";
+import SmartPlaylistEditor from "../components/SmartPlaylistEditor";
 import TooltipButton from "../components/TooltipButton";
 import { TrackRating } from "../components/StarRating";
 import { useAuth } from "../contexts/AuthContext";
@@ -30,10 +32,13 @@ import {
   getNavidromePlaylistStatus,
   getNavidromePlaylists,
   invalidateNavidromePlaylists,
+  clearNavidromePlaylistRules,
+  createNavidromeSmartPlaylist,
   moveNavidromePlaylistEntry,
   removeNavidromePlaylistEntries,
   removeNavidromePlaylistEntry,
   renameNavidromePlaylist,
+  setNavidromePlaylistRules,
 } from "../utils/api/endpoints/playlists.js";
 import "./navidromePlaylists.css";
 
@@ -102,6 +107,7 @@ export default function NavidromePlaylistsPage() {
   const [filter, setFilter] = useState("");
   const [selectedIndexes, setSelectedIndexes] = useState(() => new Set());
   const [visibleLimit, setVisibleLimit] = useState(TRACK_WINDOW);
+  const [smartMode, setSmartMode] = useState("");
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const lastClickedIndex = useRef(null);
@@ -184,9 +190,14 @@ export default function NavidromePlaylistsPage() {
     [visibleTracks, visibleLimit],
   );
 
+  // A smart playlist's contents come from its rules, so its rows are not
+  // something to reorder, remove or pick from.
+  const isSmart = Boolean(selected?.smart ?? selectedSummary?.smart);
+  const canEditTracks = canEdit && !isSmart;
+
   // Dragging a row onto another only makes sense against the whole playlist:
   // with a filter on, the row above is not the row above.
-  const canReorder = canEdit && !query;
+  const canReorder = canEditTracks && !query;
   const selectedCount = selectedIndexes.size;
 
   // A different playlist, or a different filter, starts again from the top
@@ -269,6 +280,52 @@ export default function NavidromePlaylistsPage() {
     [clearSelection, detail, refreshAll, selectedId, showError, tracks],
   );
 
+  const handleCreateSmart = async ({ name, rules }) => {
+    setBusy("smart");
+    try {
+      const result = await createNavidromeSmartPlaylist({ name, rules });
+      await refreshAll();
+      setSmartMode("");
+      showSuccess(`Created ${name}`);
+      if (result?.playlist?.id) select(result.playlist.id);
+    } catch (error) {
+      showError(errorMessage(error, "Could not create the smart playlist"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleSaveRules = async ({ rules }) => {
+    if (!selectedId) return;
+    setBusy("smart");
+    try {
+      await setNavidromePlaylistRules(selectedId, rules);
+      await refreshAll();
+      await detail.refetch();
+      setSmartMode("");
+      showSuccess("Rules saved");
+    } catch (error) {
+      showError(errorMessage(error, "Could not save the rules"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleClearRules = async () => {
+    if (!selectedId) return;
+    setBusy("smart");
+    try {
+      await clearNavidromePlaylistRules(selectedId);
+      await refreshAll();
+      await detail.refetch();
+      showSuccess("This playlist no longer updates itself");
+    } catch (error) {
+      showError(errorMessage(error, "Could not remove the rules"));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const handleCreate = async (name) => {
     setBusy("create");
     try {
@@ -348,10 +405,15 @@ export default function NavidromePlaylistsPage() {
         aria-current={active ? "true" : undefined}
         onClick={() => select(playlist.id)}
       >
-        <ListMusic className="artist-icon-sm nd-playlists__item-icon" aria-hidden="true" />
+        {playlist.smart ? (
+          <Sparkles className="artist-icon-sm nd-playlists__item-icon" aria-hidden="true" />
+        ) : (
+          <ListMusic className="artist-icon-sm nd-playlists__item-icon" aria-hidden="true" />
+        )}
         <span className="nd-playlists__item-copy">
           <span className="nd-playlists__item-name">{playlist.name || "Untitled"}</span>
           <span className="nd-playlists__item-meta">
+            {playlist.smart ? "Smart · " : ""}
             {pluralize(playlist.trackCount, "track")}
             {!playlist.owned && playlist.ownerUsername ? ` · ${playlist.ownerUsername}` : ""}
           </span>
@@ -379,6 +441,15 @@ export default function NavidromePlaylistsPage() {
           >
             <Plus className="artist-icon-sm" aria-hidden="true" />
             New playlist
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setSmartMode("create")}
+            disabled={!connected || busy === "smart"}
+          >
+            <Sparkles className="artist-icon-sm" aria-hidden="true" />
+            New smart playlist
           </button>
         </div>
       </header>
@@ -456,6 +527,7 @@ export default function NavidromePlaylistsPage() {
                   </span>
                   <h2 className="nd-playlists__title">{selected.name || "Untitled"}</h2>
                   <p className="nd-playlists__meta">
+                    {isSmart ? "Updates itself · " : ""}
                     {pluralize(selected.trackCount, "track")}
                     {selected.durationSeconds ? ` · ${formatDuration(selected.durationSeconds)}` : ""}
                     {selected.unavailableCount
@@ -486,6 +558,30 @@ export default function NavidromePlaylistsPage() {
                     <Shuffle className="artist-icon-sm" aria-hidden="true" />
                     Shuffle
                   </button>
+                  {canEdit && isSmart ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setSmartMode("edit")}
+                        disabled={!selected.rules}
+                        title={selected.rules
+                          ? undefined
+                          : "These rules were written elsewhere and cannot be shown here"}
+                      >
+                        <Sparkles className="artist-icon-sm" aria-hidden="true" />
+                        Edit rules
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleClearRules}
+                        disabled={busy === "smart"}
+                      >
+                        Stop updating
+                      </button>
+                    </>
+                  ) : null}
                   {canEdit ? (
                     <>
                       <button
@@ -542,7 +638,7 @@ export default function NavidromePlaylistsPage() {
                     </span>
                   </div>
 
-                  {canEdit && selectedCount ? (
+                  {canEditTracks && selectedCount ? (
                     <div className="nd-playlists__selection" role="status">
                       <span>{pluralize(selectedCount, "track")} selected</span>
                       <button
@@ -609,7 +705,7 @@ export default function NavidromePlaylistsPage() {
                               }
                             } : undefined}
                           >
-                            {canEdit ? (
+                            {canEditTracks ? (
                               <input
                                 type="checkbox"
                                 className="nd-playlists__track-select"
@@ -659,7 +755,7 @@ export default function NavidromePlaylistsPage() {
                             <span className="nd-playlists__track-duration">
                               {track.durationMs ? formatTrackDuration(track.durationMs) : ""}
                             </span>
-                            {canEdit ? (
+                            {canEditTracks ? (
                               <TooltipButton
                                 type="button"
                                 className="btn btn-icon btn-xs btn-ghost nd-playlists__track-remove"
@@ -701,6 +797,16 @@ export default function NavidromePlaylistsPage() {
           ) : null}
         </section>
       </div>
+
+      <SmartPlaylistEditor
+        open={Boolean(smartMode)}
+        mode={smartMode === "edit" ? "edit" : "create"}
+        initialName={smartMode === "edit" ? selected?.name || "" : ""}
+        initialRules={smartMode === "edit" ? selected?.rules || null : null}
+        busy={busy === "smart"}
+        onClose={() => setSmartMode("")}
+        onSave={smartMode === "edit" ? handleSaveRules : handleCreateSmart}
+      />
 
       <CreatePlaylistModal
         open={createOpen}

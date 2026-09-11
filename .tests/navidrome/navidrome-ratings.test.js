@@ -11,7 +11,7 @@ import {
 process.env.AURRAL_NAVIDROME_USER_AUTH = "reverse-proxy";
 process.env.AURRAL_NAVIDROME_USER_HEADER = "X-Authentik-Username";
 
-const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars] =
+const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars, songIdStore] =
   await setupIsolatedBackend(
     "navidrome-ratings",
     "backend/config/db-sqlite.js",
@@ -20,6 +20,7 @@ const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, res
     "backend/services/navidromeAnnotations.js",
     "backend/services/navidromeTrackResolver.js",
     "backend/services/subsonicLibraryService.js",
+    "backend/services/navidromeSongIdStore.js",
   );
 
 const RELATIVE = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
@@ -50,8 +51,11 @@ function createFakeNavidrome() {
       return reply(JSON.stringify({ id: "nd-1", title: "A New Day Yesterday", path: RELATIVE, libraryId: 1 }));
     }
     if (url.pathname === "/api/song") {
-      const wanted = url.searchParams.get("title") || url.searchParams.get("path");
       const song = { id: "nd-1", title: "A New Day Yesterday", path: RELATIVE, libraryId: 1, albumId: "al-1" };
+      // Several songs in one read, by id, is how playlists and stars resolve.
+      const ids = url.searchParams.getAll("id");
+      if (ids.length) return reply(JSON.stringify(ids.includes("nd-1") ? [song] : []));
+      const wanted = url.searchParams.get("title") || url.searchParams.get("path");
       const matches = wanted && (RELATIVE.startsWith(wanted) || song.title.toLowerCase().includes(wanted.toLowerCase()));
       return reply(JSON.stringify(matches ? [song] : []));
     }
@@ -229,4 +233,15 @@ test("a star on a song this server does not hold is skipped quietly", async () =
   const result = await annotations.importStarsFromNavidrome(user);
   assert.equal(result.connected, true);
   assert.equal(result.matched, 1, "only the song we hold matched");
+});
+
+test("with nothing remembered, stars are matched by reading the songs themselves", () => {
+  // The store is what makes a repeat pass cheap; this is the first pass.
+  songIdStore.clearNavidromeSongIds();
+  resolver.resetNavidromeTrackResolver();
+  return annotations.importStarsFromNavidrome(user).then((result) => {
+    assert.equal(result.connected, true);
+    assert.equal(result.matched, 1);
+    assert.ok(songIdStore.countNavidromeSongIds() >= 1, "and the answer is kept for next time");
+  });
 });

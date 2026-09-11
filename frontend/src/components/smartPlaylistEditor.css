@@ -1,0 +1,128 @@
+/* The rule editor for smart playlists: one row per rule, as iTunes had it. */
+
+.smart-rules__modal {
+  max-width: 44rem;
+}
+
+.smart-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.smart-rules__name {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.smart-rules__name input,
+.smart-rules__limits input,
+.smart-rules select,
+.smart-rules__value {
+  padding: 0.3125rem 0.5rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface);
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.smart-rules__name input:focus,
+.smart-rules__limits input:focus,
+.smart-rules select:focus,
+.smart-rules__value:focus {
+  outline: none;
+  border-color: var(--aurral-border-strong);
+  box-shadow: var(--aurral-ring);
+}
+
+.smart-rules__match,
+.smart-rules__limits label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--aurral-text-muted);
+}
+
+.smart-rules__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.smart-rules__row {
+  display: grid;
+  grid-template-columns: minmax(6rem, 10rem) minmax(6rem, 11rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.smart-rules__value {
+  min-width: 0;
+  width: 100%;
+}
+
+.smart-rules__range {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.smart-rules__range-and {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  color: var(--aurral-text-subtle);
+}
+
+.smart-rules__add {
+  align-self: flex-start;
+}
+
+.smart-rules__limits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--aurral-border);
+}
+
+.smart-rules__limits input {
+  width: 5rem;
+}
+
+@media (max-width: 40rem) {
+  .smart-rules__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "field remove"
+      "operator operator"
+      "value value";
+  }
+
+  .smart-rules__field {
+    grid-area: field;
+  }
+
+  .smart-rules__operator {
+    grid-area: operator;
+  }
+
+  .smart-rules__row > .smart-rules__value,
+  .smart-rules__range {
+    grid-area: value;
+  }
+
+  .smart-rules__row > .btn {
+    grid-area: remove;
+  }
+}

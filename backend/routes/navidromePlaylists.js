@@ -13,6 +13,13 @@ import {
   resolveNavidromeSongIds,
 } from "../services/navidromeTrackResolver.js";
 import { publicLibraryJsonReplacer } from "./library/handlers/canonical.js";
+import {
+  SmartPlaylistRuleError,
+  describeSmartPlaylistFields,
+  fromNavidromeRules,
+  isSmartPlaylistRecord,
+  toNavidromeRules,
+} from "../services/navidromeSmartPlaylists.js";
 
 /**
  * Hand-made playlists that live in Navidrome, read and edited as the
@@ -76,8 +83,9 @@ async function adminClientForOwnedPlaylist(req, res, playlistId) {
   return admin;
 }
 
-function toPlaylistSummary(playlist, username) {
-  const owner = String(playlist?.owner || "");
+function toPlaylistSummary(playlist, username, record = null) {
+  const owner = String(playlist?.owner || record?.ownerName || "");
+  const smart = isSmartPlaylistRecord(record);
   return {
     id: String(playlist.id),
     kind: "navidrome",
@@ -90,6 +98,10 @@ function toPlaylistSummary(playlist, username) {
     public: playlist.public === true,
     createdAt: playlist.created || null,
     changedAt: playlist.changed || null,
+    smart,
+    // Null when the rules use something this editor cannot show; the playlist
+    // still works, it just cannot be opened in the rule editor.
+    rules: smart ? fromNavidromeRules(record.rules) : null,
     // Consumers of Aurral's own playlists look for these; an empty set means
     // "unknown", never "already added".
     trackIdentities: [],
@@ -152,13 +164,30 @@ router.get("/status", noCache, async (req, res) => {
   }
 });
 
+// Subsonic says nothing about smart rules, so the records come from the
+// admin connection in one call and are matched up by id. Without that
+// connection the page still works, just without the smart badge.
+async function playlistRecordsById() {
+  const admin = getAdminNavidromeClient();
+  if (!admin?.isConfigured?.()) return new Map();
+  try {
+    const records = await admin.getPlaylistRecords();
+    return new Map(records.map((record) => [String(record.id), record]));
+  } catch {
+    return new Map();
+  }
+}
+
 router.get("/", noCache, async (req, res) => {
   const client = userClient(req, res);
   if (!client) return undefined;
   try {
-    const playlists = await client.getSubsonicPlaylists();
+    const [playlists, records] = await Promise.all([
+      client.getSubsonicPlaylists(),
+      playlistRecordsById(),
+    ]);
     const summaries = playlists
-      .map((playlist) => toPlaylistSummary(playlist, client.user))
+      .map((playlist) => toPlaylistSummary(playlist, client.user, records.get(String(playlist.id))))
       .sort((a, b) => Number(b.owned) - Number(a.owned) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
     return res.json({ username: client.user, playlists: summaries });
   } catch (error) {
@@ -166,15 +195,27 @@ router.get("/", noCache, async (req, res) => {
   }
 });
 
+// What the rule editor may offer. Kept on the server so the editor cannot
+// invent a field Navidrome would answer with an empty playlist.
+router.get("/rule-fields", noCache, (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  return res.json(describeSmartPlaylistFields());
+});
+
 router.get("/:id", noCache, async (req, res) => {
   const client = userClient(req, res);
   if (!client) return undefined;
   try {
+    // Reading a smart playlist is what makes Navidrome evaluate its rules, so
+    // this read comes first and the record after it.
     const playlist = await client.getSubsonicPlaylist(req.params.id);
     if (!playlist) return res.status(404).json({ error: "Playlist not found" });
+    const records = await playlistRecordsById();
     const tracks = await mapNavidromeEntriesToTracks(playlist.entry, { playlistId: req.params.id });
     return sendJson(res, 200, {
-      ...toPlaylistSummary(playlist, client.user),
+      ...toPlaylistSummary(playlist, client.user, records.get(String(req.params.id))),
       trackCount: tracks.length,
       tracks,
       unavailableCount: tracks.filter((track) => !track.available).length,
@@ -257,6 +298,89 @@ router.delete("/:id/entries/:index", noCache, async (req, res) => {
     return res.json({ removed: 1 });
   } catch (error) {
     return sendNavidromeError(res, error, "Could not remove from the playlist in Navidrome");
+  }
+});
+
+/**
+ * A smart playlist is made in two steps: the person creates an ordinary
+ * playlist through their own connection, so it belongs to them, and the rules
+ * are attached through the admin one, which is the only connection that can
+ * write them. Navidrome fills it in when it is next read.
+ */
+router.post("/smart", noCache, async (req, res) => {
+  const client = userClient(req, res);
+  if (!client) return undefined;
+  const name = String(req.body?.name || "").trim();
+  if (!name) return res.status(400).json({ error: "Playlist name is required" });
+  const admin = getAdminNavidromeClient();
+  if (!admin?.isConfigured?.()) {
+    return res.status(503).json({
+      error: "Navidrome admin connection not configured",
+      message: "Smart playlists need the Navidrome connection in Settings.",
+    });
+  }
+  let rules;
+  try {
+    rules = toNavidromeRules(req.body?.rules);
+  } catch (error) {
+    if (error instanceof SmartPlaylistRuleError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+  let created = null;
+  try {
+    created = await client.createPlaylist(name, []);
+    await admin.setPlaylistRules(created.id, { name, rules });
+    const playlist = await client.getSubsonicPlaylist(created.id);
+    const record = await admin.getPlaylistRecord(created.id);
+    return res.status(201).json({ playlist: toPlaylistSummary(playlist, client.user, record) });
+  } catch (error) {
+    // A playlist with no rules on it is a confusing leftover, so it goes.
+    if (created?.id) await client.deletePlaylist(created.id).catch(() => {});
+    return sendNavidromeError(res, error, "Could not create the smart playlist in Navidrome");
+  }
+});
+
+// Changing the rules of an existing smart playlist, or turning an ordinary
+// one into a smart one.
+router.put("/:id/rules", noCache, async (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  let rules;
+  try {
+    rules = toNavidromeRules(req.body?.rules);
+  } catch (error) {
+    if (error instanceof SmartPlaylistRuleError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+  try {
+    const admin = await adminClientForOwnedPlaylist(req, res, req.params.id);
+    if (!admin) return undefined;
+    const record = await admin.getPlaylistRecord(req.params.id);
+    await admin.setPlaylistRules(req.params.id, { name: record?.name, rules });
+    const client = userClient(req, res);
+    if (!client) return undefined;
+    const playlist = await client.getSubsonicPlaylist(req.params.id);
+    const updated = await admin.getPlaylistRecord(req.params.id);
+    return res.json({ playlist: toPlaylistSummary(playlist, client.user, updated) });
+  } catch (error) {
+    return sendNavidromeError(res, error, "Could not save the rules in Navidrome");
+  }
+});
+
+// Dropping the rules leaves the songs it last held, as an ordinary playlist.
+router.delete("/:id/rules", noCache, async (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  try {
+    const admin = await adminClientForOwnedPlaylist(req, res, req.params.id);
+    if (!admin) return undefined;
+    const record = await admin.getPlaylistRecord(req.params.id);
+    await admin.setPlaylistRules(req.params.id, { name: record?.name, rules: null });
+    return res.json({ smart: false });
+  } catch (error) {
+    return sendNavidromeError(res, error, "Could not remove the rules in Navidrome");
   }
 });
 
