@@ -29,6 +29,7 @@ const LIBRARY_ROOT = process.env.LIBRARY_ROOT || "/data/Music/Library";
 const REPORT_PATH = process.env.REPORT_PATH || "/app/downloads/artist-audit.txt";
 
 const { db } = await import("/app/backend/config/db-sqlite.js");
+const { lidarrClient } = await import("/app/backend/services/lidarrClient.js");
 
 const normalize = (value) =>
   String(value || "")
@@ -42,9 +43,17 @@ const normalize = (value) =>
 const entries = await fs.readdir(LIBRARY_ROOT, { withFileTypes: true });
 const folders = entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink()).map((e) => e.name);
 
-const artists = db
-  .prepare("SELECT name, json_extract(metadata_json, '$.path') AS path FROM library_artists")
-  .all();
+// Straight from Lidarr, because Lidarr is the only authority on what Lidarr
+// manages. Reading Aurral's cached copy instead made this report lie: the
+// index sat 107 artists behind, and every artist added since was reported as
+// an orphaned folder even though Lidarr held it at exactly that path.
+const artists = (await lidarrClient.listArtists({ forceRefresh: true })).map((artist) => ({
+  name: artist.artistName,
+  path: artist.path,
+}));
+
+const indexedArtists = db.prepare("SELECT COUNT(*) AS count FROM library_artists").get().count;
+const indexLag = artists.length - indexedArtists;
 
 // Whether Lidarr manages a folder is decided by the track files it knows about,
 // not by artist paths. A collaboration album sits in its own folder - "Johann
@@ -138,6 +147,13 @@ const say = (text) => {
 
 say(`Library root: ${LIBRARY_ROOT}`);
 say(`Folders on disk: ${folders.length}   Lidarr artists: ${artists.length}\n`);
+// The folders Lidarr has track files for still come from Aurral's index, so an
+// index that is behind can still turn a managed folder into an orphan here.
+// Say so rather than let the number be read as fact.
+if (indexLag > 0) {
+  say(`WARNING: Aurral's library index holds ${indexedArtists} artists, ${indexLag} fewer than Lidarr.`);
+  say("Run a library scan and repeat this audit; some orphans below are only missing from the index.\n");
+}
 say(`ORPHANED FOLDERS (not in Lidarr at all): ${orphaned.length} folders, ${orphanedTracks} audio files`);
 say(`PATH MISMATCHES (in Lidarr, folder named differently): ${pathMismatch.length}`);
 say(`MISSING (in Lidarr, nothing resembling it on disk): ${missing.length}\n`);
