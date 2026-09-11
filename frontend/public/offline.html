@@ -81,7 +81,9 @@
   </head>
   <body>
     <div class="card">
-      <img src="icons/aurral-192.png" alt="" />
+      <!-- Absolute: this page is served in place of whatever URL was asked
+           for, so a relative path would resolve against that URL. -->
+      <img src="/icons/aurral-192.png" alt="" onerror="this.remove()" />
       <h1>Can't reach your music</h1>
       <p>Aurral is not answering right now. Check that you are online, then try again.</p>
       <button type="button" onclick="location.reload()">Try again</button>
