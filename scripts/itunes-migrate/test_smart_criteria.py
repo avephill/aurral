@@ -355,6 +355,19 @@ class WholePlaylists(unittest.TestCase):
             "limit": 25,
         })
 
+    def test_an_unlimited_playlist_carries_no_sort(self):
+        # iTunes keeps a selection method whether or not the playlist is
+        # limited, and unlimited it means nothing. Navidrome would take it
+        # literally and shuffle the whole list on every read.
+        result = convert_smart_playlist(
+            info_blob(limited=False, selection=0x02),
+            criteria_blob([{"kind": "text", "field": 0x0E, "comparison": 0x02, "value": "Mellow"}]),
+        )
+        self.assertTrue(result["convertible"])
+        self.assertIsNone(result["rules"]["limit"])
+        self.assertEqual(result["rules"]["sort"], "")
+        self.assertEqual(result["rules"]["order"], "asc")
+
     def test_a_limit_in_minutes_is_reported_not_invented(self):
         result = convert_smart_playlist(
             info_blob(limited=True, limit_method=0x01, limit_count=60),

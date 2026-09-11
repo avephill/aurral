@@ -489,11 +489,15 @@ def convert_smart_playlist(info_blob, criteria_blob):
                 f"a limit measured in {details['limitUnit']}, which Navidrome cannot express"
             )
 
+    # How tracks are chosen only means something when there is a limit to choose
+    # for. iTunes stores a method either way, and carrying it over unlimited
+    # would hand Navidrome a sort it honours - most often "random", which would
+    # reshuffle the whole playlist on every open.
     rules = {
         "match": parsed["match"],
         "conditions": parsed["conditions"],
-        "sort": details["sort"] or "",
-        "order": details["order"] or "asc",
+        "sort": (details["sort"] or "") if limit else "",
+        "order": (details["order"] or "asc") if limit else "asc",
         "limit": limit,
     }
     return {

@@ -45,8 +45,41 @@ for (const playlist of await userClient.getSubsonicPlaylists()) {
   existing.set(String(playlist.name || "").trim().toLowerCase(), playlist);
 }
 
+/**
+ * What a set of rules would actually match, without touching the real
+ * playlist. Navidrome only evaluates rules when a playlist is read, so the
+ * only honest way to ask is to put them on a throwaway one and read it.
+ *
+ * This is the difference between a preview and a guess: rules that are
+ * perfectly valid can still match nothing, because iTunes' genre names are not
+ * the ones in the file tags, or match far too much, because Navidrome
+ * evaluates over every library the owner can see and not just their own.
+ */
+async function countMatches(rules) {
+  const probe = await userClient.createPlaylist(`zz-preview-${Date.now()}`, []);
+  try {
+    await admin.setPlaylistRules(probe.id, { name: "zz-preview", rules });
+    const read = await userClient.getSubsonicPlaylist(probe.id);
+    const entries = read?.entry || [];
+    // Which library each match came from is the thing worth seeing, and the
+    // Subsonic entry does not say, so the songs are looked up natively.
+    const ids = entries.map((entry) => String(entry.id));
+    const libraries = {};
+    for (let index = 0; index < ids.length; index += 100) {
+      for (const song of await admin.getSongsByIds(ids.slice(index, index + 100))) {
+        const library = song.libraryName || song.libraryId || "?";
+        libraries[library] = (libraries[library] || 0) + 1;
+      }
+    }
+    return { total: entries.length, libraries };
+  } finally {
+    await userClient.deletePlaylist(probe.id).catch(() => {});
+  }
+}
+
 const wanted = plan.playlists.filter((entry) => !only || entry.name === only);
 console.log(`${wanted.length} playlist(s) to ${apply ? "apply" : "check"} for ${ownerName}`);
+if (!apply) console.log("  (counting what each rule matches; this reads every playlist once)\n");
 
 const summary = { created: 0, updated: 0, unchanged: 0, failed: 0 };
 
@@ -64,7 +97,24 @@ for (const entry of wanted) {
   const found = existing.get(name.toLowerCase());
   const action = found ? "update" : "create";
   if (!apply) {
-    console.log(`  would ${action}: ${name}  ${JSON.stringify(rules)}`);
+    let preview;
+    try {
+      preview = await countMatches(rules);
+    } catch (error) {
+      console.log(`  ✗ ${name}: could not be previewed: ${error.message}`);
+      summary.failed += 1;
+      continue;
+    }
+    const now = found ? Number(found.songCount ?? 0) : null;
+    const change = now === null ? "new" : `${now} -> ${preview.total}`;
+    // Nothing at all, or many times what it holds today, is the shape of a
+    // rule that has quietly gone wrong rather than one that has simply moved on.
+    const flag = preview.total === 0
+      ? "  MATCHES NOTHING"
+      : now && preview.total > now * 1.5
+        ? "  much larger than it is now"
+        : "";
+    console.log(`  would ${action}: ${name.padEnd(34)} ${change.padStart(14)}  by library ${JSON.stringify(preview.libraries)}${flag}`);
     summary[action === "create" ? "created" : "updated"] += 1;
     continue;
   }
