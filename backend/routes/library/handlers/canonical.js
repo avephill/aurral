@@ -22,7 +22,15 @@ import {
   scheduleLibraryScan,
 } from "../../../services/libraryScanWorker.js";
 
-const isFilesystemPathKey = (key) => key.toLowerCase().endsWith("path");
+// Anything named like a path is a path on this server and stays here. The one
+// exception is streamPath, which is a URL on Aurral's own API made of two ids
+// and says nothing about the filesystem; stripping it left callers with a
+// track they could see and could not play.
+const PUBLIC_PATH_KEYS = new Set(["streampath"]);
+const isFilesystemPathKey = (key) => {
+  const lower = key.toLowerCase();
+  return lower.endsWith("path") && !PUBLIC_PATH_KEYS.has(lower);
+};
 
 export function stripFilesystemPaths(value) {
   if (Array.isArray(value)) return value.map(stripFilesystemPaths);
