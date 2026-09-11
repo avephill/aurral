@@ -26,10 +26,22 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: "autoUpdate",
-        includeAssets: ["arralogo.svg", "icons/*.png", "spotify-oauth-callback.js"],
+        includeAssets: ["arralogo.svg", "icons/*.png", "spotify-oauth-callback.js", "offline.html"],
         workbox: {
           navigateFallback: null,
           directoryIndex: null,
+          // Pages always come from the server, so an unreachable server would
+          // otherwise show the browser's own error page. Installed as an app
+          // that looks broken, so serve a plain page that says what happened.
+          runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === "navigate",
+              handler: "NetworkOnly",
+              options: {
+                precacheFallback: { fallbackURL: `${basePath}offline.html` },
+              },
+            },
+          ],
         },
         manifest: {
           // Installed on a desktop this becomes a real application: its own
