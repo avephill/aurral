@@ -56,6 +56,22 @@ export const removeNavidromePlaylistEntry = (playlistId, index, songId = null) =
     + (songId ? `?songId=${encodeURIComponent(songId)}` : ""),
   );
 
+// Folders live in Aurral, not in Navidrome, so these never touch a playlist.
+export const getNavidromePlaylistFolders = ({ signal } = {}) =>
+  getData("/navidrome-playlists/folders", { signal });
+
+export const setNavidromePlaylistFolder = (playlistId, folder) =>
+  putData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/folder`, { folder });
+
+export const renameNavidromePlaylistFolder = (from, to) =>
+  postData("/navidrome-playlists/folders/rename", { from, to });
+
+export const removeNavidromePlaylistFolder = (folder) =>
+  postData("/navidrome-playlists/folders/remove", { folder });
+
+export const duplicateNavidromePlaylist = (playlistId, name = "") =>
+  postData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/duplicate`, name ? { name } : {});
+
 // Smart playlists: rules Navidrome evaluates, rather than a fixed list.
 export const getNavidromePlaylistRuleFields = ({ signal } = {}) =>
   getData("/navidrome-playlists/rule-fields", { signal });

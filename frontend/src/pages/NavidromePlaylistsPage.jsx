@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  FolderOpen,
   GripVertical,
   ListMusic,
   Sparkles,
@@ -34,10 +38,14 @@ import {
   invalidateNavidromePlaylists,
   clearNavidromePlaylistRules,
   createNavidromeSmartPlaylist,
+  duplicateNavidromePlaylist,
   moveNavidromePlaylistEntry,
   removeNavidromePlaylistEntries,
   removeNavidromePlaylistEntry,
+  removeNavidromePlaylistFolder,
   renameNavidromePlaylist,
+  renameNavidromePlaylistFolder,
+  setNavidromePlaylistFolder,
   setNavidromePlaylistRules,
 } from "../utils/api/endpoints/playlists.js";
 import "./navidromePlaylists.css";
@@ -51,6 +59,10 @@ import "./navidromePlaylists.css";
 // Long playlists are rendered a window at a time. Dad's largest is twelve
 // thousand tracks, and laying that out at once takes seconds.
 const TRACK_WINDOW = 300;
+
+const countPlaylists = (node) =>
+  node.playlists.length
+  + [...node.children.values()].reduce((total, child) => total + countPlaylists(child), 0);
 
 const pluralize = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -108,6 +120,9 @@ export default function NavidromePlaylistsPage() {
   const [selectedIndexes, setSelectedIndexes] = useState(() => new Set());
   const [visibleLimit, setVisibleLimit] = useState(TRACK_WINDOW);
   const [smartMode, setSmartMode] = useState("");
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveValue, setMoveValue] = useState("");
+  const [collapsed, setCollapsed] = useState(() => new Set());
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
   const lastClickedIndex = useRef(null);
@@ -135,6 +150,39 @@ export default function NavidromePlaylistsPage() {
   );
   const owned = playlists.filter((playlist) => playlist.owned);
   const others = playlists.filter((playlist) => !playlist.owned);
+  const folders = Array.isArray(list.data?.folders) ? list.data.folders : [];
+
+  // Folders live in Aurral, so the tree is built here from the folder each
+  // playlist carries. A folder with nothing in it cannot exist.
+  const tree = useMemo(() => {
+    const root = { path: "", name: "", children: new Map(), playlists: [] };
+    for (const playlist of owned) {
+      const segments = String(playlist.folder || "").split("/").filter(Boolean);
+      let node = root;
+      for (const segment of segments) {
+        if (!node.children.has(segment)) {
+          node.children.set(segment, {
+            path: [node.path, segment].filter(Boolean).join("/"),
+            name: segment,
+            children: new Map(),
+            playlists: [],
+          });
+        }
+        node = node.children.get(segment);
+      }
+      node.playlists.push(playlist);
+    }
+    return root;
+  }, [owned]);
+
+  const toggleFolder = useCallback((path) => {
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
   const selected = detail.data && String(detail.data.id) === selectedId ? detail.data : null;
   const selectedSummary = playlists.find((playlist) => String(playlist.id) === selectedId) || null;
   const canEdit = Boolean(selected?.owned ?? selectedSummary?.owned);
@@ -280,6 +328,60 @@ export default function NavidromePlaylistsPage() {
     [clearSelection, detail, refreshAll, selectedId, showError, tracks],
   );
 
+  const handleDuplicate = async () => {
+    if (!selectedId) return;
+    setBusy("duplicate");
+    try {
+      const result = await duplicateNavidromePlaylist(selectedId);
+      await refreshAll();
+      showSuccess(`Copied to ${result?.playlist?.name || "a new playlist"}`);
+      if (result?.playlist?.id) select(result.playlist.id);
+    } catch (error) {
+      showError(errorMessage(error, "Could not duplicate the playlist"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleMove = async () => {
+    if (!selectedId) return;
+    setBusy("move");
+    try {
+      const folder = moveValue.trim();
+      await setNavidromePlaylistFolder(selectedId, folder);
+      await refreshAll();
+      setMoveOpen(false);
+      showSuccess(folder ? `Moved to ${folder}` : "Moved out of its folder");
+    } catch (error) {
+      showError(errorMessage(error, "Could not move the playlist"));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const handleRenameFolder = async (from) => {
+    const to = window.prompt(`Rename the folder “${from}” to:`, from);
+    if (!to || to === from) return;
+    try {
+      await renameNavidromePlaylistFolder(from, to);
+      await refreshAll();
+      showSuccess(`Renamed to ${to}`);
+    } catch (error) {
+      showError(errorMessage(error, "Could not rename the folder"));
+    }
+  };
+
+  const handleRemoveFolder = async (folder) => {
+    try {
+      // The playlists inside are kept; they move up one level.
+      await removeNavidromePlaylistFolder(folder);
+      await refreshAll();
+      showSuccess(`Removed the folder ${folder}`);
+    } catch (error) {
+      showError(errorMessage(error, "Could not remove the folder"));
+    }
+  };
+
   const handleCreateSmart = async ({ name, rules }) => {
     setBusy("smart");
     try {
@@ -422,6 +524,66 @@ export default function NavidromePlaylistsPage() {
     );
   };
 
+  // A folder and everything under it. Folders come first, as iTunes had them,
+  // and a folder with nothing inside cannot exist, so there is nothing empty
+  // to draw.
+  const renderFolder = (node, depth) => (
+    <div key={node.path || "root"} className="nd-playlists__folder">
+      {[...node.children.values()]
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
+        .map((child) => {
+          const isCollapsed = collapsed.has(child.path);
+          const count = countPlaylists(child);
+          return (
+            <div key={child.path}>
+              <div
+                className="nd-playlists__folder-row"
+                style={{ paddingLeft: `${depth * 0.75}rem` }}
+              >
+                <button
+                  type="button"
+                  className="nd-playlists__folder-toggle"
+                  onClick={() => toggleFolder(child.path)}
+                  aria-expanded={!isCollapsed}
+                >
+                  {isCollapsed ? (
+                    <ChevronRight className="artist-icon-xs" aria-hidden="true" />
+                  ) : (
+                    <ChevronDown className="artist-icon-xs" aria-hidden="true" />
+                  )}
+                  <FolderOpen className="artist-icon-sm" aria-hidden="true" />
+                  <span className="nd-playlists__folder-name">{child.name}</span>
+                  <span className="nd-playlists__folder-count">{count}</span>
+                </button>
+                <span className="nd-playlists__folder-actions">
+                  <TooltipButton
+                    type="button"
+                    className="btn btn-icon btn-xs btn-ghost"
+                    label="Rename folder"
+                    onClick={() => handleRenameFolder(child.path)}
+                  >
+                    <Pencil className="artist-icon-xs" aria-hidden="true" />
+                  </TooltipButton>
+                  <TooltipButton
+                    type="button"
+                    className="btn btn-icon btn-xs btn-ghost"
+                    label="Remove folder, keeping its playlists"
+                    onClick={() => handleRemoveFolder(child.path)}
+                  >
+                    <X className="artist-icon-xs" aria-hidden="true" />
+                  </TooltipButton>
+                </span>
+              </div>
+              {isCollapsed ? null : renderFolder(child, depth + 1)}
+            </div>
+          );
+        })}
+      <div style={depth ? { paddingLeft: `${depth * 0.75}rem` } : undefined}>
+        {node.playlists.map(renderPlaylistButton)}
+      </div>
+    </div>
+  );
+
   return (
     <div className="nd-playlists">
       <header className="nd-playlists__header">
@@ -488,7 +650,7 @@ export default function NavidromePlaylistsPage() {
           ) : (
             <>
               <div className="nd-playlists__group-label">My playlists</div>
-              {owned.length ? owned.map(renderPlaylistButton) : (
+              {owned.length ? renderFolder(tree, 0) : (
                 <p className="nd-playlists__empty nd-playlists__empty--compact">None yet.</p>
               )}
               {others.length ? (
@@ -594,6 +756,26 @@ export default function NavidromePlaylistsPage() {
                       >
                         <Pencil className="artist-icon-sm" aria-hidden="true" />
                         Rename
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={handleDuplicate}
+                        disabled={busy === "duplicate"}
+                      >
+                        <Copy className="artist-icon-sm" aria-hidden="true" />
+                        Duplicate
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setMoveValue(selected.folder || "");
+                          setMoveOpen(true);
+                        }}
+                      >
+                        <FolderOpen className="artist-icon-sm" aria-hidden="true" />
+                        {selected.folder ? "Move" : "Put in a folder"}
                       </button>
                       <button
                         type="button"
@@ -797,6 +979,40 @@ export default function NavidromePlaylistsPage() {
           ) : null}
         </section>
       </div>
+
+      <ModalShell
+        open={moveOpen}
+        title="Put this playlist in a folder"
+        description="Folders are Aurral's own. Navidrome and your phone still show one flat list."
+        onClose={() => setMoveOpen(false)}
+        disableClose={busy === "move"}
+        footer={(
+          <>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMoveOpen(false)} disabled={busy === "move"}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleMove} disabled={busy === "move"}>
+              Move
+            </button>
+          </>
+        )}
+      >
+        <label className="nd-playlists__move">
+          <span>Folder</span>
+          <input
+            type="text"
+            value={moveValue}
+            onChange={(event) => setMoveValue(event.target.value)}
+            list="nd-playlist-folders"
+            placeholder="Rock/Live, or leave empty for none"
+            autoFocus
+          />
+          <datalist id="nd-playlist-folders">
+            {folders.map((folder) => <option key={folder} value={folder} />)}
+          </datalist>
+          <small>A name with a slash makes a folder inside another.</small>
+        </label>
+      </ModalShell>
 
       <SmartPlaylistEditor
         open={Boolean(smartMode)}

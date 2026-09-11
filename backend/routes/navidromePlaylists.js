@@ -14,6 +14,16 @@ import {
 } from "../services/navidromeTrackResolver.js";
 import { publicLibraryJsonReplacer } from "./library/handlers/canonical.js";
 import {
+  PlaylistFolderError,
+  forgetPlaylistFolder,
+  getPlaylistFolders,
+  listFolders,
+  pruneMissingPlaylists,
+  removeFolder,
+  renameFolder,
+  setPlaylistFolder,
+} from "../services/navidromePlaylistFolders.js";
+import {
   SmartPlaylistRuleError,
   describeSmartPlaylistFields,
   fromNavidromeRules,
@@ -83,7 +93,7 @@ async function adminClientForOwnedPlaylist(req, res, playlistId) {
   return admin;
 }
 
-function toPlaylistSummary(playlist, username, record = null) {
+function toPlaylistSummary(playlist, username, record = null, folder = "") {
   const owner = String(playlist?.owner || record?.ownerName || "");
   const smart = isSmartPlaylistRecord(record);
   return {
@@ -98,6 +108,7 @@ function toPlaylistSummary(playlist, username, record = null) {
     public: playlist.public === true,
     createdAt: playlist.created || null,
     changedAt: playlist.changed || null,
+    folder,
     smart,
     // Null when the rules use something this editor cannot show; the playlist
     // still works, it just cannot be opened in the rule editor.
@@ -186,12 +197,116 @@ router.get("/", noCache, async (req, res) => {
       client.getSubsonicPlaylists(),
       playlistRecordsById(),
     ]);
+    // A playlist deleted from a phone should not leave a row behind in the
+    // folder tree, so the list is the moment to tidy up.
+    pruneMissingPlaylists(req.user.id, playlists.map((playlist) => playlist.id));
+    const folders = getPlaylistFolders(req.user.id);
     const summaries = playlists
-      .map((playlist) => toPlaylistSummary(playlist, client.user, records.get(String(playlist.id))))
+      .map((playlist) => toPlaylistSummary(
+        playlist,
+        client.user,
+        records.get(String(playlist.id)),
+        folders.get(String(playlist.id)) || "",
+      ))
       .sort((a, b) => Number(b.owned) - Number(a.owned) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-    return res.json({ username: client.user, playlists: summaries });
+    return res.json({ username: client.user, playlists: summaries, folders: listFolders(req.user.id) });
   } catch (error) {
     return sendNavidromeError(res, error, "Could not load playlists from Navidrome");
+  }
+});
+
+// Folders. Navidrome has none, so these read and write Aurral's own tree and
+// never touch a playlist.
+router.get("/folders", noCache, (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  return res.json({ folders: listFolders(req.user.id) });
+});
+
+router.post("/folders/rename", noCache, (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  try {
+    const moved = renameFolder(req.user.id, req.body?.from, req.body?.to);
+    return res.json({ moved, folders: listFolders(req.user.id) });
+  } catch (error) {
+    if (error instanceof PlaylistFolderError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+});
+
+router.post("/folders/remove", noCache, (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  try {
+    // The playlists inside are kept; they move up one level.
+    const moved = removeFolder(req.user.id, req.body?.folder);
+    return res.json({ moved, folders: listFolders(req.user.id) });
+  } catch (error) {
+    if (error instanceof PlaylistFolderError) return res.status(400).json({ error: error.message });
+    throw error;
+  }
+});
+
+router.put("/:id/folder", noCache, async (req, res) => {
+  const client = userClient(req, res);
+  if (!client) return undefined;
+  try {
+    // Only a playlist this person can see may be filed by them.
+    const playlist = await client.getSubsonicPlaylist(req.params.id);
+    if (!playlist) return res.status(404).json({ error: "Playlist not found" });
+    const folder = setPlaylistFolder(req.user.id, req.params.id, req.body?.folder);
+    return res.json({ folder, folders: listFolders(req.user.id) });
+  } catch (error) {
+    if (error instanceof PlaylistFolderError) return res.status(400).json({ error: error.message });
+    if (Number(error?.code) === 70) return res.status(404).json({ error: "Playlist not found" });
+    return sendNavidromeError(res, error, "Could not move the playlist");
+  }
+});
+
+/**
+ * A copy of a playlist. A smart one copies its rules, so the copy goes on
+ * updating itself; an ordinary one copies the songs it holds now.
+ */
+router.post("/:id/duplicate", noCache, async (req, res) => {
+  const client = userClient(req, res);
+  if (!client) return undefined;
+  try {
+    const source = await client.getSubsonicPlaylist(req.params.id);
+    if (!source) return res.status(404).json({ error: "Playlist not found" });
+    const name = String(req.body?.name || "").trim() || `${source.name || "Playlist"} copy`;
+
+    const records = await playlistRecordsById();
+    const record = records.get(String(req.params.id));
+    const smart = isSmartPlaylistRecord(record);
+
+    const songIds = smart ? [] : (source.entry || []).map((entry) => String(entry.id)).filter(Boolean);
+    const created = await client.createPlaylist(name, songIds.slice(0, 500));
+    if (!created?.id) throw new Error("Navidrome did not return a playlist id");
+    for (let index = 500; index < songIds.length; index += 500) {
+      await client.appendPlaylistSongs(created.id, songIds.slice(index, index + 500));
+    }
+
+    if (smart) {
+      const admin = getAdminNavidromeClient();
+      if (admin?.isConfigured?.()) await admin.setPlaylistRules(created.id, { name, rules: record.rules });
+    }
+    // A copy belongs in the same folder as the original.
+    const folder = getPlaylistFolders(req.user.id).get(String(req.params.id)) || "";
+    if (folder) setPlaylistFolder(req.user.id, created.id, folder);
+
+    const playlist = await client.getSubsonicPlaylist(created.id);
+    return res.status(201).json({
+      playlist: playlist
+        ? toPlaylistSummary(playlist, client.user, smart ? record : null, folder)
+        : null,
+      copied: smart ? "rules" : songIds.length,
+    });
+  } catch (error) {
+    return sendNavidromeError(res, error, "Could not duplicate the playlist");
   }
 });
 
@@ -215,7 +330,12 @@ router.get("/:id", noCache, async (req, res) => {
     const records = await playlistRecordsById();
     const tracks = await mapNavidromeEntriesToTracks(playlist.entry, { playlistId: req.params.id });
     return sendJson(res, 200, {
-      ...toPlaylistSummary(playlist, client.user, records.get(String(req.params.id))),
+      ...toPlaylistSummary(
+        playlist,
+        client.user,
+        records.get(String(req.params.id)),
+        getPlaylistFolders(req.user.id).get(String(req.params.id)) || "",
+      ),
       trackCount: tracks.length,
       tracks,
       unavailableCount: tracks.filter((track) => !track.available).length,
@@ -476,6 +596,7 @@ router.delete("/:id", noCache, async (req, res) => {
   if (!client) return undefined;
   try {
     await client.deletePlaylist(req.params.id);
+    forgetPlaylistFolder(req.user.id, req.params.id);
     return res.json({ deleted: true });
   } catch (error) {
     return sendNavidromeError(res, error, "Could not delete the playlist in Navidrome");

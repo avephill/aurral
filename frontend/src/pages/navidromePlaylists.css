@@ -198,6 +198,9 @@
 
 .nd-playlists__track {
   display: grid;
+  /* Every cell is pinned to a named line below, because a row on a smart
+     playlist has no checkbox, no handle and no remove button, and without
+     pinning the remaining cells slide left into the wrong columns. */
   grid-template-columns:
     [select] auto [grip] auto [number] 2rem [play] 2rem
     [copy] minmax(0, 1fr) [rating] auto [duration] auto [remove] auto;
@@ -218,10 +221,12 @@
 }
 
 .nd-playlists__track.is-unavailable .nd-playlists__track-copy {
+  grid-column: copy;
   opacity: 0.55;
 }
 
 .nd-playlists__track-number {
+  grid-column: number;
   color: var(--aurral-text-subtle);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
@@ -243,6 +248,7 @@
 }
 
 .nd-playlists__track-play {
+  grid-column: play;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -287,18 +293,21 @@
 }
 
 .nd-playlists__track-rating {
+  grid-column: rating;
   display: flex;
   justify-content: center;
   min-width: 5.25rem;
 }
 
 .nd-playlists__track-duration {
+  grid-column: duration;
   color: var(--aurral-text-muted);
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
 
 .nd-playlists__track-remove {
+  grid-column: remove;
   opacity: 0;
   transition: opacity 0.15s ease;
 }
@@ -447,6 +456,8 @@
 }
 
 .nd-playlists__track-select {
+  grid-column: select;
+  justify-self: start;
   width: 0.9375rem;
   height: 0.9375rem;
   margin: 0;
@@ -455,6 +466,7 @@
 }
 
 .nd-playlists__track-grip {
+  grid-column: grip;
   display: inline-flex;
   color: var(--aurral-text-subtle);
   cursor: grab;
@@ -482,4 +494,85 @@
 .nd-playlists__more {
   align-self: center;
   margin: 0.75rem auto 0;
+}
+
+/* Folders, which live in Aurral rather than in Navidrome. */
+.nd-playlists__folder-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.nd-playlists__folder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.3125rem 0.375rem;
+  border: none;
+  border-radius: var(--aurral-radius-sm);
+  background: none;
+  color: var(--aurral-text-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nd-playlists__folder-toggle:hover {
+  background: var(--aurral-surface-hover);
+  color: var(--aurral-text);
+}
+
+.nd-playlists__folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nd-playlists__folder-count {
+  flex: 0 0 auto;
+  color: var(--aurral-text-subtle);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.nd-playlists__folder-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.125rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.nd-playlists__folder-row:hover .nd-playlists__folder-actions,
+.nd-playlists__folder-row:focus-within .nd-playlists__folder-actions {
+  opacity: 1;
+}
+
+.nd-playlists__move {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.nd-playlists__move input {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface);
+  color: var(--aurral-text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.nd-playlists__move small {
+  color: var(--aurral-text-subtle);
+  font-weight: 400;
 }

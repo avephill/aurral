@@ -257,6 +257,18 @@ db.exec(`
     FOREIGN KEY (track_id) REFERENCES library_tracks(id) ON DELETE CASCADE
   );
 
+  -- Which folder a person files a Navidrome playlist under. Navidrome has no
+  -- notion of a folder, so the tree lives here; every client still sees one
+  -- flat list of playlists, which is what Navidrome holds.
+  CREATE TABLE IF NOT EXISTS navidrome_playlist_folders (
+    user_id INTEGER NOT NULL,
+    playlist_id TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, playlist_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   -- Navidrome's id for one indexed file, per Navidrome library. Learned the
   -- first time a track is resolved and reused after that, so path lookups stop
   -- repeating and a song id can be turned back into a file.
@@ -307,6 +319,8 @@ db.exec(`
     ON library_album_tracks (track_id);
   CREATE INDEX IF NOT EXISTS idx_library_tracks_title
     ON library_tracks (title COLLATE NOCASE);
+  CREATE INDEX IF NOT EXISTS idx_navidrome_playlist_folders_user
+    ON navidrome_playlist_folders (user_id, folder);
   CREATE INDEX IF NOT EXISTS idx_navidrome_song_ids_song_id
     ON navidrome_song_ids (song_id);
   CREATE INDEX IF NOT EXISTS idx_library_media_files_track_id
