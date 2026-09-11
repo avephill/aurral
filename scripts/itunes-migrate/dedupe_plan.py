@@ -16,10 +16,13 @@ playlist entries that have to move to the survivor first, or they are lost.
 import argparse
 import csv
 import sqlite3
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 # Lossless first, then the better lossy. A survivor is chosen on quality, and
 # everything attached to the losers is meant to move to it.
+MAX_FOLDER_DEPTH = 3      # Artist/Album/Disc
+MAX_SEGMENT_REPEATS = 2   # a self-titled album uses its name twice
+
 FORMAT_RANK = {"flac": 3, "alac": 3, "wav": 3, "m4a": 2, "aac": 2, "ogg": 1, "opus": 1, "mp3": 1, "wma": 0}
 
 
@@ -69,7 +72,13 @@ def looped(path):
     *keep*, which would have deleted the real file and left a phantom.
     """
     segments = str(path or "").split("/")[:-1]
-    return len(segments) != len(set(segments))
+    if not segments:
+        return False
+    repeats = max(Counter(segments).values())
+    # A healthy library tops out at Artist/Album/Disc and at two uses of one
+    # name, which is just a self-titled record - "Cage the Elephant/Cage the
+    # Elephant". A loop is not subtle: those paths ran forty Searows deep.
+    return len(segments) > MAX_FOLDER_DEPTH or repeats > MAX_SEGMENT_REPEATS
 
 
 def rank(row):
