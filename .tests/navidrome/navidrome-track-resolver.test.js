@@ -7,11 +7,12 @@ import {
   setupIsolatedBackend,
 } from "../helpers/backendTestHarness.js";
 
-const [isolatedState, { db }, libraryStore, resolver] = await setupIsolatedBackend(
+const [isolatedState, { db }, libraryStore, resolver, songIdStore] = await setupIsolatedBackend(
   "navidrome-track-resolver",
   "backend/config/db-sqlite.js",
   "backend/services/libraryMediaStore.js",
   "backend/services/navidromeTrackResolver.js",
+  "backend/services/navidromeSongIdStore.js",
 );
 
 const {
@@ -104,6 +105,10 @@ test.after(async () => {
 
 test.beforeEach(() => {
   resolver.resetNavidromeTrackResolver();
+  // Ids learned in one test would otherwise answer the next one from the
+  // store instead of from Navidrome, which is the point of the store but not
+  // what these cases are about.
+  songIdStore.clearNavidromeSongIds();
 });
 
 test("playlist entries map to canonical tracks through the native paths, learning the root on the way", async () => {
@@ -231,4 +236,84 @@ test("a preferred library wins over the main-library copy when it has one", asyn
   assert.equal(resolved[0].outsidePreferredLibrary, true);
   assert.equal(await resolver.getPersonalLibraryIdForUser("avery", { client }), 2);
   assert.equal(await resolver.getPersonalLibraryIdForUser("nobody", { client }), null);
+});
+
+test("a remembered song id answers without asking Navidrome again", async () => {
+  const relative = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
+  const first = fakeAdminClient({
+    playlistTracks: [{ id: "pt-1", mediaFileId: "nd-1", path: relative, libraryId: 1 }],
+  });
+  const entries = [{ id: "nd-1", title: "A New Day Yesterday", path: "made/up/path.flac" }];
+  const before = await resolver.mapNavidromeEntriesToTracks(entries, { playlistId: "pl-1", client: first });
+  assert.equal(before[0].trackId, track.id);
+  assert.equal(songIdStore.getMediaPathsForNavidromeSongIds(["nd-1"]).get("nd-1"), `${AURRAL_ROOT}/${relative}`);
+
+  // A fresh process: memory is empty, the store is not.
+  resolver.resetNavidromeTrackResolver();
+  const second = fakeAdminClient({ playlistTracks: [] });
+  const after = await resolver.mapNavidromeEntriesToTracks(entries, { playlistId: "pl-1", client: second });
+  assert.equal(after[0].trackId, track.id);
+  assert.equal(after[0].available, true);
+  assert.deepEqual(second.calls, [], "no admin call was needed");
+});
+
+test("a path the player itself reports is used when it matches an indexed file", async () => {
+  const relative = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
+  // Roots are known, so a real path on the entry is enough on its own.
+  const client = fakeAdminClient({
+    playlistTracks: [{ id: "pt-9", mediaFileId: "nd-9", path: relative, libraryId: 1 }],
+  });
+  await resolver.mapNavidromeEntriesToTracks(
+    [{ id: "nd-9", title: "A New Day Yesterday", path: "made/up.flac" }],
+    { playlistId: "pl-9", client },
+  );
+  songIdStore.clearNavidromeSongIds();
+  const fresh = fakeAdminClient({ playlistTracks: [] });
+  const tracks = await resolver.mapNavidromeEntriesToTracks(
+    [{ id: "nd-new", title: "A New Day Yesterday", path: relative }],
+    { playlistId: "pl-9", client: fresh },
+  );
+  assert.equal(tracks[0].trackId, track.id);
+  assert.deepEqual(fresh.calls, [], "the reported path made the admin read unnecessary");
+});
+
+test("a reported path pointing at another song is refused", async () => {
+  const relative = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
+  const client = fakeAdminClient({
+    playlistTracks: [{ id: "pt-8", mediaFileId: "nd-8", path: relative, libraryId: 1 }],
+  });
+  await resolver.mapNavidromeEntriesToTracks(
+    [{ id: "nd-8", title: "A New Day Yesterday", path: "made/up.flac" }],
+    { playlistId: "pl-8", client },
+  );
+  songIdStore.clearNavidromeSongIds();
+  const fresh = fakeAdminClient({ playlistTracks: [] });
+  // Same path, but the entry says it is a different song.
+  const tracks = await resolver.mapNavidromeEntriesToTracks(
+    [{ id: "nd-wrong", title: "Something Else Entirely", path: relative }],
+    { playlistId: "pl-8", client: fresh },
+  );
+  assert.equal(tracks[0].available, false);
+});
+
+test("roots given in the configuration are used as they are", async () => {
+  process.env.AURRAL_NAVIDROME_MUSIC_ROOT = AURRAL_ROOT;
+  try {
+    resolver.resetNavidromeTrackResolver();
+    assert.deepEqual(resolver.getNavidromeRoots(), { aurralRoot: AURRAL_ROOT, navidromeRoot: "" });
+    // No title search is needed to learn the mapping: the path query is first.
+    const relative = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
+    const client = fakeAdminClient({
+      songsByPath: { [relative]: [{ id: "nd-main", path: relative, libraryId: 1 }] },
+    });
+    const song = await resolver.resolveNavidromeSong(
+      { path: `${AURRAL_ROOT}/${relative}`, title: "A New Day Yesterday" },
+      { client },
+    );
+    assert.deepEqual(song, { id: "nd-main", libraryId: 1 });
+    assert.ok(client.calls.every((call) => call[0] !== "searchSongsNative"));
+  } finally {
+    delete process.env.AURRAL_NAVIDROME_MUSIC_ROOT;
+    resolver.resetNavidromeTrackResolver();
+  }
 });

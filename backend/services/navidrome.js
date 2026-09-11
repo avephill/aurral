@@ -568,6 +568,23 @@ export class NavidromeClient {
     return Array.isArray(songs) ? songs : [];
   }
 
+  /**
+   * Songs this user has starred in Navidrome, newest first. Read as the user,
+   * so the answer is their own stars and nobody else's.
+   */
+  async getStarredSongs({ limit = 0 } = {}) {
+    const data = await this.request("getStarred2");
+    const songs = data.starred2?.song || [];
+    const list = Array.isArray(songs) ? songs : [songs].filter(Boolean);
+    return limit > 0 ? list.slice(0, limit) : list;
+  }
+
+  /** One song read through the native API, which carries its real path. */
+  async getSongNative(id) {
+    const song = await this._nativeRequest("GET", `/api/song/${encodeURIComponent(String(id || ""))}`);
+    return song && typeof song === "object" ? song : null;
+  }
+
   async findSongsByPath(path) {
     const songs = await this._nativeRequest(
       "GET",

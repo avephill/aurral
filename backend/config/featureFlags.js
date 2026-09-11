@@ -69,6 +69,23 @@ export const isNavidromeUserAuthEnabled = () => getNavidromeUserAuthMode() !== "
 export const getNavidromeUserHeader = () =>
   String(process.env.AURRAL_NAVIDROME_USER_HEADER || "Remote-User").trim() || "Remote-User";
 
+// Aurral and Navidrome index the same files under different roots: Aurral
+// holds absolute paths, Navidrome holds paths relative to each library root.
+// Left unset, the first successful lookup teaches Aurral the mapping by
+// comparing one file's two paths. Setting it states the mapping outright,
+// which removes the guesswork and the title search that seeds it.
+//
+//   AURRAL_NAVIDROME_MUSIC_ROOT   absolute path, as Aurral sees it, of the
+//                                 folder Navidrome's main library indexes
+//   AURRAL_NAVIDROME_PATH_PREFIX  prefix Navidrome puts in front of the shared
+//                                 tail, if any (usually empty)
+export const getNavidromeRootMapping = () => {
+  const aurralRoot = String(process.env.AURRAL_NAVIDROME_MUSIC_ROOT || "").trim().replace(/\/+$/, "");
+  if (!aurralRoot) return null;
+  const navidromeRoot = String(process.env.AURRAL_NAVIDROME_PATH_PREFIX || "").trim().replace(/\/+$/, "");
+  return { aurralRoot, navidromeRoot };
+};
+
 // Navidrome-held playlists need both the permission to make playlists and a
 // way to act as the user.
 export const isNavidromePlaylistsEnabled = () =>

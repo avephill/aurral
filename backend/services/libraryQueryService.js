@@ -587,6 +587,46 @@ export function getCanonicalNewlyAvailableAlbums({ since = 0, limit = 30 } = {})
   });
 }
 
+/**
+ * Identity keys for a set of track ids, as a Map. Favourites are stored by
+ * identity key, so anything arriving as a track id has to come through here.
+ */
+export function getCanonicalTrackIdentityKeysByIds(ids = []) {
+  const values = [...new Set((Array.isArray(ids) ? ids : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0))];
+  const keys = new Map();
+  const CHUNK = 500;
+  for (let index = 0; index < values.length; index += CHUNK) {
+    const chunk = values.slice(index, index + CHUNK);
+    const rows = db.prepare(
+      `SELECT id, identity_key AS identityKey FROM library_tracks WHERE id IN (${chunk.map(() => "?").join(",")})`,
+    ).all(...chunk);
+    for (const row of rows) if (row.identityKey) keys.set(Number(row.id), String(row.identityKey));
+  }
+  return keys;
+}
+
+/**
+ * Track titles for a set of track ids, as a Map. Used to check that a file
+ * found by path really is the song a caller was handed.
+ */
+export function getCanonicalTrackTitlesByIds(ids = []) {
+  const values = [...new Set((Array.isArray(ids) ? ids : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0))];
+  const titles = new Map();
+  const CHUNK = 500;
+  for (let index = 0; index < values.length; index += CHUNK) {
+    const chunk = values.slice(index, index + CHUNK);
+    const rows = db.prepare(
+      `SELECT id, title FROM library_tracks WHERE id IN (${chunk.map(() => "?").join(",")})`,
+    ).all(...chunk);
+    for (const row of rows) titles.set(Number(row.id), String(row.title || ""));
+  }
+  return titles;
+}
+
 export function getCanonicalTrackPath(albumReference, trackReference) {
   const albumValue = String(albumReference ?? "").trim();
   const trackValue = String(trackReference ?? "").trim();

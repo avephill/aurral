@@ -16,8 +16,16 @@ import {
   getCanonicalMediaFilesByPaths,
   getCanonicalTrack,
   getCanonicalTrackPath,
+  getCanonicalTrackTitlesByIds,
 } from "./libraryQueryService.js";
 import { buildCanonicalLibraryReadModel } from "./canonicalLibraryReadAdapter.js";
+import { getNavidromeRootMapping } from "../config/featureFlags.js";
+import {
+  getMediaPathsForNavidromeSongIds,
+  getNavidromeSongId,
+  rememberNavidromeSongId,
+  rememberNavidromeSongIds,
+} from "./navidromeSongIdStore.js";
 import { logger } from "./logger.js";
 
 /**
@@ -55,6 +63,7 @@ const state = {
   libraries: null,
   librariesFetchedAt: 0,
   librariesPromise: null,
+  rootsConfigured: false,
   songIdByRelativePath: new Map(),
 };
 
@@ -75,7 +84,9 @@ export function resetNavidromeTrackResolver() {
   state.libraries = null;
   state.librariesFetchedAt = 0;
   state.librariesPromise = null;
+  state.rootsConfigured = false;
   state.songIdByRelativePath = new Map();
+  applyConfiguredRoots();
 }
 
 async function getLibraries(client) {
@@ -147,6 +158,9 @@ export function getNavidromeRoots() {
 }
 
 function setRoots(roots) {
+  // A mapping given in the configuration is the truth; nothing learned from a
+  // path comparison may quietly replace it.
+  if (state.rootsConfigured) return;
   state.aurralRoot = roots.aurralRoot;
   state.navidromeRoot = roots.navidromeRoot;
   logger.info(
@@ -154,6 +168,27 @@ function setRoots(roots) {
     `[Navidrome] Library roots: Aurral ${roots.aurralRoot} ↔ Navidrome ${roots.navidromeRoot || "(relative)"}`,
   );
 }
+
+/**
+ * Take the roots straight from the configuration when it states them, so the
+ * first lookup is an exact path query instead of a title search that has to
+ * guess the mapping.
+ */
+function applyConfiguredRoots() {
+  const configured = getNavidromeRootMapping();
+  if (!configured) return false;
+  state.rootsConfigured = false;
+  state.aurralRoot = normalizePath(configured.aurralRoot);
+  state.navidromeRoot = configured.navidromeRoot ? normalizePath(configured.navidromeRoot) : "";
+  state.rootsConfigured = true;
+  logger.info(
+    "library",
+    `[Navidrome] Library roots from configuration: Aurral ${state.aurralRoot} ↔ Navidrome ${state.navidromeRoot || "(relative)"}`,
+  );
+  return true;
+}
+
+applyConfiguredRoots();
 
 /**
  * Learn the roots from one pair of paths for the same file, but only when the
@@ -175,6 +210,7 @@ function learnRoots(aurralPath, navidromePath) {
  * Aurral's index by its album-and-file suffix.
  */
 function learnRootsFromNavidromePaths(paths) {
+  if (state.rootsConfigured) return { aurralRoot: state.aurralRoot, navidromeRoot: state.navidromeRoot };
   let attempts = 0;
   for (const navidromePath of paths) {
     if (!navidromePath || attempts >= ROOT_LEARNING_ATTEMPTS) break;
@@ -250,6 +286,17 @@ export async function resolveNavidromeSong(track, { client = getAdminNavidromeCl
     return state.songIdByRelativePath.get(cacheKey(relative));
   }
 
+  // An id worked out on an earlier run is still the answer, so ask the store
+  // before asking Navidrome. Anything it hands back is also worth holding in
+  // memory for the rest of this process.
+  const storedFor = preferred !== null ? preferred : canonicalLibraryId;
+  const stored = getNavidromeSongId(absolute, { libraryId: storedFor ?? null });
+  if (stored?.songId) {
+    const result = { id: stored.songId, libraryId: stored.libraryId };
+    if (relative) rememberSongId(cacheKey(relative), result);
+    return result;
+  }
+
   if (relative) {
     let candidates = [];
     try {
@@ -257,7 +304,15 @@ export async function resolveNavidromeSong(track, { client = getAdminNavidromeCl
     } catch (error) {
       logger.warn("library", `[Navidrome] Path lookup failed for ${relative}: ${error.message}`);
     }
-    const match = asResult(pick(candidates.filter((song) => songPath(song) === relative)));
+    const exact = candidates.filter((song) => songPath(song) === relative);
+    // Every copy found here is worth keeping, not just the one being asked
+    // for: the others are what ratings and stars are written to.
+    rememberNavidromeSongIds(exact.map((song) => ({
+      mediaPath: absolute,
+      libraryId: song?.libraryId ?? null,
+      songId: song?.id,
+    })));
+    const match = asResult(pick(exact));
     if (match) {
       rememberSongId(cacheKey(relative), match);
       return match;
@@ -287,6 +342,9 @@ export async function resolveNavidromeSong(track, { client = getAdminNavidromeCl
   relative = relativeToRoot(absolute, state.aurralRoot) || bestEntry.roots.relative;
   const result = asResult(best);
   rememberSongId(cacheKey(relative), result);
+  if (result) {
+    rememberNavidromeSongId({ mediaPath: absolute, libraryId: result.libraryId, songId: result.id });
+  }
   return result;
 }
 
@@ -313,9 +371,13 @@ export async function resolveNavidromeSongCopies(track, { client = getAdminNavid
   } catch {
     return [primary];
   }
-  const ids = candidates
-    .filter((song) => songPath(song) === relative && song?.id)
-    .map((song) => String(song.id));
+  const exact = candidates.filter((song) => songPath(song) === relative && song?.id);
+  rememberNavidromeSongIds(exact.map((song) => ({
+    mediaPath: absolute,
+    libraryId: song?.libraryId ?? null,
+    songId: song.id,
+  })));
+  const ids = exact.map((song) => String(song.id));
   return [primary, ...ids.filter((id) => id !== String(primary))];
 }
 
@@ -404,6 +466,48 @@ async function realPathsForPlaylist(playlistId, client) {
 }
 
 /**
+ * Absolute Aurral paths for Navidrome song ids, as a Map keyed by song id.
+ *
+ * Ids already in the store cost nothing. The rest are read one at a time
+ * through the admin connection, which is the only place real paths come from,
+ * and are then stored so the next caller pays nothing either.
+ */
+export async function mediaPathsForNavidromeSongIds(
+  songIds = [],
+  { client = getAdminNavidromeClient(), maxLookups = 200 } = {},
+) {
+  const ids = [...new Set((Array.isArray(songIds) ? songIds : [])
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean))];
+  if (!ids.length) return new Map();
+
+  const known = getMediaPathsForNavidromeSongIds(ids);
+  const missing = ids.filter((id) => !known.has(id));
+  if (!missing.length || !client) return known;
+
+  const learned = [];
+  for (const id of missing.slice(0, maxLookups)) {
+    let song = null;
+    try {
+      song = await client.getSongNative(id);
+    } catch (error) {
+      logger.warn("library", `[Navidrome] Could not read song ${id}: ${error.message}`);
+      continue;
+    }
+    const navidromePath = normalizePath(song?.path);
+    if (!navidromePath) continue;
+    if (!state.aurralRoot) learnRootsFromNavidromePaths([navidromePath]);
+    if (!state.aurralRoot) continue;
+    const absolute = joinRoot(state.aurralRoot, navidromeRelativePath(navidromePath, state.navidromeRoot));
+    if (!absolute) continue;
+    known.set(id, absolute);
+    learned.push({ songId: id, mediaPath: absolute, libraryId: song?.libraryId ?? null });
+  }
+  if (learned.length) rememberNavidromeSongIds(learned);
+  return known;
+}
+
+/**
  * Map Navidrome playlist entries (Subsonic `entry` objects) onto canonical
  * tracks so the built-in player can play them. Entries with no local file
  * come back with `available: false` and Navidrome's own metadata.
@@ -415,19 +519,63 @@ export async function mapNavidromeEntriesToTracks(
   const list = Array.isArray(entries) ? entries : [];
   if (!list.length) return [];
 
-  const realPaths = await realPathsForPlaylist(playlistId, client);
-  const navidromePathFor = (entry) => realPaths.get(String(entry?.id ?? "")) || null;
+  // Which file each entry is, worked out the cheapest way first: an id already
+  // in the store, then the path the entry carries itself (Navidrome sends real
+  // paths only to players configured for them, and a made-up path that lands
+  // on an indexed file of the same name is just as usable), and only then the
+  // admin connection, which can always read a playlist's real paths.
+  const idFor = (entry) => String(entry?.id ?? "");
+  const absoluteById = getMediaPathsForNavidromeSongIds(list.map(idFor));
+  const learned = [];
 
-  if (!state.aurralRoot) {
-    learnRootsFromNavidromePaths(list.map(navidromePathFor).filter(Boolean));
-  }
-
-  const absoluteFor = (entry) => {
-    const path = navidromePathFor(entry);
+  const rebuild = (navidromePath) => {
+    const path = normalizePath(navidromePath);
     if (!path || !state.aurralRoot) return null;
     return joinRoot(state.aurralRoot, navidromeRelativePath(path, state.navidromeRoot));
   };
-  const absolutePaths = list.map(absoluteFor);
+
+  const claimed = [];
+  for (const entry of list) {
+    const id = idFor(entry);
+    if (!id || absoluteById.has(id) || !entry?.path) continue;
+    const absolute = rebuild(entry.path);
+    if (absolute) claimed.push({ id, absolute, title: String(entry?.title || "") });
+  }
+  if (claimed.length) {
+    const indexed = new Map(
+      getCanonicalMediaFilesByPaths(claimed.map((candidate) => candidate.absolute))
+        .map((file) => [file.path, file]),
+    );
+    const titles = getCanonicalTrackTitlesByIds([...indexed.values()].map((file) => file.trackId));
+    const same = (a, b) => String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+    for (const candidate of claimed) {
+      const file = indexed.get(candidate.absolute);
+      // The title has to agree. A made-up path can otherwise land on a real
+      // file with the same name under a different artist.
+      if (file && same(titles.get(Number(file.trackId)) || "", candidate.title)) {
+        absoluteById.set(candidate.id, candidate.absolute);
+        learned.push({ songId: candidate.id, mediaPath: candidate.absolute, libraryId: null });
+      }
+    }
+  }
+
+  const unknown = list.filter((entry) => idFor(entry) && !absoluteById.has(idFor(entry)));
+  if (unknown.length) {
+    const realPaths = await realPathsForPlaylist(playlistId, client);
+    if (!state.aurralRoot) learnRootsFromNavidromePaths([...realPaths.values()]);
+    for (const entry of unknown) {
+      const id = idFor(entry);
+      const absolute = rebuild(realPaths.get(id));
+      if (absolute) {
+        absoluteById.set(id, absolute);
+        learned.push({ songId: id, mediaPath: absolute, libraryId: null });
+      }
+    }
+  }
+  // What this read worked out saves the next one the same work.
+  if (learned.length) rememberNavidromeSongIds(learned);
+
+  const absolutePaths = list.map((entry) => absoluteById.get(idFor(entry)) || null);
   const files = getCanonicalMediaFilesByPaths(absolutePaths.filter(Boolean));
   const fileByPath = new Map(files.map((file) => [file.path, file]));
   const trackIds = [...new Set(files.map((file) => file.trackId))];
