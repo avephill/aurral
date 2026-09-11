@@ -57,6 +57,21 @@ def folder_of(path):
     return "/".join(parts[:-1]) if len(parts) > 1 else ""
 
 
+def looped(path):
+    """A path that walks through the same folder name twice came out of a
+    symlink loop, not off a disc.
+
+    /music/Library/Searows/Searows once pointed back at its own parent, and
+    Navidrome indexed the album underneath it over and over at increasing
+    depth. Those rows look exactly like duplicates - identical recording,
+    identical release group - and on 2026-09-11 they made up 767 of 1,633
+    proposed deletions. Worse, 45 of them had been chosen as the copy to
+    *keep*, which would have deleted the real file and left a phantom.
+    """
+    segments = str(path or "").split("/")[:-1]
+    return len(segments) != len(set(segments))
+
+
 def rank(row):
     """Best first."""
     return (
@@ -69,8 +84,15 @@ def rank(row):
 
 def build(rows):
     groups = defaultdict(list)
+    skipped_loops = 0
     for row in rows:
+        if looped(row["path"]):
+            skipped_loops += 1
+            continue
         groups[(row["rec"], row["rg"])].append(row)
+    if skipped_loops:
+        print(f"ignored {skipped_loops} file(s) on symlink-loop paths; "
+              "fix the loop and rescan, or this is hiding real files")
 
     across, within = [], []
     for (rec, rg), members in groups.items():
