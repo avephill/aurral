@@ -136,6 +136,16 @@ MEDIA_KIND_FIELD = 0x3C
 # The media kinds that mean "music". A Navidrome library holds nothing else,
 # so a rule asking for one of these says nothing and is dropped.
 MEDIA_KINDS_MUSIC = {0x01, 0x1021B1}
+# Only for saying, in a report, what a playlist was asking for.
+MEDIA_KINDS = {
+    0x02: "films",
+    0x04: "podcasts",
+    0x08: "audiobooks",
+    0x20: "music videos",
+    0x40: "TV shows",
+    0x400: "home videos",
+    0xC00000: "books",
+}
 
 GROUP_COUNT = 61      # how many rules belong to a group - relative to its start
 GROUP_LOGIC = 68      # whether they are joined by and or or - relative to its start
@@ -223,6 +233,49 @@ def parse_info(info):
     }
 
 
+def _resolve_media_kinds(node, unsupported):
+    """Fold away the media kind rules that say nothing here.
+
+    iTunes writes nearly every music playlist as "(the media kind is music, or
+    it is a music video) and (what the person asked for)". A Navidrome library
+    holds only music, so that first group is true of everything in it and can
+    go. The same is true of "and it is not a podcast".
+
+    What cannot go is a rule that asks *for* something Navidrome does not
+    hold: a playlist of podcasts is not a playlist of music with a rule
+    removed, so it is reported instead.
+    """
+    conditions = []
+    kinds = []
+    for child in node["conditions"]:
+        if "mediaKind" in child:
+            kinds.append(child)
+        elif "match" in child:
+            resolved = _resolve_media_kinds(child, unsupported)
+            if resolved is not None:
+                conditions.append(resolved)
+        else:
+            conditions.append(child)
+
+    if kinds:
+        music = [kind for kind in kinds if (kind["mediaKind"] in MEDIA_KINDS_MUSIC) != kind["negative"]]
+        if node["match"] == "any" and music:
+            # One of the alternatives is true of everything here, so the whole
+            # group is, whatever else it offers.
+            if not conditions:
+                return None
+        else:
+            for kind in kinds:
+                is_music = kind["mediaKind"] in MEDIA_KINDS_MUSIC
+                if is_music != kind["negative"]:
+                    continue
+                unsupported.append(
+                    f"a rule asking for {MEDIA_KINDS.get(kind['mediaKind'], 'something other than music')}"
+                )
+
+    return {"match": node["match"], "conditions": conditions}
+
+
 def _simplify(node):
     """Fold away the scaffolding iTunes writes around every playlist.
 
@@ -303,11 +356,9 @@ def parse_criteria(criteria):
             continue
 
         if field == MEDIA_KIND_FIELD:
-            kind = _uint32(criteria, int_a_at)
-            if kind not in MEDIA_KINDS_MUSIC:
-                unsupported.append("a rule about something other than music")
-            # Either way the slot is used up.
-            member_read()
+            # What a media kind rule means depends on the company it keeps, so
+            # it is kept as it is and sorted out once the tree is built.
+            add({"mediaKind": _uint32(criteria, int_a_at), "negative": negative})
             offset = int_a_at + RULE_INT_LENGTH
             continue
 
@@ -405,7 +456,8 @@ def parse_criteria(criteria):
         else:
             offset = int_a_at + RULE_INT_LENGTH
 
-    rules = _simplify(root)
+    resolved = _resolve_media_kinds(root, unsupported) or {"match": root["match"], "conditions": []}
+    rules = _simplify(resolved)
     # A playlist whose rules all sit in one group reads better without it.
     while len(rules["conditions"]) == 1 and "match" in rules["conditions"][0]:
         rules = rules["conditions"][0]

@@ -204,10 +204,55 @@ class UnsupportedRules(unittest.TestCase):
             {"field": "genre", "operator": "is", "value": "Classical"},
         ])
 
-    def test_a_media_kind_that_is_not_music_is_reported(self):
+    def test_asking_for_something_that_is_not_music_is_reported(self):
         blob = criteria_blob([{"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x02}])
         _, unsupported = parse_criteria(blob)
-        self.assertIn("other than music", unsupported[0])
+        self.assertIn("films", unsupported[0])
+
+    def test_the_wrapper_itunes_writes_on_every_music_playlist_falls_away(self):
+        # The real shape: "(media kind is music, or is a music video) and
+        # (what the person asked for)".
+        blob = criteria_blob([
+            {"kind": "group", "count": 2, "match": "any"},
+            {"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x01},
+            {"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x20},
+            {"kind": "group", "count": 2, "match": "all"},
+            {"kind": "text", "field": 0x0E, "comparison": 0x02, "value": "roadtrip"},
+            {"kind": "int", "field": 0x19, "comparison": 0x10, "intA": 60},
+        ])
+        rules, unsupported = parse_criteria(blob)
+        self.assertEqual(unsupported, [])
+        self.assertTrue(is_flat(rules))
+        self.assertEqual(rules["conditions"], [
+            {"field": "comment", "operator": "contains", "value": "roadtrip"},
+            {"field": "rating", "operator": "gt", "value": 3},
+        ])
+
+    def test_a_playlist_of_podcasts_is_reported_not_silently_turned_into_music(self):
+        blob = criteria_blob([
+            {"kind": "group", "count": 1, "match": "any"},
+            {"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x04},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Talk"},
+        ])
+        _, unsupported = parse_criteria(blob)
+        self.assertIn("podcasts", unsupported[0])
+
+    def test_the_pair_itunes_writes_on_every_music_playlist_says_nothing(self):
+        # "the media kind is music" and "it is not a music video", which is
+        # what iTunes puts on all of them.
+        blob = criteria_blob([
+            {"kind": "int", "field": 0x3C, "comparison": 0x01, "intA": 0x01},
+            {"kind": "int", "field": 0x3C, "comparison": 0x01, "sign": 2, "intA": 0x20},
+            {"kind": "text", "field": 0x08, "comparison": 0x01, "value": "Folk"},
+        ])
+        rules, unsupported = parse_criteria(blob)
+        self.assertEqual(unsupported, [])
+        self.assertEqual(rules["conditions"], [{"field": "genre", "operator": "is", "value": "Folk"}])
+
+    def test_excluding_music_itself_is_reported(self):
+        blob = criteria_blob([{"kind": "int", "field": 0x3C, "comparison": 0x01, "sign": 2, "intA": 0x01}])
+        _, unsupported = parse_criteria(blob)
+        self.assertEqual(len(unsupported), 1)
 
 
 class Groups(unittest.TestCase):
