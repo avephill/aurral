@@ -2,11 +2,15 @@ import {
   getData,
   postData,
   putData,
-  patchData,
   deleteData,
   buildAuthenticatedApiUrl,
 } from "../core.js";
 import { queryClient, queryKeys } from "../../../queryClient.js";
+import {
+  getNavidromePlaylists,
+  getPlaylistProvider,
+  isNavidromePlaylistStore,
+} from "../playlistProviders.js";
 
 export const getFlowTrackStreamUrl = (jobId) =>
   buildAuthenticatedApiUrl(`/playlists/stream/${encodeURIComponent(jobId)}`);
@@ -41,48 +45,24 @@ export const generateFlowArtwork = (playlistId) =>
     `/playlists/artwork/${encodeURIComponent(playlistId)}/generate`,
   );
 
-// Where hand-made playlists live. "aurral" is the built-in store under
-// /playlists; "navidrome" reads and edits the signed-in user's Navidrome
-// playlists directly, so the shared-playlist helpers below route there and
-// every "Add to playlist" menu in the app follows without knowing.
-let playlistStoreMode = "aurral";
-
-export const setPlaylistStoreMode = (mode) => {
-  playlistStoreMode = mode === "navidrome" ? "navidrome" : "aurral";
-};
-
-export const getPlaylistStoreMode = () => playlistStoreMode;
-
-export const isNavidromePlaylistStore = () => playlistStoreMode === "navidrome";
-
-export const getNavidromePlaylistStatus = ({ signal } = {}) =>
-  getData("/navidrome-playlists/status", { signal });
-
-export const getNavidromePlaylists = ({ signal } = {}) =>
-  getData("/navidrome-playlists", { signal });
-
-export const getNavidromePlaylist = (playlistId, { signal } = {}) =>
-  getData(`/navidrome-playlists/${encodeURIComponent(playlistId)}`, { signal });
-
-export const createNavidromePlaylist = (payload) => postData("/navidrome-playlists", payload);
-
-export const addNavidromePlaylistTracks = (playlistId, payload) =>
-  postData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/tracks`, payload);
-
-export const removeNavidromePlaylistEntry = (playlistId, index, songId = null) =>
-  deleteData(
-    `/navidrome-playlists/${encodeURIComponent(playlistId)}/entries/${encodeURIComponent(index)}`,
-    { params: songId ? { songId } : {} },
-  );
-
-export const renameNavidromePlaylist = (playlistId, name) =>
-  patchData(`/navidrome-playlists/${encodeURIComponent(playlistId)}`, { name });
-
-export const deleteNavidromePlaylist = (playlistId) =>
-  deleteData(`/navidrome-playlists/${encodeURIComponent(playlistId)}`);
-
-export const invalidateNavidromePlaylists = () =>
-  queryClient.invalidateQueries({ queryKey: queryKeys.navidromePlaylistsRoot });
+// Hand-made playlists live either in Aurral or in Navidrome. Which store is
+// in use, and how to talk to each, is in ../playlistProviders.js; the helpers
+// below ask the current provider rather than branching on the mode.
+export {
+  PLAYLIST_STORES,
+  addNavidromePlaylistTracks,
+  createNavidromePlaylist,
+  deleteNavidromePlaylist,
+  getNavidromePlaylist,
+  getNavidromePlaylistStatus,
+  getNavidromePlaylists,
+  getPlaylistStoreMode,
+  invalidateNavidromePlaylists,
+  isNavidromePlaylistStore,
+  removeNavidromePlaylistEntry,
+  renameNavidromePlaylist,
+  setPlaylistStoreMode,
+} from "../playlistProviders.js";
 
 const fetchPlaylistStatus = async (signal) => {
   const status = await getData("/playlists/status", { signal });
@@ -138,14 +118,7 @@ export const convertFlowToStaticPlaylist = (flowId, payload = {}) =>
     payload,
   );
 
-export const createSharedPlaylist = async (payload) => {
-  if (isNavidromePlaylistStore()) {
-    const result = await createNavidromePlaylist(payload);
-    invalidateNavidromePlaylists();
-    return result?.playlist || result;
-  }
-  return postData("/playlists/shared-playlists", payload);
-};
+export const createSharedPlaylist = (payload) => getPlaylistProvider().create(payload);
 
 export const setFlowEnabled = (flowId, enabled) =>
   putData(`/playlists/flows/${flowId}/enabled`, {
@@ -158,40 +131,13 @@ export const importSharedPlaylist = (payload) =>
     payload,
   );
 
-export const updateSharedPlaylist = async (playlistId, payload) => {
-  if (isNavidromePlaylistStore()) {
-    const result = await renameNavidromePlaylist(playlistId, payload?.name);
-    invalidateNavidromePlaylists();
-    return result?.playlist || result;
-  }
-  return putData(
-    `/playlists/shared-playlists/${playlistId}`,
-    payload,
-  );
-};
+export const updateSharedPlaylist = (playlistId, payload) =>
+  getPlaylistProvider().rename(playlistId, payload);
 
-export const addSharedPlaylistTracks = async (playlistId, payload) => {
-  if (isNavidromePlaylistStore()) {
-    const result = await addNavidromePlaylistTracks(playlistId, payload);
-    invalidateNavidromePlaylists();
-    return result;
-  }
-  return postData(
-    `/playlists/shared-playlists/${playlistId}/tracks`,
-    payload,
-  );
-};
+export const addSharedPlaylistTracks = (playlistId, payload) =>
+  getPlaylistProvider().addTracks(playlistId, payload);
 
-export const deleteSharedPlaylist = async (playlistId) => {
-  if (isNavidromePlaylistStore()) {
-    const result = await deleteNavidromePlaylist(playlistId);
-    invalidateNavidromePlaylists();
-    return result;
-  }
-  return deleteData(
-    `/playlists/shared-playlists/${playlistId}`,
-  );
-};
+export const deleteSharedPlaylist = (playlistId) => getPlaylistProvider().remove(playlistId);
 
 export const deleteSharedPlaylistTrack = (playlistId, jobId) =>
   deleteData(
