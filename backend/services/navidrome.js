@@ -579,6 +579,28 @@ export class NavidromeClient {
     return limit > 0 ? list.slice(0, limit) : list;
   }
 
+  /**
+   * Move one playlist entry. `rowId` is the playlist-track row's own id, and
+   * `toIndex` is where the entry should end up, counting from zero, in the
+   * list as it will read afterwards.
+   *
+   * Navidrome takes the entry out first and then inserts it before the
+   * position given, so the value it wants is one past the destination.
+   */
+  async movePlaylistTrack(playlistId, rowId, toIndex) {
+    const target = Math.max(0, Number(toIndex) || 0);
+    return this._nativeRequest(
+      "PUT",
+      `/api/playlist/${encodeURIComponent(String(playlistId))}/tracks/${encodeURIComponent(String(rowId))}`,
+      { insert_before: String(target + 1) },
+    );
+  }
+
+  /** The playlist record itself, including its owner and any smart rules. */
+  async getPlaylistRecord(playlistId) {
+    return this._nativeRequest("GET", `/api/playlist/${encodeURIComponent(String(playlistId))}`);
+  }
+
   /** One song read through the native API, which carries its real path. */
   async getSongNative(id) {
     const song = await this._nativeRequest("GET", `/api/song/${encodeURIComponent(String(id || ""))}`);

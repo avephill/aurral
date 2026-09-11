@@ -1,7 +1,18 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ListMusic, Pause, Pencil, Play, Plus, Shuffle, Trash2, X } from "lucide-react";
+import {
+  GripVertical,
+  ListMusic,
+  Pause,
+  Pencil,
+  Play,
+  Plus,
+  Search,
+  Shuffle,
+  Trash2,
+  X,
+} from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import { CreatePlaylistModal, ModalShell } from "../components/PlaylistModals";
 import TooltipButton from "../components/TooltipButton";
@@ -19,6 +30,8 @@ import {
   getNavidromePlaylistStatus,
   getNavidromePlaylists,
   invalidateNavidromePlaylists,
+  moveNavidromePlaylistEntry,
+  removeNavidromePlaylistEntries,
   removeNavidromePlaylistEntry,
   renameNavidromePlaylist,
 } from "../utils/api/endpoints/playlists.js";
@@ -29,6 +42,10 @@ import "./navidromePlaylists.css";
  * user. Everything on this page is a live read of Navidrome; edits go
  * straight back, so a Navidrome client on the phone sees them at once.
  */
+
+// Long playlists are rendered a window at a time. Dad's largest is twelve
+// thousand tracks, and laying that out at once takes seconds.
+const TRACK_WINDOW = 300;
 
 const pluralize = (count, noun) => `${count} ${noun}${count === 1 ? "" : "s"}`;
 
@@ -82,6 +99,12 @@ export default function NavidromePlaylistsPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [removingIndex, setRemovingIndex] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [selectedIndexes, setSelectedIndexes] = useState(() => new Set());
+  const [visibleLimit, setVisibleLimit] = useState(TRACK_WINDOW);
+  const [dragIndex, setDragIndex] = useState(null);
+  const [dropIndex, setDropIndex] = useState(null);
+  const lastClickedIndex = useRef(null);
 
   const status = useQuery({
     queryKey: queryKeys.navidromePlaylistStatus,
@@ -141,6 +164,109 @@ export default function NavidromePlaylistsPage() {
       playQueue(playable, { startIndex, shuffle, source, updateShufflePreference: false });
     },
     [playQueue, selected, selectedId, showError, source],
+  );
+
+  const tracks = useMemo(
+    () => (Array.isArray(selected?.tracks) ? selected.tracks : []),
+    [selected],
+  );
+
+  // Searching inside a playlist. Everything is already loaded, so this is a
+  // plain filter; each row keeps the position it holds in the real playlist.
+  const query = filter.trim().toLowerCase();
+  const visibleTracks = useMemo(() => {
+    if (!query) return tracks;
+    return tracks.filter((track) => [track.title, track.artistName, track.albumTitle]
+      .some((value) => String(value || "").toLowerCase().includes(query)));
+  }, [tracks, query]);
+  const windowedTracks = useMemo(
+    () => visibleTracks.slice(0, visibleLimit),
+    [visibleTracks, visibleLimit],
+  );
+
+  // Dragging a row onto another only makes sense against the whole playlist:
+  // with a filter on, the row above is not the row above.
+  const canReorder = canEdit && !query;
+  const selectedCount = selectedIndexes.size;
+
+  // A different playlist, or a different filter, starts again from the top
+  // with nothing selected.
+  useEffect(() => {
+    setSelectedIndexes(new Set());
+    setFilter("");
+    setVisibleLimit(TRACK_WINDOW);
+    lastClickedIndex.current = null;
+  }, [selectedId]);
+
+  useEffect(() => {
+    setVisibleLimit(TRACK_WINDOW);
+  }, [query]);
+
+  const toggleSelected = useCallback((index, { range = false } = {}) => {
+    setSelectedIndexes((current) => {
+      const next = new Set(current);
+      const anchorIndex = lastClickedIndex.current;
+      if (range && anchorIndex !== null) {
+        // Shift-click takes everything between, as a list does everywhere.
+        const positions = visibleTracks.map((track) => track.index);
+        const from = positions.indexOf(anchorIndex);
+        const to = positions.indexOf(index);
+        if (from !== -1 && to !== -1) {
+          const [start, end] = from < to ? [from, to] : [to, from];
+          for (let step = start; step <= end; step += 1) next.add(positions[step]);
+          return next;
+        }
+      }
+      if (next.has(index)) next.delete(index);
+      else next.add(index);
+      return next;
+    });
+    lastClickedIndex.current = index;
+  }, [visibleTracks]);
+
+  const selectAllVisible = useCallback(() => {
+    setSelectedIndexes(new Set(visibleTracks.map((track) => track.index)));
+  }, [visibleTracks]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIndexes(new Set());
+    lastClickedIndex.current = null;
+  }, []);
+
+  const handleRemoveSelected = async () => {
+    if (!selectedId || !selectedCount) return;
+    const byIndex = new Map(tracks.map((track) => [track.index, track]));
+    const entries = [...selectedIndexes]
+      .sort((a, b) => a - b)
+      .map((index) => ({ index, songId: byIndex.get(index)?.navidromeId || null }));
+    setBusy("remove-selected");
+    try {
+      await removeNavidromePlaylistEntries(selectedId, entries);
+      await refreshAll();
+      clearSelection();
+      showSuccess(`Removed ${pluralize(entries.length, "track")}`);
+    } catch (error) {
+      showError(errorMessage(error, "Could not remove the tracks"));
+      if (error?.response?.status === 409) detail.refetch();
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const moveTrack = useCallback(
+    async (fromIndex, toIndex) => {
+      if (fromIndex === toIndex || toIndex < 0 || toIndex >= tracks.length) return;
+      const track = tracks.find((entry) => entry.index === fromIndex);
+      try {
+        await moveNavidromePlaylistEntry(selectedId, fromIndex, toIndex, track?.navidromeId || null);
+        await refreshAll();
+        clearSelection();
+      } catch (error) {
+        showError(errorMessage(error, "Could not reorder the playlist"));
+        if (error?.response?.status === 409) detail.refetch();
+      }
+    },
+    [clearSelection, detail, refreshAll, selectedId, showError, tracks],
   );
 
   const handleCreate = async (name) => {
@@ -386,72 +512,186 @@ export default function NavidromePlaylistsPage() {
                 </div>
               </div>
 
-              {selected.tracks?.length ? (
-                <ol className="nd-playlists__tracks">
-                  {selected.tracks.map((track) => {
-                    const playable = toPlayable(track, selectedId);
-                    const isCurrent = Boolean(
-                      playable && currentTrack && String(currentTrack.id) === playable.id,
-                    );
-                    return (
-                      <li
-                        key={`${track.index}-${track.navidromeId || track.trackId}`}
-                        className={`nd-playlists__track${isCurrent ? " is-current" : ""}${track.available ? "" : " is-unavailable"}`}
-                      >
-                        <span className="nd-playlists__track-number">
-                          {isCurrent && isPlaying ? (
-                            <span className="nd-playlists__playing" aria-label="Playing" />
-                          ) : (
-                            track.index + 1
-                          )}
-                        </span>
+              {tracks.length ? (
+                <>
+                  <div className="nd-playlists__toolbar">
+                    <label className="nd-playlists__search">
+                      <Search className="artist-icon-xs" aria-hidden="true" />
+                      <input
+                        type="search"
+                        value={filter}
+                        onChange={(event) => setFilter(event.target.value)}
+                        placeholder="Search this playlist"
+                        aria-label="Search this playlist"
+                      />
+                      {filter ? (
                         <button
                           type="button"
-                          className="nd-playlists__track-play"
-                          onClick={() => (isCurrent ? togglePlayPause() : playFrom(track, false))}
-                          disabled={!track.available}
-                          aria-label={isCurrent && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                          className="nd-playlists__search-clear"
+                          onClick={() => setFilter("")}
+                          aria-label="Clear search"
                         >
-                          {isCurrent && isPlaying ? (
-                            <Pause className="artist-icon-xs" aria-hidden="true" />
-                          ) : (
-                            <Play className="artist-icon-xs" aria-hidden="true" />
-                          )}
+                          <X className="artist-icon-xs" aria-hidden="true" />
                         </button>
-                        <span className="nd-playlists__track-copy">
-                          <span className="nd-playlists__track-title">{track.title || "Untitled"}</span>
-                          <span className="nd-playlists__track-detail">
-                            {[track.artistName, track.albumTitle].filter(Boolean).join(" · ")}
-                            {track.available ? "" : " · not on this server"}
-                          </span>
-                        </span>
-                        <span className="nd-playlists__track-rating">
-                          {track.available ? (
-                            <TrackRating trackId={track.trackId} albumId={track.albumId} title={track.title} size="sm" />
-                          ) : null}
-                        </span>
-                        <span className="nd-playlists__track-duration">
-                          {track.durationMs ? formatTrackDuration(track.durationMs) : ""}
-                        </span>
-                        {canEdit ? (
-                          <TooltipButton
-                            type="button"
-                            className="btn btn-icon btn-xs btn-ghost nd-playlists__track-remove"
-                            label="Remove from playlist"
-                            onClick={() => handleRemove(track)}
-                            disabled={removingIndex === track.index}
+                      ) : null}
+                    </label>
+                    <span className="nd-playlists__toolbar-count">
+                      {query
+                        ? `${pluralize(visibleTracks.length, "match")} of ${tracks.length}`
+                        : pluralize(tracks.length, "track")}
+                    </span>
+                  </div>
+
+                  {canEdit && selectedCount ? (
+                    <div className="nd-playlists__selection" role="status">
+                      <span>{pluralize(selectedCount, "track")} selected</span>
+                      <button
+                        type="button"
+                        className="btn btn-ghost-danger btn-xs"
+                        onClick={handleRemoveSelected}
+                        disabled={busy === "remove-selected"}
+                      >
+                        {busy === "remove-selected" ? (
+                          <DotLoader size="xs" label={null} />
+                        ) : (
+                          <Trash2 className="artist-icon-xs" aria-hidden="true" />
+                        )}
+                        Remove
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-xs" onClick={selectAllVisible}>
+                        Select all{query ? " matching" : ""}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-xs" onClick={clearSelection}>
+                        Clear
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {visibleTracks.length ? (
+                    <ol className="nd-playlists__tracks">
+                      {windowedTracks.map((track) => {
+                        const playable = toPlayable(track, selectedId);
+                        const isCurrent = Boolean(
+                          playable && currentTrack && String(currentTrack.id) === playable.id,
+                        );
+                        const isSelected = selectedIndexes.has(track.index);
+                        const isDropTarget = dropIndex === track.index && dragIndex !== track.index;
+                        return (
+                          <li
+                            key={`${track.index}-${track.navidromeId || track.trackId}`}
+                            className={`nd-playlists__track${isCurrent ? " is-current" : ""}${track.available ? "" : " is-unavailable"}${isSelected ? " is-selected" : ""}${isDropTarget ? " is-drop-target" : ""}${dragIndex === track.index ? " is-dragging" : ""}`}
+                            draggable={canReorder}
+                            onDragStart={canReorder ? () => setDragIndex(track.index) : undefined}
+                            onDragOver={canReorder ? (event) => {
+                              event.preventDefault();
+                              setDropIndex(track.index);
+                            } : undefined}
+                            onDrop={canReorder ? (event) => {
+                              event.preventDefault();
+                              if (dragIndex !== null) moveTrack(dragIndex, track.index);
+                              setDragIndex(null);
+                              setDropIndex(null);
+                            } : undefined}
+                            onDragEnd={canReorder ? () => {
+                              setDragIndex(null);
+                              setDropIndex(null);
+                            } : undefined}
+                            onKeyDown={canReorder ? (event) => {
+                              // Alt with an arrow moves the row, for anyone not
+                              // dragging with a mouse.
+                              if (!event.altKey) return;
+                              if (event.key === "ArrowUp") {
+                                event.preventDefault();
+                                moveTrack(track.index, track.index - 1);
+                              } else if (event.key === "ArrowDown") {
+                                event.preventDefault();
+                                moveTrack(track.index, track.index + 1);
+                              }
+                            } : undefined}
                           >
-                            {removingIndex === track.index ? (
-                              <DotLoader size="xs" label={null} />
-                            ) : (
-                              <X className="artist-icon-xs" aria-hidden="true" />
-                            )}
-                          </TooltipButton>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
+                            {canEdit ? (
+                              <input
+                                type="checkbox"
+                                className="nd-playlists__track-select"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                onClick={(event) => toggleSelected(track.index, { range: event.shiftKey })}
+                                aria-label={`Select ${track.title || "track"}`}
+                              />
+                            ) : null}
+                            {canReorder ? (
+                              <span className="nd-playlists__track-grip" aria-hidden="true">
+                                <GripVertical className="artist-icon-xs" />
+                              </span>
+                            ) : null}
+                            <span className="nd-playlists__track-number">
+                              {isCurrent && isPlaying ? (
+                                <span className="nd-playlists__playing" aria-label="Playing" />
+                              ) : (
+                                track.index + 1
+                              )}
+                            </span>
+                            <button
+                              type="button"
+                              className="nd-playlists__track-play"
+                              onClick={() => (isCurrent ? togglePlayPause() : playFrom(track, false))}
+                              disabled={!track.available}
+                              aria-label={isCurrent && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                            >
+                              {isCurrent && isPlaying ? (
+                                <Pause className="artist-icon-xs" aria-hidden="true" />
+                              ) : (
+                                <Play className="artist-icon-xs" aria-hidden="true" />
+                              )}
+                            </button>
+                            <span className="nd-playlists__track-copy">
+                              <span className="nd-playlists__track-title">{track.title || "Untitled"}</span>
+                              <span className="nd-playlists__track-detail">
+                                {[track.artistName, track.albumTitle].filter(Boolean).join(" · ")}
+                                {track.available ? "" : " · not on this server"}
+                              </span>
+                            </span>
+                            <span className="nd-playlists__track-rating">
+                              {track.available ? (
+                                <TrackRating trackId={track.trackId} albumId={track.albumId} title={track.title} size="sm" />
+                              ) : null}
+                            </span>
+                            <span className="nd-playlists__track-duration">
+                              {track.durationMs ? formatTrackDuration(track.durationMs) : ""}
+                            </span>
+                            {canEdit ? (
+                              <TooltipButton
+                                type="button"
+                                className="btn btn-icon btn-xs btn-ghost nd-playlists__track-remove"
+                                label="Remove from playlist"
+                                onClick={() => handleRemove(track)}
+                                disabled={removingIndex === track.index}
+                              >
+                                {removingIndex === track.index ? (
+                                  <DotLoader size="xs" label={null} />
+                                ) : (
+                                  <X className="artist-icon-xs" aria-hidden="true" />
+                                )}
+                              </TooltipButton>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  ) : (
+                    <p className="nd-playlists__empty">Nothing in this playlist matches “{filter}”.</p>
+                  )}
+
+                  {visibleTracks.length > windowedTracks.length ? (
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm nd-playlists__more"
+                      onClick={() => setVisibleLimit((current) => current + TRACK_WINDOW)}
+                    >
+                      Show more ({visibleTracks.length - windowedTracks.length} left)
+                    </button>
+                  ) : null}
+                </>
               ) : (
                 <p className="nd-playlists__empty">
                   This playlist is empty. Use Add to playlist on any track to fill it.

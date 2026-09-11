@@ -59,6 +59,8 @@ export {
   getPlaylistStoreMode,
   invalidateNavidromePlaylists,
   isNavidromePlaylistStore,
+  moveNavidromePlaylistEntry,
+  removeNavidromePlaylistEntries,
   removeNavidromePlaylistEntry,
   renameNavidromePlaylist,
   setPlaylistStoreMode,

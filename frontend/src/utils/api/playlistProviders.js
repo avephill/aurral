@@ -56,6 +56,15 @@ export const removeNavidromePlaylistEntry = (playlistId, index, songId = null) =
     + (songId ? `?songId=${encodeURIComponent(songId)}` : ""),
   );
 
+export const removeNavidromePlaylistEntries = (playlistId, entries) =>
+  postData(`/navidrome-playlists/${encodeURIComponent(playlistId)}/entries/remove`, { entries });
+
+export const moveNavidromePlaylistEntry = (playlistId, fromIndex, toIndex, songId = null) =>
+  putData(
+    `/navidrome-playlists/${encodeURIComponent(playlistId)}/entries/${encodeURIComponent(fromIndex)}/position`,
+    { toIndex, songId },
+  );
+
 export const renameNavidromePlaylist = (playlistId, name) =>
   patchData(`/navidrome-playlists/${encodeURIComponent(playlistId)}`, { name });
 
@@ -85,6 +94,9 @@ const aurralPlaylistProvider = {
   remove: (playlistId) => deleteData(`/playlists/shared-playlists/${playlistId}`),
   removeEntry: (playlistId, { jobId } = {}) =>
     deleteData(`/playlists/shared-playlists/${playlistId}/tracks/${jobId}`),
+  // Aurral's own store keeps playlists in insertion order and has no move.
+  canReorder: false,
+  moveEntry: null,
   invalidate: () => queryClient.invalidateQueries({ queryKey: queryKeys.playlistStatus }),
 };
 
@@ -111,6 +123,11 @@ const navidromePlaylistProvider = {
   remove: (playlistId) => withInvalidate(() => deleteNavidromePlaylist(playlistId)),
   removeEntry: (playlistId, { index, songId = null } = {}) =>
     withInvalidate(() => removeNavidromePlaylistEntry(playlistId, index, songId)),
+  removeEntries: (playlistId, entries) =>
+    withInvalidate(() => removeNavidromePlaylistEntries(playlistId, entries)),
+  canReorder: true,
+  moveEntry: (playlistId, { fromIndex, toIndex, songId = null } = {}) =>
+    withInvalidate(() => moveNavidromePlaylistEntry(playlistId, fromIndex, toIndex, songId)),
   invalidate: invalidateNavidromePlaylists,
 };
 

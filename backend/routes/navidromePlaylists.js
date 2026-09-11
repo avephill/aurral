@@ -44,6 +44,38 @@ function userClient(req, res) {
   return client;
 }
 
+/**
+ * Reordering is the one edit Subsonic cannot express, so it goes through the
+ * admin connection. That connection can edit anybody's playlist, so ownership
+ * is checked here rather than being left to Navidrome.
+ */
+async function adminClientForOwnedPlaylist(req, res, playlistId) {
+  const admin = getAdminNavidromeClient();
+  if (!admin?.isConfigured?.()) {
+    res.status(503).json({
+      error: "Navidrome admin connection not configured",
+      message: "Reordering needs the Navidrome connection in Settings.",
+    });
+    return null;
+  }
+  let record = null;
+  try {
+    record = await admin.getPlaylistRecord(playlistId);
+  } catch (error) {
+    if (Number(error?.response?.status) === 404) {
+      res.status(404).json({ error: "Playlist not found" });
+      return null;
+    }
+    throw error;
+  }
+  const owner = String(record?.ownerName || "");
+  if (owner.toLowerCase() !== String(req.user?.username || "").toLowerCase()) {
+    res.status(403).json({ error: "This playlist belongs to someone else" });
+    return null;
+  }
+  return admin;
+}
+
 function toPlaylistSummary(playlist, username) {
   const owner = String(playlist?.owner || "");
   return {
@@ -225,6 +257,79 @@ router.delete("/:id/entries/:index", noCache, async (req, res) => {
     return res.json({ removed: 1 });
   } catch (error) {
     return sendNavidromeError(res, error, "Could not remove from the playlist in Navidrome");
+  }
+});
+
+// Removing several at once. Subsonic takes every position in one call and
+// applies them against the list as it was, so the positions do not shift
+// under each other.
+router.post("/:id/entries/remove", noCache, async (req, res) => {
+  const client = userClient(req, res);
+  if (!client) return undefined;
+  const entries = (Array.isArray(req.body?.entries) ? req.body.entries : [])
+    .map((entry) => ({
+      index: Number(entry?.index),
+      songId: String(entry?.songId || "").trim(),
+    }))
+    .filter((entry) => Number.isInteger(entry.index) && entry.index >= 0);
+  if (!entries.length) return res.status(400).json({ error: "entries are required" });
+  if (entries.length > MAX_TRACKS_PER_REQUEST) {
+    return res.status(400).json({ error: `At most ${MAX_TRACKS_PER_REQUEST} entries at a time` });
+  }
+  try {
+    const playlist = await client.getSubsonicPlaylist(req.params.id);
+    if (!playlist) return res.status(404).json({ error: "Playlist not found" });
+    for (const entry of entries) {
+      const found = playlist.entry[entry.index];
+      if (!found) return res.status(404).json({ error: "Entry not found" });
+      if (entry.songId && String(found.id) !== entry.songId) {
+        return res.status(409).json({
+          error: "Playlist changed",
+          message: "This playlist was edited elsewhere. Reload it and try again.",
+        });
+      }
+    }
+    const removed = await client.removePlaylistEntries(
+      req.params.id,
+      entries.map((entry) => entry.index),
+    );
+    return res.json({ removed });
+  } catch (error) {
+    return sendNavidromeError(res, error, "Could not remove from the playlist in Navidrome");
+  }
+});
+
+// Moving an entry. The caller says where it is now, where it should go, and
+// which song it saw there, so a playlist edited elsewhere is left alone.
+router.put("/:id/entries/:index/position", noCache, async (req, res) => {
+  if (!isNavidromePlaylistsEnabled()) {
+    return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  const fromIndex = Number(req.params.index);
+  const toIndex = Number(req.body?.toIndex);
+  if (!Number.isInteger(fromIndex) || fromIndex < 0) return res.status(400).json({ error: "Invalid entry index" });
+  if (!Number.isInteger(toIndex) || toIndex < 0) return res.status(400).json({ error: "toIndex is required" });
+  const expectedSongId = String(req.body?.songId || "").trim();
+  try {
+    const admin = await adminClientForOwnedPlaylist(req, res, req.params.id);
+    if (!admin) return undefined;
+    const rows = await admin.getPlaylistTracks(req.params.id);
+    if (fromIndex >= rows.length || toIndex >= rows.length) {
+      return res.status(400).json({ error: "Position is outside the playlist" });
+    }
+    if (fromIndex === toIndex) return res.json({ moved: false });
+    const row = rows[fromIndex];
+    const songId = String(row?.mediaFileId ?? row?.mediaFile?.id ?? "");
+    if (expectedSongId && songId !== expectedSongId) {
+      return res.status(409).json({
+        error: "Playlist changed",
+        message: "This playlist was edited elsewhere. Reload it and try again.",
+      });
+    }
+    await admin.movePlaylistTrack(req.params.id, row.id, toIndex);
+    return res.json({ moved: true, fromIndex, toIndex });
+  } catch (error) {
+    return sendNavidromeError(res, error, "Could not reorder the playlist in Navidrome");
   }
 });
 
