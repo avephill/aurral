@@ -349,7 +349,116 @@ def match_all(itunes, nav):
             results[pid] = {"nav_id": row["id"], "tier": tier, "ambiguous": ambiguous}
         else:
             results[pid] = {"nav_id": None, "tier": "unmatched", "ambiguous": False}
+
+    claim_album_leftovers(itunes, results, nav)
     return results
+
+
+_TRACK_NO = re.compile(r"^track\s*(\d+)$")
+_ARTIST_TAIL = re.compile(r"\s+-\s+.*$")
+
+
+def _title_forms(name, artist):
+    """The ways this title could reasonably be written. iTunes files a
+    compilation track as 'Title - Artist ', so the part before the dash is a
+    second reading of the same title rather than a different song."""
+    forms = {norm_bare(name) or ""}
+    stripped = _ARTIST_TAIL.sub("", name or "")
+    if stripped and stripped != name:
+        forms.add(norm_bare(stripped) or "")
+    if artist:
+        tail = re.sub(re.escape(artist) + r"\s*$", "", name or "", flags=re.I).strip(" -")
+        if tail:
+            forms.add(norm_bare(tail) or "")
+    return {f for f in forms if f}
+
+
+def _leftover_score(forms, cand):
+    """How much a free slot's title looks like this one. Containment counts as
+    strongly as a near-exact ratio: 'La Llorona' holds 'Liorona' badly but
+    'Fée Clochette' sits inside 'La Fée Clochette' exactly."""
+    target = cand["b_title"] or cand["n_title"]
+    if not target:
+        return 0.0
+    best = 0.0
+    for form in forms:
+        ratio = SequenceMatcher(None, form, target).ratio()
+        if form in target or target in form:
+            ratio = max(ratio, 0.90)
+        best = max(best, ratio)
+    return best
+
+
+def claim_album_leftovers(itunes, results, nav, *, floor=0.60, margin=0.15, tol=3.0):
+    """T11, run once the per-track tiers have finished.
+
+    When part of an album matched, the album is on the server, and the only
+    candidates left for its stragglers are the few tracks of that album nothing
+    has claimed. That is a far smaller pool than the library, so a title the
+    other tiers could not place - a typo, a dropped article, an accent - becomes
+    decidable.
+
+    Length alone is not enough: two tracks on one record often run the same
+    number of seconds, and picking by duration would file 'The Black Page #1'
+    as 'How Could I Be Such a Fool'. The title has to agree as well.
+    """
+    nav_by_id = {r["id"]: r for r in nav}
+    nav_by_album = defaultdict(list)
+    for r in nav:
+        nav_by_album[r["album_id"]].append(r)
+    claimed = {r["nav_id"] for r in results.values() if r["nav_id"]}
+
+    albums = defaultdict(lambda: ([], []))
+    for pid, t in itunes.items():
+        album = norm_album(t.get("Album"))
+        if not album:
+            continue
+        key = (norm_artist(t.get("Album Artist") or t.get("Artist")), album)
+        albums[key][0 if results[pid]["nav_id"] else 1].append(pid)
+
+    proposals = []
+    for matched, unmatched in albums.values():
+        if not matched or not unmatched:
+            continue
+        landed = Counter(nav_by_id[results[p]["nav_id"]]["album_id"] for p in matched)
+        free = [r for r in nav_by_album[landed.most_common(1)[0][0]] if r["id"] not in claimed]
+        if not free:
+            continue
+        for pid in unmatched:
+            t = itunes[pid]
+            dur = (t.get("Total Time") or 0) / 1000.0
+            near = [c for c in free if abs(c["duration"] - dur) <= tol]
+            if not near:
+                continue
+            forms = _title_forms(t.get("Name"), t.get("Artist"))
+            if not forms:
+                continue
+            scored = sorted(((_leftover_score(forms, c), c) for c in near), key=lambda sc: -sc[0])
+            best, cand = scored[0]
+            runner = scored[1][0] if len(scored) > 1 else 0.0
+            if best < floor or (len(scored) > 1 and best - runner < margin):
+                continue
+            # 'Track 09' and 'Track 17' score alike and are not the same track;
+            # nothing but the number distinguishes them, and it disagrees.
+            left = _TRACK_NO.match(next(iter(forms)))
+            right = _TRACK_NO.match(cand["b_title"] or "")
+            if left and right and left.group(1) != right.group(1):
+                continue
+            proposals.append((best, pid, cand))
+
+    # Best first, so two stragglers wanting one slot resolve in favour of the
+    # better reading rather than whichever came up first.
+    proposals.sort(key=lambda p: -p[0])
+    taken = set()
+    for score, pid, cand in proposals:
+        if cand["id"] in claimed or cand["id"] in taken:
+            continue
+        taken.add(cand["id"])
+        results[pid] = {
+            "nav_id": cand["id"],
+            "tier": "T11 free slot on a part-matched album",
+            "ambiguous": score < 0.75,
+        }
 
 
 # --------------------------------------------------------------------------- reporting
