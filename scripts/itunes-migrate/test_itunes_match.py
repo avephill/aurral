@@ -248,3 +248,39 @@ class AlbumAndLength(unittest.TestCase):
         results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
         self.run_pass(itunes, results, nav)
         self.assertIsNone(results["p1"]["nav_id"])
+
+
+    def test_a_label_name_in_front_does_not_hide_the_record(self):
+        # "A Putumayo Blend: Music From the Coffee Lands" is the same disc his
+        # library calls "Music of the Coffee Lands"; the names differ at the
+        # front, where a prefix test sees nothing.
+        nav = [nav_row("n1", "Song", "Various", "A Putumayo Blend: Music From the Coffee Lands", 200)]
+        itunes = {"p1": itunes_track("Track 01", "Putumayo Presents", "Music of the Coffee Lands", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")
+
+    def test_a_composer_in_front_does_not_hide_the_record(self):
+        nav = [nav_row("n1", "Hallelujah", "George Frideric Handel", "The Messiah (Highlights)", 200)]
+        itunes = {"p1": itunes_track("Track 01", "George Frideric Handel",
+                                     "Handel: Messiah (Highlights)", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")
+
+    def test_records_sharing_only_a_common_word_are_not_the_same(self):
+        nav = [nav_row("n1", "Song", "Band", "Abbey Road", 200)]
+        itunes = {"p1": itunes_track("Track 01", "Band", "Let It Be", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertIsNone(results["p1"]["nav_id"])
+
+
+    def test_a_typo_at_the_end_is_found_without_sharing_an_opening(self):
+        # "Feast Of Wine" for "Feast of Wire": the names diverge inside the
+        # first dozen characters, where the old bucketing looked.
+        nav = [nav_row("n1", "Sunken Waltz", "Calexico", "Feast of Wire", 200)]
+        itunes = {"p1": itunes_track("Track 01", "Calexico", "Feast Of Wine", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")

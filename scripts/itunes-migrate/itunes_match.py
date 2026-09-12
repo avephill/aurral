@@ -351,12 +351,155 @@ def match_all(itunes, nav):
             results[pid] = {"nav_id": None, "tier": "unmatched", "ambiguous": False}
 
     claim_album_by_album_and_length(itunes, results, nav)
+    claim_album_by_duration_fingerprint(itunes, results, nav)
     claim_album_leftovers(itunes, results, nav)
     return results
 
 
+FINGERPRINT_MIN_TRACKS = 3     # fewer than this is not a fingerprint
+# "Various Artists" is not an artist; its catalogue is the whole library, and
+# matching a rip against it by length alone put a Boyz II Men Christmas song on
+# a recording of Rita Dove reading poetry.
+FINGERPRINT_SKIP_ARTISTS = {"variousartists", "various", "compilation", "compilations",
+                            "originalsoundtrack", "soundtrack", "unknownartist"}
+_TRAILING_NUMBER = re.compile(r"\s*\d+$")
+FINGERPRINT_SHARE = 0.70       # how much of the rip the album has to account for
+FINGERPRINT_MARGIN = 2         # and by how many tracks it must beat the runner-up
+
+
+def placeholder_album(album, artist):
+    """Whether the album name tells us nothing about which record this is.
+
+    Ripped without a CDDB match, iTunes falls back to the artist's name, or the
+    artist's name and a disc number - "Jamiroquai 1" for Return of the Space
+    Cowboy - or gives up entirely and writes "Unknown Album".
+    """
+    name = (album or "").strip()
+    if not name or name in {"unknown album", "unknownalbum", "untitled", "no album"}:
+        return True
+    bare = _TRAILING_NUMBER.sub("", name)
+    return norm_artist(bare) == artist and bool(artist)
+
+
+def claim_album_by_duration_fingerprint(itunes, results, nav, *, tol=3.0):
+    """T13: find the record by how long its tracks are.
+
+    Ripped without a CDDB match, iTunes names the album after the artist -
+    "Jamiroquai 1" for Return of the Space Cowboy, "Tony Bennett" for a Tony
+    Bennett record, "Unknown Album" for the rest. No amount of comparing album
+    names will ever place those, because the name he has is not the name of the
+    record.
+
+    What does survive is the shape of the disc. A run of track lengths is close
+    to unique, so the rip is tried against each album that artist has and the
+    one that accounts for most of it wins - provided it accounts for most of it
+    and beats whatever came second by a clear margin.
+    """
+    claimed = {r["nav_id"] for r in results.values() if r["nav_id"]}
+    by_artist_album = defaultdict(lambda: defaultdict(list))
+    for row in nav:
+        for artist in {row["n_artist"], row["n_album_artist"]} - {""}:
+            by_artist_album[artist][row["album_id"]].append(row)
+
+    rips = defaultdict(list)
+    for pid, t in itunes.items():
+        if results[pid]["nav_id"]:
+            continue
+        artist = norm_artist(t.get("Album Artist")) or norm_artist(t.get("Artist"))
+        if artist and artist not in FINGERPRINT_SKIP_ARTISTS:
+            rips[(artist, norm_album(t.get("Album")))].append(pid)
+
+    for (artist, album), pids in rips.items():
+        # Only where the album name is no help at all. "Dean Martin Assortment"
+        # and "R&B Christmas" name something real and belong to the tiers that
+        # read names; sending them here matched them to whatever ran the same
+        # number of seconds.
+        if not placeholder_album(album, artist):
+            continue
+        if len(pids) < FINGERPRINT_MIN_TRACKS:
+            continue
+        wanted = [((itunes[pid].get("Total Time") or 0) / 1000.0, pid) for pid in pids]
+
+        scored = []
+        for _album_id, rows in by_artist_album.get(artist, {}).items():
+            free = [r for r in rows if r["id"] not in claimed]
+            if not free:
+                continue
+            pairs = []
+            for dur, pid in wanted:
+                for row in free:
+                    gap = abs(row["duration"] - dur)
+                    if gap <= tol:
+                        pairs.append((gap, pid, row))
+            pairs.sort(key=lambda c: c[0])
+            used, taken, chosen = set(), set(), []
+            for gap, pid, row in pairs:
+                if pid in used or row["id"] in taken:
+                    continue
+                used.add(pid)
+                taken.add(row["id"])
+                chosen.append((pid, row))
+            scored.append((len(chosen), chosen))
+
+        if not scored:
+            continue
+        scored.sort(key=lambda s: -s[0])
+        best, chosen = scored[0]
+        runner = scored[1][0] if len(scored) > 1 else 0
+        if best < len(pids) * FINGERPRINT_SHARE or best - runner < FINGERPRINT_MARGIN:
+            continue
+        for pid, row in chosen:
+            claimed.add(row["id"])
+            results[pid] = {"nav_id": row["id"], "tier": "T13 album by track lengths", "ambiguous": False}
+
+
 ALBUM_STEM = 12        # how much of an album name buckets it for near-match lookup
 ALBUM_SIMILAR = 0.90   # a spelling variant, not a different record
+# Words that carry no identity: a label's name, an article, a preposition. What
+# is left of "A Putumayo Blend: Music From the Coffee Lands" is the record.
+ALBUM_NOISE = {
+    "a", "an", "the", "of", "from", "for", "and", "in", "on", "at", "to", "with",
+    "presents", "present", "blend", "volume", "vol", "disc", "cd",
+}
+ALBUM_TOKEN_SHARE = 0.75   # how much of the shorter name the two must have in common
+ALBUM_MIN_TOKENS = 2       # one word in common is a coincidence
+
+
+class _WordIndex:
+    """Album names looked up by the words in them, so a name can be found
+    without comparing it to every album in the library."""
+
+    def __init__(self, names):
+        self._by_word = defaultdict(set)
+        for name in names:
+            for word in album_words(name):
+                self._by_word[word].add(name)
+
+    def get_candidates(self, name):
+        found = set()
+        for word in album_words(name):
+            found |= self._by_word.get(word, set())
+        return found
+
+
+def album_words(name):
+    """The words of an album name that say which record it is."""
+    return {word for word in str(name or "").split() if word not in ALBUM_NOISE}
+
+
+def same_record(left, right):
+    """Whether two album names are the same record said differently.
+
+    The names differ at the front as often as the back - "Handel: Messiah
+    (Highlights)" against "The Messiah (Highlights)", "A New World Party"
+    against "Putumayo Presents: New World Party" - so a prefix test sees
+    nothing. What survives in both is the words that name the record.
+    """
+    a, b = album_words(left), album_words(right)
+    if not a or not b:
+        return False
+    shared = a & b
+    return len(shared) >= ALBUM_MIN_TOKENS and len(shared) / min(len(a), len(b)) >= ALBUM_TOKEN_SHARE
 
 
 def claim_album_by_album_and_length(itunes, results, nav, *, tol=3.0):
@@ -392,6 +535,7 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=3.0):
     by_stem = defaultdict(set)
     for name in by_album:
         by_stem[name[:ALBUM_STEM]].add(name)
+    by_words = _WordIndex(by_album)
     claimed = {r["nav_id"] for r in results.values() if r["nav_id"]}
 
     # Gather the whole album's worth of possibilities before choosing any of
@@ -413,10 +557,16 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=3.0):
             # Suites "The Cello Suites Inspired By Bach, From The Six-Part Film
             # Series", which is the library's title with a subtitle glued on.
             # One side being a prefix of the other is the same record.
+            # Candidates come from the words in the name, not from its opening.
+            # Bucketing on the first twelve characters could not see "Feast Of
+            # Wine" against "Feast of Wire", nor anything wearing a label's
+            # name in front, and both are common here.
+            candidates = by_words.get_candidates(album) | by_stem.get(album[:ALBUM_STEM], set())
             near_names = {
-                key for key in by_stem.get(album[:ALBUM_STEM], ())
+                key for key in candidates
                 if len(key) >= 10 and (album.startswith(key) or key.startswith(album)
-                                       or SequenceMatcher(None, album, key).ratio() >= ALBUM_SIMILAR)
+                                       or SequenceMatcher(None, album, key).ratio() >= ALBUM_SIMILAR
+                                       or same_record(album, key))
             }
             # "Blood Sugar Sex Magic" against "Blood Sugar Sex Magik" is one
             # letter; the prefix test cannot see it because they differ at the
