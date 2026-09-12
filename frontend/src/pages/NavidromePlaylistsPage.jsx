@@ -117,6 +117,7 @@ export default function NavidromePlaylistsPage() {
   const [busy, setBusy] = useState("");
   const [removingIndex, setRemovingIndex] = useState(null);
   const [filter, setFilter] = useState("");
+  const [sharedOpen, setSharedOpen] = useState(false);
   const [selectedIndexes, setSelectedIndexes] = useState(() => new Set());
   const [visibleLimit, setVisibleLimit] = useState(TRACK_WINDOW);
   const [smartMode, setSmartMode] = useState("");
@@ -657,8 +658,23 @@ export default function NavidromePlaylistsPage() {
               )}
               {others.length ? (
                 <>
-                  <div className="nd-playlists__group-label">Shared with me</div>
-                  {others.map(renderPlaylistButton)}
+                  {/* Collapsed by default: someone else's lists can outnumber
+                      your own many times over and push them off the screen. */}
+                  <button
+                    type="button"
+                    className="nd-playlists__group-label nd-playlists__group-toggle"
+                    onClick={() => setSharedOpen((open) => !open)}
+                    aria-expanded={sharedOpen}
+                  >
+                    {sharedOpen ? (
+                      <ChevronDown className="artist-icon-xs" aria-hidden="true" />
+                    ) : (
+                      <ChevronRight className="artist-icon-xs" aria-hidden="true" />
+                    )}
+                    <span>Shared with me</span>
+                    <span className="nd-playlists__folder-count">{others.length}</span>
+                  </button>
+                  {sharedOpen ? others.map(renderPlaylistButton) : null}
                 </>
               ) : null}
             </>
