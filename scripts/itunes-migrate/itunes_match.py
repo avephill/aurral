@@ -359,7 +359,7 @@ ALBUM_STEM = 12        # how much of an album name buckets it for near-match loo
 ALBUM_SIMILAR = 0.90   # a spelling variant, not a different record
 
 
-def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
+def claim_album_by_album_and_length(itunes, results, nav, *, tol=3.0):
     """T12: the album name and the length agree, and nothing else has to.
 
     Two cases the artist-and-title tiers cannot reach, both real:
@@ -377,6 +377,11 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
     The album name has to be exclusive - one album in the library answers to it
     - or "Greatest Hits" would match everybody's. Within that album the length
     has to pick out exactly one unclaimed track.
+
+    The tolerance matches the other tiers at three seconds, because a rip and a
+    release rarely agree to the second: every track of My Beautiful Dark
+    Twisted Fantasy runs exactly two seconds shorter in his library than in the
+    export, so a one-second window found none of them.
     """
     by_album = defaultdict(list)
     for row in nav:
@@ -388,6 +393,13 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
     for name in by_album:
         by_stem[name[:ALBUM_STEM]].add(name)
     claimed = {r["nav_id"] for r in results.values() if r["nav_id"]}
+
+    # Gather the whole album's worth of possibilities before choosing any of
+    # them. Deciding track by track cannot cope with a rip that runs a couple
+    # of seconds short throughout: every track then sits near two others, and
+    # "exactly one candidate" is never true. Pairing the album as a whole,
+    # closest first, lets the offset cancel out.
+    pending = defaultdict(list)
 
     for pid, t in itunes.items():
         if results[pid]["nav_id"]:
@@ -412,15 +424,49 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
             if len(near_names) != 1:
                 continue
             rows = by_album[next(iter(near_names))]
-        # "Greatest Hits" names a dozen records; the Cello Suites names one.
-        if len({row["album_id"] for row in rows}) > 1:
+        # "Greatest Hits" names a dozen records, and those are a dozen
+        # different artists - that is the ambiguity worth refusing. One record
+        # imported twice is still one record, so the test is on who made it,
+        # not on how many rows the library happens to hold.
+        if len({row["n_album_artist"] or row["n_artist"] for row in rows}) > 1:
             continue
         dur = (t.get("Total Time") or 0) / 1000.0
-        near = [r for r in rows if r["id"] not in claimed and abs(r["duration"] - dur) <= tol]
-        if len(near) != 1:
-            continue
-        claimed.add(near[0]["id"])
-        results[pid] = {"nav_id": near[0]["id"], "tier": "T12 album+length", "ambiguous": False}
+        for row in rows:
+            if row["id"] in claimed:
+                continue
+            gap = abs(row["duration"] - dur)
+            if gap <= tol:
+                pending[id(rows)].append((gap, pid, row))
+
+    for candidates in pending.values():
+        # A track whose two best candidates are equally far away is a coin
+        # flip, whatever the rest of the album does; leave it.
+        gaps = defaultdict(list)
+        for gap, pid, _row in candidates:
+            gaps[pid].append(gap)
+        tied = {pid for pid, g in gaps.items() if len(g) > 1 and sorted(g)[0] == sorted(g)[1]}
+
+        candidates.sort(key=lambda c: c[0])
+        used = set()
+        for gap, pid, row in candidates:
+            if pid in tied or pid in used or row["id"] in claimed:
+                continue
+            used.add(pid)
+            claimed.add(row["id"])
+            # A title translated or renamed can share nothing with the original
+            # - "Cape Verde Greets You" and "Cabo Verde manda mantenha" are one
+            # song - so a low score cannot refuse the pair. But on a soundtrack
+            # full of cues of the same length it is the only sign that the
+            # album simply does not have this track, so it is flagged.
+            left = norm_bare(itunes[pid].get("Name")) or ""
+            right = row["b_title"] or ""
+            informative = not _TRACK_NO.match(left) and left and right
+            unlike = informative and SequenceMatcher(None, left, right).ratio() < 0.3
+            results[pid] = {
+                "nav_id": row["id"],
+                "tier": "T12 album+length",
+                "ambiguous": gap > 1.0 or unlike,
+            }
 
 
 _TRACK_NO = re.compile(r"^track\s*(\d+)$")
