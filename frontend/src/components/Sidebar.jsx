@@ -187,6 +187,15 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       isLibraryViewAvailable(view, { hasPermission, userLibrariesEnabled }),
     );
     const items = [
+      // Library first: the music someone already has comes before the music
+      // they do not. Discovery is somewhere to go, not the front door.
+      {
+        path: "/library",
+        label: "Library",
+        icon: Library,
+        section: "library",
+        subnav: libraryViews,
+      },
       ...(discoveryEnabled
         ? [
             {
@@ -197,13 +206,6 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
             },
           ]
         : []),
-      {
-        path: "/library",
-        label: "Library",
-        icon: Library,
-        section: "library",
-        subnav: libraryViews,
-      },
       ...(ticketmasterConfigured
         ? [
             {

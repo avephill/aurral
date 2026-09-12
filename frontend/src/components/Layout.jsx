@@ -139,14 +139,13 @@ function Layout({ children, headerActions }) {
 
   const mobilePrimaryItems = useMemo(() => {
     const items = [
-      { path: "/discover", label: "Discover", icon: Sparkles },
+      // Library first, matching the sidebar: someone's own music before
+      // anything they might acquire.
       { path: "/library", label: "Library", icon: Library },
-      {
-        path: "/playlists",
-        label: "Playlists",
-        icon: AudioWaveform,
-        permission: "accessFlow",
-      },
+      { path: "/discover", label: "Discover", icon: Sparkles },
+      // Not gated on accessFlow: these are the person's own Navidrome
+      // playlists, not the ones Aurral generates.
+      { path: "/playlists", label: "Playlists", icon: AudioWaveform },
     ];
     return items.filter((item) => !item.permission || hasPermission(item.permission));
   }, [hasPermission]);
