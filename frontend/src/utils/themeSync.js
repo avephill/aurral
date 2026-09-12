@@ -7,6 +7,7 @@ import { getMyTheme, updateMyTheme } from "./api/endpoints/auth.js";
 import {
   applyStoredThemeSelection,
   getThemeSettings,
+  hasStoredThemeSelection,
   subscribeToThemeChanges,
 } from "./theme.js";
 
@@ -59,10 +60,14 @@ export function startThemeSync(userId) {
       if (stored?.themeId) {
         lastSyncedSelection = { themeId: stored.themeId, appearance: stored.appearance };
         applyStoredThemeSelection(stored.themeId, stored.appearance);
-      } else {
-        // First sign-in on this account: adopt whatever this browser has.
+      } else if (hasStoredThemeSelection()) {
+        // Nothing stored for this account yet, and this browser holds a theme
+        // someone chose here: keep it and claim it for the account.
         pushThemeToServer();
       }
+      // Otherwise leave the account empty. A browser that has simply never had
+      // a theme picked in it must not write its default over the choice this
+      // person made somewhere else and has not signed in with yet.
     })
     .catch(() => {})
     .finally(() => {

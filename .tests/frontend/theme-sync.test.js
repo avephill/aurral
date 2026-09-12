@@ -102,6 +102,19 @@ test("a first sign-in with nothing stored adopts this browser's choice", async (
   assert.deepEqual(h.theme.getThemeSettings(), { themeId: "itunes", appearance: "dark" });
 });
 
+test("a browser that has never had a theme picked claims nothing", async (t) => {
+  const h = await openThemeSyncHarness(t);
+  h.setServerTheme(null);
+  // No setThemeSelection: this is a fresh browser showing the default.
+
+  h.sync.startThemeSync(7);
+  await h.settle();
+
+  // Writing the default here would overwrite a choice made on another machine
+  // the moment someone opens the app in a new browser.
+  assert.equal(h.saved().length, 0);
+});
+
 test("signing out stops mirroring, so the next person's pick is not saved", async (t) => {
   const h = await openThemeSyncHarness(t);
   h.setServerTheme({ themeId: "aurral", appearance: "system" });

@@ -430,6 +430,15 @@ function readStoredValue(key) {
   }
 }
 
+/**
+ * Whether this browser holds a theme someone actually chose, as opposed to
+ * showing the default because nothing is stored. getThemeSettings() cannot
+ * tell the two apart: both answer with the default theme.
+ */
+export function hasStoredThemeSelection() {
+  return readStoredValue(THEME_STORAGE_KEY) !== null;
+}
+
 export function getThemeSettings() {
   const storedTheme = readStoredValue(THEME_STORAGE_KEY);
   if (THEME_APPEARANCES.includes(storedTheme)) return { themeId: DEFAULT_THEME_ID, appearance: storedTheme };
