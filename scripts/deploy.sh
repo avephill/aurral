@@ -39,7 +39,9 @@ for _ in $(seq 1 30); do
   reported="$(curl -fsS -m 5 "$HEALTH_URL" 2>/dev/null \
     | sed -n 's/.*"appVersion":"\([^"]*\)".*/\1/p' || true)"
   if [[ -n "$reported" ]]; then
-    if [[ "$reported" == "$VERSION" ]]; then
+    # The app normalises a release version and drops the leading "v", so
+    # compare without it rather than failing on a cosmetic difference.
+    if [[ "${reported#v}" == "${VERSION#v}" ]]; then
       echo "==> live: $reported"
       exit 0
     fi
