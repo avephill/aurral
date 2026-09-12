@@ -6,7 +6,10 @@ export const LIBRARY_VIEWS = [
   // No "Tracks" view: a quarter of a million rows is not something anyone
   // browses, and the page had to build the whole list to show the first screen.
   // Track-level access is through an album, a search or a playlist.
-  { id: "album-artists", label: "Album Artists", path: "/library/album-artists" },
+  // One artist list, not two. "Album Artists" and "Artists" rendered the same
+  // data here, and the distinction is a cataloguer's rather than a listener's:
+  // the track-level credit fills the sidebar with everyone who guested once.
+  // /library/album-artists still resolves, so old links keep working.
   { id: "artists", label: "Artists", path: "/library/artists" },
   { id: "genres", label: "Genres", path: "/library/genres" },
   { id: "playlists", label: "Playlists", path: "/library/playlists", permission: "accessFlow" },
