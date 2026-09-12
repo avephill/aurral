@@ -219,3 +219,32 @@ class AlbumAndLength(unittest.TestCase):
         self.run_pass(itunes, results, nav)
         claimed = [r["nav_id"] for r in results.values() if r["nav_id"]]
         self.assertEqual(claimed, ["n1"])
+
+
+    def test_one_letter_in_the_album_name_is_still_that_album(self):
+        # iTunes spelled it "Magic"; the record is "Magik". The prefix test
+        # cannot see it, because they differ at the end.
+        nav = [nav_row("n1", "The Power of Equality", "Red Hot Chili Peppers",
+                       "Blood Sugar Sex Magik", 244)]
+        itunes = {"p1": itunes_track("Track 01", "Red Hot Chili Peppers",
+                                     "Blood Sugar Sex Magic", 244)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")
+
+    def test_a_merely_similar_album_name_is_not_enough(self):
+        nav = [nav_row("n1", "Some Song", "Someone", "Greatest Hits Volume One", 200)]
+        itunes = {"p1": itunes_track("Track 01", "Someone", "Christmas Songs Forever", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertIsNone(results["p1"]["nav_id"])
+
+    def test_two_names_equally_close_are_a_guess_and_refused(self):
+        # Both spellings sit within a letter of what iTunes wrote, so there is
+        # nothing to choose between them.
+        nav = [nav_row("n1", "A", "Band", "Abbey Road Sessions", 200, album_id="a1"),
+               nav_row("n2", "B", "Band", "Abbey Road Sessiona", 200, album_id="a2")]
+        itunes = {"p1": itunes_track("Track 01", "Band", "Abbey Road Sessionz", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertIsNone(results["p1"]["nav_id"])

@@ -355,6 +355,10 @@ def match_all(itunes, nav):
     return results
 
 
+ALBUM_STEM = 12        # how much of an album name buckets it for near-match lookup
+ALBUM_SIMILAR = 0.90   # a spelling variant, not a different record
+
+
 def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
     """T12: the album name and the length agree, and nothing else has to.
 
@@ -378,6 +382,11 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
     for row in nav:
         if row["n_album"]:
             by_album[row["n_album"]].append(row)
+    # Bucketed on the opening of the name so a near-identical spelling can be
+    # found without comparing every album to every other.
+    by_stem = defaultdict(set)
+    for name in by_album:
+        by_stem[name[:ALBUM_STEM]].add(name)
     claimed = {r["nav_id"] for r in results.values() if r["nav_id"]}
 
     for pid, t in itunes.items():
@@ -392,13 +401,17 @@ def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
             # Suites "The Cello Suites Inspired By Bach, From The Six-Part Film
             # Series", which is the library's title with a subtitle glued on.
             # One side being a prefix of the other is the same record.
-            prefixed = [
-                (key, value) for key, value in by_album.items()
-                if len(key) >= 10 and (album.startswith(key) or key.startswith(album))
-            ]
-            if len(prefixed) != 1:
+            near_names = {
+                key for key in by_stem.get(album[:ALBUM_STEM], ())
+                if len(key) >= 10 and (album.startswith(key) or key.startswith(album)
+                                       or SequenceMatcher(None, album, key).ratio() >= ALBUM_SIMILAR)
+            }
+            # "Blood Sugar Sex Magic" against "Blood Sugar Sex Magik" is one
+            # letter; the prefix test cannot see it because they differ at the
+            # end. Two candidate names would be a guess, so only one will do.
+            if len(near_names) != 1:
                 continue
-            rows = prefixed[0][1]
+            rows = by_album[next(iter(near_names))]
         # "Greatest Hits" names a dozen records; the Cello Suites names one.
         if len({row["album_id"] for row in rows}) > 1:
             continue
