@@ -207,14 +207,22 @@ def apply_overrides(path, results, nav):
 
     nfc = lambda s: unicodedata.normalize("NFC", s or "")
     by_path = {nfc(r["path"]): r["id"] for r in nav}
+    # iTunes paths reach us in whatever normalisation macOS used (usually NFD),
+    # so compare the sheet against NFC-folded copies of the match keys.
+    by_key = {nfc(k): k for k in results}
     applied = unresolved = 0
     with open(path, newline="") as fh:
         for row in csv.DictReader(fh):
             target = nfc(row.get("navidrome_path_to_use", "")).strip()
             if not target:
                 continue
-            target = target.split(" (")[0].strip()
-            key = "path:" + nfc(row["itunes_track"]).strip()
+            # Strip only a copied candidate annotation, e.g. " (207s, sim 1.00)";
+            # real paths often contain " (" of their own.
+            target = re.sub(r"\s+\(\d+s, sim [\d.]+\)$", "", target).strip()
+            # Normally a path tail; tracks that lived only in iCloud have no path,
+            # so a cell may instead carry their whole "meta:..." identity key.
+            cell = nfc(row["itunes_track"]).strip()
+            key = by_key.get(cell if cell.startswith("meta:") else "path:" + cell, "")
             nav_id = by_path.get(target)
             if key in results and nav_id:
                 results[key] = {"nav_id": nav_id, "tier": "manual override", "ambiguous": False}

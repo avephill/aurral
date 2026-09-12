@@ -1,0 +1,2859 @@
+{
+  "owner": "dunshill",
+  "playlists": [
+    {
+      "name": "10's,",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "10's,"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "90\u2019s Music",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "year",
+            "operator": "inTheRange",
+            "value": "1990,1999"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "All Songs - Filtered",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Holiday"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Harsh"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Hard"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative - Folk",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Folk"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Holiday"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative - Jazz",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Holiday"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative - Medium",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Alternative Mellow"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Medium"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative - Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Mellow"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative - Rowdy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Rock"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Holiday"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Rowdy"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative Folk",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Folk"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative Jazz",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Alternative Rock",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative Rock"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Atmospheric",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Atmospheric"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Atmospheric Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Atmospheric"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Mellow"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Attitude",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Attitude"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Best of - Alternative Other",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Other"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Holiday"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Best Of New Alternative Music",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "dateadded",
+            "operator": "after",
+            "value": "2018-11-01"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "year",
+            "operator": "gt",
+            "value": 2010
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Best of Rock - Modern Other",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Other"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Mellow"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Blues",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "genre",
+            "operator": "contains",
+            "value": "Blues"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Carnival",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Carnival"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Chick Mix",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Chick"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Classic Rock",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Classic Rock"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Classical",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "genre",
+            "operator": "contains",
+            "value": "Classical"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Couch",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Couch"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Couch - Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Couch"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Mellow"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Country",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Country,"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Dance - All",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Dance"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Dance - Fun",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Dance Fun"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Dance - Rowdy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Dance Rowdy"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Dance - Sexy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Dance Sexy"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Dance - Soul",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Dance Soul"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Delinquent",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Delinquent"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Driving Music - Cruisin",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Cruisin"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Electronica",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Electronica"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Energetic",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Energetic"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Feel Good",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Feel Good"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Fun",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Fun"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Goofy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Goofy"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Gospel & Religious",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "genre",
+            "operator": "contains",
+            "value": "Gospel & Religious"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Groovy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Groovy"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Groovy Instrumental",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Groovy"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Instrumental"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Halloween",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Halloween"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Happy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Happy"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Haunting",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Haunting"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Hip Hop/Rap",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "genre",
+            "operator": "contains",
+            "value": "Hip Hop/Rap"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 2
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Holiday",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Holiday"
+          },
+          {
+            "field": "genre",
+            "operator": "contains",
+            "value": "Holiday"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Hypnotic",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Hypnotic"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Inspirational",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Inspirational"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Instrumental - Any",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Instrumental"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Italian Singers",
+      "rules": {
+        "match": "any",
+        "conditions": [
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Frank Sinatra"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Dean Martin"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Louis Prima"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Tony Bennett"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Zucchero"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Perry Como"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Frankie Avalon"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Frankie Laine"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Bobby Rydell"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Nancy Sinatra"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "Luciano Pavarotti"
+          },
+          {
+            "field": "artist",
+            "operator": "contains",
+            "value": "John Travolta"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Jazz - All",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "3,3"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Jazz - Classic",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Classic Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Jazz - Cocktail",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Cocktail Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Jazz - Cool",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Jazz"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Cool"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Jazz - Dinner",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Dinner Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Jazz - World",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "World"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Jazz"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Latin",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "genre",
+            "operator": "contains",
+            "value": "Latin"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Mellow"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Mellow and Medium to Resolve",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Mellow"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Medium"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Most Recent Music",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "dateadded",
+            "operator": "after",
+            "value": "2017-01-01"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "New Music - Alternative - Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Classical"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "World"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Mellow"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "dateadded",
+            "operator": "after",
+            "value": "2010-01-01"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "New Music - Alternative - Not Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "dateadded",
+            "operator": "after",
+            "value": "2010-01-01"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Classical"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "World"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Mellow"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "New Music - Rarely Listened To",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "year",
+            "operator": "gt",
+            "value": 2017
+          },
+          {
+            "field": "playcount",
+            "operator": "lt",
+            "value": 5
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 2
+          }
+        ],
+        "sort": "album",
+        "order": "desc",
+        "limit": 1000
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "New Music - World etc.",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "dateadded",
+            "operator": "after",
+            "value": "2009-01-01"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Classical"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Alternative"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Playlist",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "1,1"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Playlist 2",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "0,0"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Psych",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Psych"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Punk",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Punk"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "R & B",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "R & B"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rarely Listened < 2 Times",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "playcount",
+            "operator": "is",
+            "value": 0
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 0
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 1 Star",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "1,1"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 2 Stars",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "2,2"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 3 Stars",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "3,3"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 4 Stars",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "4,4"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 5 Star",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "5,5"
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": "Holiday"
+          },
+          {
+            "field": "genre",
+            "operator": "notContains",
+            "value": "Holiday"
+          },
+          {
+            "field": "genre",
+            "operator": "notContains",
+            "value": "Classical"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Reflective",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Reflective"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rock - Hard",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Rock"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Hard"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rock - Harsh",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Rock"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Harsh"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Romantic",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Romantic"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Schmaltzy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Schmaltzy"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Sing Along",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Sing Along"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Slow Burn",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Slow Burn"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": false,
+      "editable": true
+    },
+    {
+      "name": "Songs with No Rating",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "0,0"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Sublime",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Sublime"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Swamp",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Swamp"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Top 10",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Top 10"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Trance",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Trance"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Trump",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Trump"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Wake Mellow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Wake Mellow"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Wake Rowdy",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Wake Rowdy"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "World",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "World"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 2
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 2 Star",
+      "rules": {
+        "match": "any",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "2,2"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Songs without a Comment",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": ","
+          },
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "0,0"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Songs Without a Rating",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "lt",
+            "value": 1
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Newest Music",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "dateadded",
+            "operator": "after",
+            "value": "2017-01-01"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - 5 Stars",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "5,5"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - Unrated",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "0,0"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Rated Songs - UnRated",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "inTheRange",
+            "value": "0,0"
+          },
+          {
+            "field": "album",
+            "operator": "notContains",
+            "value": "Voice Memos"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Songs that have no rating",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "lt",
+            "value": 1
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Songster",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Songster"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Speed - Fast",
+      "rules": {
+        "match": "any",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "fast"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Speed - Medium",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Medium"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "Speed - Slow",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Slow"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    },
+    {
+      "name": "The New Groove",
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "New Groove"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      },
+      "liveUpdating": true,
+      "editable": true
+    }
+  ],
+  "needsAttention": [
+    {
+      "name": ",",
+      "unsupported": [],
+      "rules": {
+        "match": "all",
+        "conditions": [],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Alternative - Other",
+      "unsupported": [
+        "Last Skipped, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Other"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Alternative"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "lastplayed",
+            "operator": "notInTheLast",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Club",
+      "unsupported": [
+        "Last Skipped, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Club"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "lastplayed",
+            "operator": "notInTheLast",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Driving Music - Country Lane",
+      "unsupported": [
+        "Last Skipped, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Country Lane"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "lastplayed",
+            "operator": "notInTheLast",
+            "value": 2
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Driving Music - Road Rage",
+      "unsupported": [
+        "Last Skipped, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Road Rage"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "lastplayed",
+            "operator": "notInTheLast",
+            "value": 4
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Esoteric",
+      "unsupported": [
+        "Last Skipped, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Esoteric"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "lastplayed",
+            "operator": "notInTheLast",
+            "value": 6
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Essential",
+      "unsupported": [
+        "Last Skipped, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Essential"
+          },
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "lastplayed",
+            "operator": "notInTheLast",
+            "value": 3
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Funeral - Inspirational",
+      "unsupported": [
+        "a rule asking for podcasts"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Funeral"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Inspirational"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Funeral - Reflective",
+      "unsupported": [
+        "a rule asking for podcasts"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Funeral"
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Reflective"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Songs with No Comments",
+      "unsupported": [],
+      "rules": {
+        "match": "all",
+        "conditions": [],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "The Newest Music",
+      "unsupported": [
+        "Purchased, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "year",
+            "operator": "is",
+            "value": 2020
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": ",,,,",
+      "unsupported": [],
+      "rules": {
+        "match": "all",
+        "conditions": [],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Juvenile Delinquent",
+      "unsupported": [
+        "a rule asking for podcasts"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "rating",
+            "operator": "gt",
+            "value": 3
+          },
+          {
+            "field": "comment",
+            "operator": "contains",
+            "value": "Juvenile Delinquent"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Songs With No Comments",
+      "unsupported": [
+        "a rule asking for podcasts"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": ","
+          },
+          {
+            "field": "comment",
+            "operator": "notContains",
+            "value": ";"
+          }
+        ],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    },
+    {
+      "name": "Songs Without Speed in Comment",
+      "unsupported": [
+        "Playlist, which Navidrome has no rule for",
+        "Playlist, which Navidrome has no rule for",
+        "Playlist, which Navidrome has no rule for"
+      ],
+      "rules": {
+        "match": "all",
+        "conditions": [],
+        "sort": "",
+        "order": "asc",
+        "limit": null
+      }
+    }
+  ],
+  "skipped": [
+    {
+      "name": "All Music",
+      "reason": "no rules in the export"
+    },
+    {
+      "name": "Recently Played",
+      "reason": "one of iTunes' own lists"
+    },
+    {
+      "name": "My Top Rated",
+      "reason": "one of iTunes' own lists"
+    },
+    {
+      "name": "Top 25 Most Played",
+      "reason": "one of iTunes' own lists"
+    }
+  ]
+}

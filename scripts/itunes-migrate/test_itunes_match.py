@@ -284,3 +284,17 @@ class AlbumAndLength(unittest.TestCase):
         results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
         self.run_pass(itunes, results, nav)
         self.assertEqual(results["p1"]["nav_id"], "n1")
+
+
+    def test_a_short_name_does_not_swallow_a_long_one(self):
+        # "World Music" sits inside "The Best of World Music: Reggae" and is a
+        # different record; letting it match made both candidates tie, and the
+        # compilation he owns was reported missing.
+        nav = [nav_row("n1", "Song", "Various Artists",
+                       "Putumayo Presents: The Best of World Music: Reggae", 200, album_id="a1"),
+               nav_row("n2", "Other", "Goat", "World Music", 200, album_id="a2")]
+        itunes = {"p1": itunes_track("Track 04", "Putumayo Presents",
+                                     "The Best Of World Music - Reggae", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")

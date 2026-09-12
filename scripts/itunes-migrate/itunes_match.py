@@ -462,6 +462,9 @@ ALBUM_NOISE = {
     "presents", "present", "blend", "volume", "vol", "disc", "cd",
 }
 ALBUM_TOKEN_SHARE = 0.75   # how much of the shorter name the two must have in common
+ALBUM_TOKEN_COVER = 0.60   # and how much of the longer, so a short name cannot
+                           # swallow a long one: "World Music" is inside "The
+                           # Best of World Music: Reggae" and is not that record
 ALBUM_MIN_TOKENS = 2       # one word in common is a coincidence
 
 
@@ -499,7 +502,9 @@ def same_record(left, right):
     if not a or not b:
         return False
     shared = a & b
-    return len(shared) >= ALBUM_MIN_TOKENS and len(shared) / min(len(a), len(b)) >= ALBUM_TOKEN_SHARE
+    return (len(shared) >= ALBUM_MIN_TOKENS
+            and len(shared) / min(len(a), len(b)) >= ALBUM_TOKEN_SHARE
+            and len(shared) / max(len(a), len(b)) >= ALBUM_TOKEN_COVER)
 
 
 def claim_album_by_album_and_length(itunes, results, nav, *, tol=3.0):
