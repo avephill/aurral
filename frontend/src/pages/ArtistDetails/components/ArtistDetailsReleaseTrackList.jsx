@@ -4,6 +4,7 @@ import SearchLibraryCheck from "../../../components/SearchLibraryCheck";
 import { TrackPlayButton } from "./TrackPlayButton";
 import { TrackPlaylistMenu } from "./TrackPlaylistMenu";
 import { TrackRating } from "../../../components/StarRating";
+import { TrackFavorite } from "../../../components/TrackFavorite";
 import { ArtistTrackListToolbar } from "./ArtistTrackListToolbar";
 import { useAlbumTrackListToolbar } from "../../../hooks/useAlbumTrackListToolbar";
 import { useAudioQueue } from "../../../contexts/audioQueueContext";
@@ -227,14 +228,23 @@ export function ArtistDetailsReleaseTrackList({
                   <span className="artist-track-rating">
                     {(() => {
                       const ref = isOwned ? canonicalRefFor(track, index) : null;
-                      return ref ? (
-                        <TrackRating
-                          trackId={ref.trackId}
-                          albumId={ref.albumId}
-                          title={track.title || track.trackName || ""}
-                          size="sm"
-                        />
-                      ) : null;
+                      if (!ref) return null;
+                      const trackTitle = track.title || track.trackName || "";
+                      return (
+                        <>
+                          <TrackFavorite
+                            trackId={ref.trackId}
+                            albumId={ref.albumId}
+                            title={trackTitle}
+                          />
+                          <TrackRating
+                            trackId={ref.trackId}
+                            albumId={ref.albumId}
+                            title={trackTitle}
+                            size="sm"
+                          />
+                        </>
+                      );
                     })()}
                   </span>
                   <span className="artist-track-duration">{durationLabel}</span>

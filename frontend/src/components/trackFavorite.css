@@ -1,0 +1,44 @@
+/* Sits beside the star rating in a track row, so it matches its metrics. */
+.track-favorite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem;
+  border: 0;
+  background: none;
+  border-radius: var(--aurral-radius-sm);
+  line-height: 0;
+  cursor: pointer;
+  color: var(--aurral-text-subtle);
+  transition: color 0.12s ease, opacity 0.12s ease;
+}
+
+.track-favorite svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.track-favorite:hover:not(:disabled) {
+  color: var(--aurral-text);
+}
+
+.track-favorite.is-active {
+  color: #d8394b;
+}
+
+.track-favorite:focus-visible {
+  outline: 2px solid var(--aurral-ring);
+  outline-offset: 2px;
+}
+
+.track-favorite:disabled {
+  cursor: default;
+}
+
+.track-favorite.is-loading {
+  opacity: 0.35;
+}
+
+.track-favorite.is-unknown {
+  opacity: 0.25;
+}

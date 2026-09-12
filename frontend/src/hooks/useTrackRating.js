@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import { lookupTrackRatings, setTrackRating } from "../utils/api/endpoints/navidromeRatings.js";
+import {
+  lookupTrackRatings,
+  setTrackRating,
+  setTrackStarred,
+} from "../utils/api/endpoints/navidromeRatings.js";
 
 /**
  * One shared store of Navidrome ratings keyed by canonical track id.
@@ -122,5 +126,30 @@ export function useTrackRating(trackId, albumId = null) {
     [albumId, key],
   );
 
-  return { ...entry, rate };
+  const star = useCallback(
+    async (nextStarred) => {
+      if (!key) return null;
+      const previous = read(key);
+      setEntry(key, { starred: nextStarred, saving: true });
+      emit();
+      try {
+        const saved = await setTrackStarred({ trackId: key, albumId }, nextStarred);
+        setEntry(key, {
+          starred: Boolean(saved?.starred ?? nextStarred),
+          rating: Number(saved?.rating ?? previous.rating),
+          known: true,
+          saving: false,
+        });
+        emit();
+        return saved;
+      } catch (error) {
+        setEntry(key, { ...previous, saving: false });
+        emit();
+        throw error;
+      }
+    },
+    [albumId, key],
+  );
+
+  return { ...entry, rate, star };
 }
