@@ -103,7 +103,10 @@ function AppContent() {
   const basePath = getAppBasePath();
   const [isHealthy, setIsHealthy] = useState(null);
   const [healthIssue, setHealthIssue] = useState(null);
-  const [rootFolderConfigured, setRootFolderConfigured] = useState(false);
+  // null until a bootstrap tells us either way. The server only reports this
+  // once it has resolved the signed-in user, so the first response after a
+  // login omits it, and "missing" must not read as "not configured".
+  const [rootFolderConfigured, setRootFolderConfigured] = useState(null);
   const [appVersion, setAppVersion] = useState(null);
   const discoveryToastShownRef = useRef(false);
   const healthCheckInFlightRef = useRef(false);
@@ -136,7 +139,9 @@ function AppContent() {
 
   const applyBootstrapHealth = (payload) => {
     setIsHealthy(payload.status === "ok");
-    setRootFolderConfigured(payload.rootFolderConfigured || false);
+    setRootFolderConfigured(
+      payload.rootFolderConfigured === undefined ? null : !!payload.rootFolderConfigured,
+    );
     setAppVersion(payload.appVersion || null);
     setHealthIssue(payload.lidarr?.circuitOpen ? "lidarr" : null);
   };
@@ -245,7 +250,7 @@ function AppContent() {
                     </div>
                   )}
 
-                  {isHealthy && !rootFolderConfigured && (
+                  {isHealthy && rootFolderConfigured === false && (
                     <div className="app-status-banner app-status-banner--warning">
                       <AlertTriangle className="app-status-banner__icon app-status-banner__icon--warning" />
                       <p className="app-status-banner__text app-status-banner__text--warning">
