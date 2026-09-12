@@ -15,6 +15,7 @@ import {
 } from "./libraryMediaStore.js";
 import { getPathMappings, resolveLocalPath } from "./pathMappings.js";
 import { mapWithConcurrency } from "./discovery/helpers.js";
+import { logger } from "./logger.js";
 
 const text = (value) => String(value || "").trim();
 
@@ -157,7 +158,11 @@ async function readFileStats(filePath) {
 }
 
 export async function indexLidarrLibrary({ client, syncSearch = true } = {}) {
+  // Both skips below are easy to hit and impossible to see from outside: no
+  // scan run is recorded, the job reports success, and the library silently
+  // keeps whatever it had. Say which one happened.
   if (!client || typeof client.isConfigured !== "function" || !client.isConfigured()) {
+    logger.warn("library", "[LidarrIndex] Skipped: Lidarr is not configured for this process");
     return { skipped: true, filesSeen: 0, filesIndexed: 0, filesFailed: 0 };
   }
 
@@ -172,8 +177,18 @@ export async function indexLidarrLibrary({ client, syncSearch = true } = {}) {
     Array.isArray(albums) &&
     albums.length === 0
   ) {
+    logger.warn(
+      "library",
+      "[LidarrIndex] Skipped: Lidarr returned no artists and no albums."
+        + " An open circuit breaker answers this way too, so the library is left as it was.",
+    );
     return { skipped: true, filesSeen: 0, filesIndexed: 0, filesFailed: 0 };
   }
+  logger.info(
+    "library",
+    `[LidarrIndex] Indexing ${Array.isArray(artists) ? artists.length : 0} artists`
+      + ` and ${Array.isArray(albums) ? albums.length : 0} albums`,
+  );
   const artistById = new Map((Array.isArray(artists) ? artists : []).map((item) => [String(item.id), item]));
   const albumTrackData = await loadAlbumTrackData(
     client,
