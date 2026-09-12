@@ -464,7 +464,7 @@ function ActivityPage() {
             {isQueueView && !hasActivityFilter && (
               <button
                 type="button"
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/discover")}
                 className="btn btn-primary btn--bold btn-min-h"
               >
                 Start Discovering

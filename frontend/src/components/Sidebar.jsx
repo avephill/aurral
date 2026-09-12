@@ -176,7 +176,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       if (item.section === "news") return isOnNews;
       if (item.section === "activity") return isOnActivity;
       if (item.section === "wanted") return isOnWanted;
-      if (item.path === "/discover" && location.pathname === "/") return true;
+      // "/" is the library now, so it no longer stands in for Discover.
       return location.pathname === item.path;
     },
     [isDiscoverSectionActive, isOnActivity, isOnLibrary, isOnNews, isOnShows, isOnWanted, location.pathname],
