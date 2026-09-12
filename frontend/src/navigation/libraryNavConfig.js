@@ -12,7 +12,10 @@ export const LIBRARY_VIEWS = [
   // /library/album-artists still resolves, so old links keep working.
   { id: "artists", label: "Artists", path: "/library/artists" },
   { id: "genres", label: "Genres", path: "/library/genres" },
-  { id: "playlists", label: "Playlists", path: "/library/playlists", permission: "accessFlow" },
+  // Not gated on accessFlow: with Navidrome-backed playlists these are the
+  // person's own lists, read and written as them. accessFlow gates what Aurral
+  // generates, which is a different thing.
+  { id: "playlists", label: "Playlists", path: "/library/playlists" },
   // Personal-library bulk editor; only offered when the admin enabled user libraries.
   { id: "mine", label: "Bulk migration", path: "/library/mine", requiresUserLibraries: true },
 ];

@@ -13,7 +13,6 @@ import { DiscoverRecentProvider } from "./contexts/DiscoverRecentProvider";
 import { AudioQueueProvider } from "./contexts/AudioQueueProvider";
 import { AlertTriangle, XCircle } from "lucide-react";
 import ReloadPrompt from "./components/ReloadPrompt";
-import UpdateIndicator from "./components/UpdateIndicator";
 import { DotLoader } from "./components/DotLoader";
 import { useWebSocketChannel } from "./hooks/useWebSocket";
 import { buildActivityPath, DEFAULT_ACTIVITY_VIEW } from "./navigation/activityNavConfig";
@@ -107,10 +106,9 @@ function AppContent() {
   // once it has resolved the signed-in user, so the first response after a
   // login omits it, and "missing" must not read as "not configured".
   const [rootFolderConfigured, setRootFolderConfigured] = useState(null);
-  const [appVersion, setAppVersion] = useState(null);
   const discoveryToastShownRef = useRef(false);
   const healthCheckInFlightRef = useRef(false);
-  const { isAuthenticated, user, bootstrap, refreshAuth } = useAuth();
+  const { isAuthenticated, bootstrap, refreshAuth } = useAuth();
   const { showSuccess, showError } = useToast();
 
   const { isConnected: appSocketConnected } = useWebSocketChannel("discovery", (msg) => {
@@ -142,7 +140,6 @@ function AppContent() {
     setRootFolderConfigured(
       payload.rootFolderConfigured === undefined ? null : !!payload.rootFolderConfigured,
     );
-    setAppVersion(payload.appVersion || null);
     setHealthIssue(payload.lidarr?.circuitOpen ? "lidarr" : null);
   };
 
@@ -165,11 +162,9 @@ function AppContent() {
           await checkHealthLive();
           setIsHealthy(true);
           setHealthIssue("degraded");
-          setAppVersion(null);
         } catch {
           setIsHealthy(false);
           setHealthIssue("backend");
-          setAppVersion(null);
         }
         refreshAuth();
       } finally {
@@ -215,14 +210,11 @@ function AppContent() {
           element={
             <DiscoverRecentProvider>
               <ProtectedRoute>
-                <Layout
-                  headerActions={
-                    <UpdateIndicator
-                      currentVersion={appVersion}
-                      visible={!user || user.role === "admin"}
-                    />
-                  }
-                >
+                {/* No upstream update check: this fork ships as Psalter on its
+                    own schedule, and the indicator compared our build against
+                    lklynet/Aurral releases, offering a "update" that was
+                    really a move to someone else's software. */}
+                <Layout>
                   {healthIssue === "lidarr" && isHealthy && (
                     <div className="app-status-banner app-status-banner--warning">
                       <AlertTriangle className="app-status-banner__icon app-status-banner__icon--warning" />
@@ -261,33 +253,42 @@ function AppContent() {
                   )}
                   <Suspense fallback={<PageLoader />}>
                     <Routes>
+                      {/* Open on the music someone already owns. Discovery and
+                          acquisition are somewhere to go, not the front door:
+                          landing on recommendations puts what you do not have
+                          ahead of what you do. */}
+                      <Route path="/" element={<Navigate to="/library" replace />} />
+                      <Route path="/shows" element={<Navigate to="/shows/all" replace />} />
+                      <Route path="/shows/:filter" element={<ShowsPage />} />
+                      <Route path="/search" element={<SearchResultsPage />} />
                       <Route
-                        path="/"
+                        path="/discover"
                         element={
                           bootstrap?.discoveryEnabled === false ? (
-                            <Navigate to="/library/artists" replace />
+                            <Navigate to="/library" replace />
                           ) : (
                             <DiscoverPage />
                           )
                         }
                       />
-                      <Route path="/shows" element={<Navigate to="/shows/all" replace />} />
-                      <Route path="/shows/:filter" element={<ShowsPage />} />
-                      <Route path="/search" element={<SearchResultsPage />} />
-                      <Route path="/discover" element={<Navigate to="/" replace />} />
                       <Route path="/discover/playlists/:presetId" element={<DiscoverPlaylistDetailPage />} />
                       <Route path="/discover/playlists" element={<DiscoverPlaylistsPage />} />
                       <Route path="/discover/news" element={<NewsPage />} />
+                      {/* When playlists live in Navidrome they are the
+                          person's own lists, read and written as them, so
+                          accessFlow has nothing to say about them; it gates
+                          what Aurral generates. Keep the gate only for the
+                          Flow-backed page. */}
                       <Route
                         path="/library/playlists"
                         element={
-                          <PermissionRoute permission="accessFlow">
-                            {bootstrap?.navidromePlaylistsEnabled === true ? (
-                              <NavidromePlaylistsPage />
-                            ) : (
+                          bootstrap?.navidromePlaylistsEnabled === true ? (
+                            <NavidromePlaylistsPage />
+                          ) : (
+                            <PermissionRoute permission="accessFlow">
                               <FlowPage mode="playlists" />
-                            )}
-                          </PermissionRoute>
+                            </PermissionRoute>
+                          )
                         }
                       />
                       <Route path="/library/mine" element={<MyLibraryPage />} />
