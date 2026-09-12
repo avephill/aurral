@@ -350,8 +350,64 @@ def match_all(itunes, nav):
         else:
             results[pid] = {"nav_id": None, "tier": "unmatched", "ambiguous": False}
 
+    claim_album_by_album_and_length(itunes, results, nav)
     claim_album_leftovers(itunes, results, nav)
     return results
+
+
+def claim_album_by_album_and_length(itunes, results, nav, *, tol=1.0):
+    """T12: the album name and the length agree, and nothing else has to.
+
+    Two cases the artist-and-title tiers cannot reach, both real:
+
+    iTunes put the movement name in the artist field, so Yo-Yo Ma's Cello
+    Suites are credited to "1. Prelude" while Navidrome, tagged from
+    MusicBrainz, credits "Johann Sebastian Bach" - and the titles disagree just
+    as completely, "J.S. Bach: Cello Suite #2 In D Minor" against "Suite no. 2
+    in D minor, BWV 1008: V. Menuett I/II".
+
+    An untitled rip carries "Track 07" where MusicBrainz supplies "Country
+    Honk". Same artist, same album, same 178 seconds, nothing in the title to
+    match on.
+
+    The album name has to be exclusive - one album in the library answers to it
+    - or "Greatest Hits" would match everybody's. Within that album the length
+    has to pick out exactly one unclaimed track.
+    """
+    by_album = defaultdict(list)
+    for row in nav:
+        if row["n_album"]:
+            by_album[row["n_album"]].append(row)
+    claimed = {r["nav_id"] for r in results.values() if r["nav_id"]}
+
+    for pid, t in itunes.items():
+        if results[pid]["nav_id"]:
+            continue
+        album = norm_album(t.get("Album"))
+        if not album:
+            continue
+        rows = by_album.get(album)
+        if not rows:
+            # One disc, filed under two names: iTunes also called the Cello
+            # Suites "The Cello Suites Inspired By Bach, From The Six-Part Film
+            # Series", which is the library's title with a subtitle glued on.
+            # One side being a prefix of the other is the same record.
+            prefixed = [
+                (key, value) for key, value in by_album.items()
+                if len(key) >= 10 and (album.startswith(key) or key.startswith(album))
+            ]
+            if len(prefixed) != 1:
+                continue
+            rows = prefixed[0][1]
+        # "Greatest Hits" names a dozen records; the Cello Suites names one.
+        if len({row["album_id"] for row in rows}) > 1:
+            continue
+        dur = (t.get("Total Time") or 0) / 1000.0
+        near = [r for r in rows if r["id"] not in claimed and abs(r["duration"] - dur) <= tol]
+        if len(near) != 1:
+            continue
+        claimed.add(near[0]["id"])
+        results[pid] = {"nav_id": near[0]["id"], "tier": "T12 album+length", "ambiguous": False}
 
 
 _TRACK_NO = re.compile(r"^track\s*(\d+)$")

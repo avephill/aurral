@@ -6,7 +6,8 @@
 import re
 import unittest
 
-from itunes_match import claim_album_leftovers, norm, norm_album, norm_artist, norm_bare, norm_loose
+from itunes_match import (claim_album_by_album_and_length, claim_album_leftovers,
+                          norm, norm_album, norm_artist, norm_bare, norm_loose)
 
 
 def nav_row(track_id, title, artist, album, duration, *, album_id="alb", comment=""):
@@ -158,3 +159,63 @@ class Leftovers(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AlbumAndLength(unittest.TestCase):
+    """T12: the album and the length agree and nothing else needs to."""
+
+    def run_pass(self, itunes, results, nav):
+        claim_album_by_album_and_length(itunes, results, nav)
+        return results
+
+    def test_an_untitled_rip_is_placed_by_length(self):
+        # iTunes wrote "Track 07"; MusicBrainz supplies the real title.
+        nav = [nav_row("n1", "Country Honk", "The Rolling Stones", "Acoustic Motherfuckers", 178)]
+        itunes = {"p1": itunes_track("Track 07", "The Rolling Stones", "Acoustic Motherfuckers", 178)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")
+
+    def test_the_artist_need_not_agree_at_all(self):
+        # iTunes filed the movement name as the artist; the library credits Bach.
+        nav = [nav_row("n1", "Suite no. 2 in D minor, BWV 1008: VI. Gigue",
+                       "Johann Sebastian Bach", "The Cello Suites: Inspired by Bach", 146)]
+        itunes = {"p1": itunes_track("J.S. Bach: Cello Suite #2 In D Minor, BWV 1008 - 6. Gigue",
+                                     "1. Prelude", "The Cello Suites: Inspired by Bach", 146)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")
+
+    def test_a_subtitle_glued_on_is_the_same_record(self):
+        nav = [nav_row("n1", "Suite no. 4: VI. Gigue", "J S Bach", "The Cello Suites: Inspired by Bach", 177)]
+        itunes = {"p1": itunes_track("Cello Suite #4 - 3. Gigue", "Yo-Yo Ma",
+                                     "The Cello Suites Inspired By Bach, From The Six-Part Film Series", 177)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertEqual(results["p1"]["nav_id"], "n1")
+
+    def test_an_album_name_many_records_share_is_refused(self):
+        # "Greatest Hits" names everybody's record; length alone cannot pick.
+        nav = [nav_row("n1", "Song A", "Band One", "Greatest Hits", 200, album_id="a1"),
+               nav_row("n2", "Song B", "Band Two", "Greatest Hits", 200, album_id="a2")]
+        itunes = {"p1": itunes_track("Whatever", "Band Three", "Greatest Hits", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertIsNone(results["p1"]["nav_id"])
+
+    def test_two_tracks_of_the_same_length_are_left_alone(self):
+        nav = [nav_row("n1", "One", "Band", "Record", 200), nav_row("n2", "Two", "Band", "Record", 200)]
+        itunes = {"p1": itunes_track("Track 03", "Band", "Record", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        self.assertIsNone(results["p1"]["nav_id"], "nothing distinguishes the two")
+
+    def test_a_slot_is_not_handed_out_twice(self):
+        nav = [nav_row("n1", "Only Track", "Band", "Record", 200)]
+        itunes = {"p1": itunes_track("Track 01", "Band", "Record", 200),
+                  "p2": itunes_track("Track 02", "Band", "Record", 200)}
+        results = {"p1": {"nav_id": None, "tier": "unmatched", "ambiguous": False},
+                   "p2": {"nav_id": None, "tier": "unmatched", "ambiguous": False}}
+        self.run_pass(itunes, results, nav)
+        claimed = [r["nav_id"] for r in results.values() if r["nav_id"]]
+        self.assertEqual(claimed, ["n1"])
