@@ -389,7 +389,12 @@
   }
 
   .nd-playlists__track {
-    grid-template-columns: 1.5rem 2rem minmax(0, 1fr) auto;
+    /* Keep the line names. Every cell is pinned to one by name, so dropping
+       them here left each cell with nowhere to go and grid stacked them down
+       the page, one per row. Narrow the columns instead of renaming them. */
+    grid-template-columns:
+      [select] auto [grip] auto [number] 1.5rem [play] 2rem
+      [copy] minmax(0, 1fr) [rating] auto [duration] auto [remove] auto;
   }
 
   .nd-playlists__track-duration,
