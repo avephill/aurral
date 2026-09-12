@@ -2696,7 +2696,11 @@ function LibraryPage() {
     section === "home"
       ? pageData?.total ?? library.albums.length + ownedLibraryTracks.length
       : activeCount;
-  const showToolbar = section !== "home";
+  // The toolbar renders everywhere, home included, so its controls have one
+  // place to live as home grows. Controls that have nothing to act on there
+  // are hidden individually below rather than by dropping the whole bar.
+  const showToolbar = true;
+  const isHome = section === "home";
   const hasActiveFilters = Boolean(selectedGenre);
 
   return (
@@ -2737,7 +2741,7 @@ function LibraryPage() {
                 Explore in Discover
               </button>
             )}
-            {showToolbar ? (
+            {!isHome ? (
               <TooltipButton
                 className={`native-library-icon-button${searchOpen ? " is-active" : ""}`}
                 onClick={() => setSearchOpen((value) => !value)}
@@ -2747,17 +2751,7 @@ function LibraryPage() {
               >
                 <Search aria-hidden="true" />
               </TooltipButton>
-            ) : (
-              <TooltipButton
-                className="native-library-icon-button"
-                onClick={refreshLibrary}
-                disabled={refreshing}
-                label={refreshing ? "Refreshing library…" : "Refresh"}
-                aria-label="Refresh library"
-              >
-                {refreshing ? <DotLoader size="sm" label={null} /> : <RefreshCw aria-hidden="true" />}
-              </TooltipButton>
-            )}
+            ) : null}
           </div>
         </div>
         {showToolbar && (
@@ -2827,7 +2821,7 @@ function LibraryPage() {
                   </TooltipButton>
                 </>
               )}
-              {section !== "genres" && (
+              {section !== "genres" && !isHome && (
                 <TooltipButton
                   className={`native-library-icon-button${hasActiveFilters ? " is-active" : ""}`}
                   onClick={() => setFiltersOpen((value) => !value)}
@@ -2848,7 +2842,7 @@ function LibraryPage() {
                 {refreshing ? <DotLoader size="sm" label={null} /> : <RefreshCw aria-hidden="true" />}
               </TooltipButton>
               <span className="native-library-toolbar-spacer" aria-hidden="true" />
-              {(tab === "artists" || tab === "albums") && (
+              {(tab === "artists" || tab === "albums") && !isHome && (
                 <div className="native-library-view-toggle" aria-label="Library view">
                   <TooltipButton
                     className={`native-library-icon-button${viewMode === "grid" ? " is-active" : ""}`}

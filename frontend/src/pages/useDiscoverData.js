@@ -98,6 +98,10 @@ export function useDiscoverData() {
   const recentlyAdded = recentlyAddedQuery.data || [];
   const recentReleases = recentReleasesQuery.data || [];
   const [pendingRecentReleaseIds, setPendingRecentReleaseIds] = useState({});
+  // Requests stay marked for the life of the page. A just-requested album has
+  // no files yet, so the card's "in library" check will not appear for a long
+  // while, and without this the button looks untouched a second later.
+  const [requestedRecentReleaseIds, setRequestedRecentReleaseIds] = useState({});
   const [error, setError] = useState(null);
   const [libraryLookup, setLibraryLookup] = useState({});
   const { lookup: artistFeedbackLookup, submitFeedback } =
@@ -466,6 +470,7 @@ export function useDiscoverData() {
           artistMbid: album.artistMbid || album.foreignArtistId,
           artistName: album.artistName,
         });
+        setRequestedRecentReleaseIds((prev) => ({ ...prev, [albumKey]: true }));
         showSuccess(`Searching for ${album.albumName || "album"}`);
       } catch (err) {
         showError(
@@ -515,6 +520,7 @@ export function useDiscoverData() {
     recentlyAdded,
     recentReleases,
     pendingRecentReleaseIds,
+    requestedRecentReleaseIds,
     error,
     libraryLookup,
     setLibraryLookup,

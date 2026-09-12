@@ -63,6 +63,7 @@ function DiscoverPage() {
     recentlyAdded,
     recentReleases,
     pendingRecentReleaseIds,
+    requestedRecentReleaseIds,
     error,
     libraryLookup,
     setLibraryLookup,
@@ -616,6 +617,7 @@ function DiscoverPage() {
                   onNavigate={navigate}
                   canAddAlbum={canAddAlbum}
                   isPending={!!pendingRecentReleaseIds[getRecentReleaseKey(album)]}
+                  isRequested={!!requestedRecentReleaseIds[getRecentReleaseKey(album)]}
                   onAlbumAction={handleRecentReleaseAlbumAction}
                 />
               </div>

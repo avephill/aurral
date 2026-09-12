@@ -1,7 +1,7 @@
 import { memo, useCallback, useState, useEffect } from "react";
 import { getReleaseGroupCover, getArtistCover } from "../utils/api/endpoints/artists.js";
 
-import { Library, Music } from "lucide-react";
+import { Check, Library, Music } from "lucide-react";
 import ArtistImage from "../components/ArtistImage";
 import AddActionButton from "../components/AddActionButton";
 import { ArtistContextMenu } from "../components/ArtistContextMenu";
@@ -262,6 +262,7 @@ export const AlbumCard = memo(
     onNavigate,
     canAddAlbum = false,
     isPending = false,
+    isRequested = false,
     onAlbumAction,
   }) => {
     const { coverUrl, releaseGroupMbid, artistMbid } = useAlbumCoverUrl(album);
@@ -304,14 +305,18 @@ export const AlbumCard = memo(
               className="artist-discover-card__action"
               onClick={(event) => event.stopPropagation()}
             >
+              {/* A requested album has no files yet, so the "in library" check
+                  above will not show for a while. Say it was asked for, or the
+                  button looks untouched and invites a second request. */}
               <AddActionButton
                 onClick={(event) => {
                   event.stopPropagation();
-                  onAlbumAction(album);
+                  if (!isRequested) onAlbumAction(album);
                 }}
+                icon={isRequested ? Check : undefined}
                 isLoading={isPending}
-                disabled={isPending}
-                label="Add to Lidarr"
+                disabled={isPending || isRequested}
+                label={isRequested ? "Requested" : "Add to Lidarr"}
               />
             </div>
           ) : null}
@@ -352,6 +357,7 @@ export const AlbumCard = memo(
       prevProps.album.statistics?.percentOfTracks === nextProps.album.statistics?.percentOfTracks &&
       prevProps.canAddAlbum === nextProps.canAddAlbum &&
       prevProps.isPending === nextProps.isPending &&
+      prevProps.isRequested === nextProps.isRequested &&
       prevProps.onNavigate === nextProps.onNavigate &&
       prevProps.onAlbumAction === nextProps.onAlbumAction
     );
