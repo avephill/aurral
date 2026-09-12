@@ -492,6 +492,17 @@ export function applyThemePreview(theme, appearance = getThemeSettings().appeara
   return applyResolvedTheme(resolved, { themeId: theme.id, appearance });
 }
 
+/**
+ * Apply a selection that came from the server (see themeSync.js). Identical to
+ * setThemeSelection, but named so the intent is clear at the call site: this is
+ * the account's stored choice arriving, not the user picking in this browser.
+ * A custom theme id that is not installed here falls back to the default, since
+ * custom theme files live in the browser.
+ */
+export function applyStoredThemeSelection(themeId, appearance = "system") {
+  return setThemeSelection(themeId, appearance);
+}
+
 export function setThemeSelection(themeId, appearance = "system") {
   const nextThemeId = getThemeDefinition(themeId) ? themeId : DEFAULT_THEME_ID;
   const nextAppearance = isThemeMode(appearance) ? appearance : "system";

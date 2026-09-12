@@ -15,6 +15,7 @@ import { clearLibraryFavoritesCache } from "../utils/api/endpoints/library.js";
 import { setPlaylistStoreMode } from "../utils/api/endpoints/playlists.js";
 import { forgetTrackRatings, setTrackRatingsEnabled } from "../hooks/useTrackRating.js";
 import { setDateTimeFormat } from "../utils/dateTime.js";
+import { startThemeSync } from "../utils/themeSync.js";
 import { queryClient } from "../queryClient.js";
 
 const AuthContext = createContext(null);
@@ -172,6 +173,12 @@ export const AuthProvider = ({ children }) => {
   // Ratings belong to the signed-in user; never show one person's stars to the next.
   useEffect(() => {
     forgetTrackRatings();
+  }, [user?.id]);
+
+  // The theme follows the account, so a choice made on one machine shows up on
+  // the next. Signed out, the browser's own copy stands.
+  useEffect(() => {
+    startThemeSync(user?.id);
   }, [user?.id]);
 
   const canLogOut = !bootstrap?.proxyAuthEnabled || !!bootstrap?.proxyLogoutUrl;

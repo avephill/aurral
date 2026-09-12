@@ -394,6 +394,54 @@ router.patch("/me/discover-layout", requireAuth, (req, res) => {
   }
 });
 
+// Theme choice is per user rather than per browser, so it follows the account
+// from one device to the next. The id is opaque here: the frontend owns the
+// theme vocabulary, including custom themes, and falls back on its own default
+// when it does not recognise a stored id.
+const THEME_APPEARANCES = ["system", "light", "dark"];
+
+function normalizeThemeSelection(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const themeId = String(raw.themeId || "").trim();
+  if (!themeId || themeId.length > 120) return null;
+  const appearance = String(raw.appearance || "system").trim();
+  if (!THEME_APPEARANCES.includes(appearance)) return null;
+  return { themeId, appearance };
+}
+
+router.get("/me/theme", requireAuth, (req, res) => {
+  try {
+    const user = userOps.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json({ theme: normalizeThemeSelection(dbOps.getUserTheme(req.user.id)) });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to get theme", message: e.message });
+  }
+});
+
+router.patch("/me/theme", requireAuth, (req, res) => {
+  try {
+    const user = userOps.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const normalized = normalizeThemeSelection(req.body?.theme);
+    if (!normalized) {
+      return res.status(400).json({
+        error: "Invalid theme",
+        message: "theme must be { themeId, appearance } with a known appearance",
+        field: "theme",
+      });
+    }
+    dbOps.setUserTheme(req.user.id, normalized);
+    res.json({ theme: normalizeThemeSelection(dbOps.getUserTheme(req.user.id)) });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to save theme", message: e.message });
+  }
+});
+
 router.patch("/me/lidarr-preferences", requireAuth, async (req, res) => {
   try {
     const user = userOps.getUserById(req.user.id);

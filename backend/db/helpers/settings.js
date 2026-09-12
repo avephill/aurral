@@ -98,6 +98,14 @@ export const dbOps = {
     );
   },
 
+  getUserTheme(userId) {
+    return dbOps.getJSONSetting(`user:${parseInt(userId, 10)}:theme`);
+  },
+
+  setUserTheme(userId, theme) {
+    dbOps.setJSONSetting(`user:${parseInt(userId, 10)}:theme`, theme);
+  },
+
   getSettings() {
     const now = Date.now();
     if (settingsCache && now - settingsCacheTime < SETTINGS_CACHE_TTL) {
