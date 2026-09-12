@@ -48,11 +48,13 @@ export default defineConfig(({ mode }) => {
           // window, its own icon, no address bar. Keep `id` stable so an
           // install survives later changes to the rest of the manifest.
           id: basePath,
-          name: "Aurral Music",
-          short_name: "Aurral",
+          name: "Psalter",
+          short_name: "Psalter",
           description: "Your music library, playlists and ratings",
-          theme_color: "#ffffff",
-          background_color: "#ffffff",
+          // The icon's ground, so the launch screen does not flash white
+          // before the app paints.
+          theme_color: "#2e3660",
+          background_color: "#2e3660",
           display: "standalone",
           display_override: ["standalone", "minimal-ui"],
           scope: basePath,
@@ -62,25 +64,25 @@ export default defineConfig(({ mode }) => {
           launch_handler: { client_mode: "navigate-existing" },
           icons: [
             {
-              src: `${basePath}icons/aurral-192.png`,
+              src: `${basePath}icons/psalter-192.png`,
               sizes: "192x192",
               type: "image/png",
               purpose: "any",
             },
             {
-              src: `${basePath}icons/aurral-512.png`,
+              src: `${basePath}icons/psalter-512.png`,
               sizes: "512x512",
               type: "image/png",
               purpose: "any",
             },
             {
-              src: `${basePath}icons/aurral-512-maskable.png`,
+              src: `${basePath}icons/psalter-512-maskable.png`,
               sizes: "512x512",
               type: "image/png",
               purpose: "maskable",
             },
             {
-              src: `${basePath}icons/aurral-icon-iOS-Default-1024x1024@1x.png`,
+              src: `${basePath}icons/psalter-1024.png`,
               sizes: "1024x1024",
               type: "image/png",
               purpose: "any",
