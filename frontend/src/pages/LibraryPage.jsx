@@ -81,7 +81,9 @@ import {
 import { useResponsiveReleaseLimit } from "./ArtistDetails/hooks/useResponsiveReleaseLimit";
 import { queryClient, queryKeys } from "../queryClient.js";
 
-const LIBRARY_VIEW_IDS = new Set(LIBRARY_VIEWS.map((view) => view.id));
+// "album-artists" is no longer offered in the sidebar but stays routable, so a
+// bookmark or an old link lands on the artist list rather than the home view.
+const LIBRARY_VIEW_IDS = new Set([...LIBRARY_VIEWS.map((view) => view.id), "album-artists"]);
 
 const text = (value) => String(value || "").trim();
 
@@ -545,7 +547,11 @@ function LibraryPage() {
   const selectedGenre = searchParams.get("genre") || "";
   const forcePreview = import.meta.env.DEV && searchParams.get("preview") === "1";
   const previewQuery = forcePreview ? "?preview=1" : "";
-  const sectionLabel = LIBRARY_VIEWS.find((view) => view.id === section)?.label || "Library";
+  // An old /library/album-artists link lands on the artist list, so it should
+  // read "Artists" rather than fall back to the generic heading.
+  const sectionLabel =
+    LIBRARY_VIEWS.find((view) => view.id === (section === "album-artists" ? "artists" : section))
+      ?.label || "Library";
   const librarySource = useMemo(() => ({ type: "native-library", id: "library" }), []);
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
@@ -1126,10 +1132,15 @@ function LibraryPage() {
     (album) => {
       const tracks = getAlbumTracks(album);
       const total = album?.trackCount || tracks.length || (album?.trackIds || []).length;
-      const available = album?.availableTrackCount != null && tracks.length !== total
-        ? album.availableTrackCount
-        : tracks.filter((track) => firstAvailableFile(track)).length;
-      return { total, available };
+      if (album?.availableTrackCount != null && tracks.length !== total) {
+        return { total, available: album.availableTrackCount };
+      }
+      // A grid of albums has not loaded anyone's tracks yet. Counting files in
+      // an empty list says nothing is available, which is a claim about the
+      // library rather than about what we happen to have fetched: leave it
+      // unknown and let the caller say nothing instead.
+      if (!tracks.length) return { total, available: null };
+      return { total, available: tracks.filter((track) => firstAvailableFile(track)).length };
     },
     [getAlbumTracks],
   );
@@ -2036,7 +2047,9 @@ function LibraryPage() {
     const albumTracks = getAlbumTracks(album);
     const availability = albumAvailability(album);
     const meta =
-      availability.total && availability.available < availability.total
+      availability.total
+      && availability.available != null
+      && availability.available < availability.total
         ? availability.available + "/" + availability.total + " available"
         : (yearOf(album.releaseDate) ? yearOf(album.releaseDate) + " · " : "") +
           (availability.total || 0) +
