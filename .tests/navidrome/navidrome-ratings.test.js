@@ -100,6 +100,21 @@ function createFakeNavidrome() {
                 })),
             },
           }));
+        case "/rest/getAlbumList2":
+          state.albumListType = url.searchParams.get("type");
+          return reply(subsonicOk({
+            albumList2: {
+              album: [
+                { id: "al-1", name: "Stand Up", userRating: 5 },
+                { id: "al-elsewhere", name: "Not On This Server", userRating: 4 },
+                { id: "al-unrated", name: "Unrated", userRating: 0 },
+              ],
+            },
+          }));
+        case "/rest/getAlbum":
+          return reply(subsonicOk({
+            album: { id, song: [{ id: id === "al-1" ? "nd-1" : "nd-unknown" }] },
+          }));
         case "/rest/unstar":
           state.starred.delete(`${user}:${id}`);
           return reply(subsonicOk());
@@ -233,6 +248,17 @@ test("a star on a song this server does not hold is skipped quietly", async () =
   const result = await annotations.importStarsFromNavidrome(user);
   assert.equal(result.connected, true);
   assert.equal(result.matched, 1, "only the song we hold matched");
+});
+
+test("top rated albums are the user's rated albums that this server holds, in Navidrome's order", async () => {
+  resolver.resetNavidromeTrackResolver();
+  const result = await annotations.getTopRatedAlbums(user, { limit: 5 });
+  assert.equal(result.connected, true);
+  assert.equal(fake.state.albumListType, "highest");
+  // The album with no file here and the unrated one are both left out.
+  assert.deepEqual(result.albums, [{ albumId: album.id, rating: 5 }]);
+  const listCall = fake.state.requests.find((request) => request.path === "/rest/getAlbumList2");
+  assert.equal(listCall.headers["x-authentik-username"], "dunshill");
 });
 
 test("with nothing remembered, stars are matched by reading the songs themselves", () => {

@@ -45,6 +45,7 @@ import {
   deleteArtistFromLibrary,
   deleteTrackFromLibrary,
   fetchCanonicalLibraryPage,
+  getTopRatedAlbums,
   getActiveLibraryRefresh,
   getCanonicalLibraryPage,
   getLibraryFavorites,
@@ -637,6 +638,11 @@ function LibraryPage() {
                   sort: "newest",
                   availableOnly: true,
                 }, { signal }),
+                // Optional: without Navidrome ratings home just has no Top
+                // rated shelf, so a failure here must not fail the page.
+                getTopRatedAlbums({ signal })
+                  .then((result) => ({ ...result.library, topRated: result.albums }))
+                  .catch(() => null),
               ])
             : await fetchCanonicalLibraryPage({
                 kind: tab,
@@ -662,9 +668,18 @@ function LibraryPage() {
         normalizedLibrary.artists.length === 0 &&
         normalizedLibrary.albums.length === 0 &&
         normalizedLibrary.tracks.length === 0;
+      const topRatedPage = section === "home" && !isDetail
+        ? pageResults.find((page) => Array.isArray(page?.topRated))
+        : null;
       return {
         nextData,
         pageResults,
+        recentAlbumIds: section === "home" && !isDetail
+          ? (pageResults[0]?.albums || []).map((album) => String(album.id))
+          : null,
+        topRatedAlbumIds: topRatedPage
+          ? topRatedPage.topRated.map((entry) => String(entry.albumId))
+          : [],
         isPreview: usePreview,
         library: usePreview ? libraryPreviewData : normalizedLibrary,
         favoriteIds: usePreview
@@ -1331,12 +1346,22 @@ function LibraryPage() {
     return sortDirection === "asc" ? items : items.reverse();
   }, [sortDirection, visibleGenreStats]);
 
-  const homeAlbums = useMemo(
+  // Home's library also holds the top-rated albums, so each shelf picks its own
+  // albums out by id rather than taking every album the library has.
+  const homeAlbums = useMemo(() => {
+    const recentIds = queryData?.recentAlbumIds ? new Set(queryData.recentAlbumIds) : null;
+    return library.albums
+      .filter((album) => !recentIds || recentIds.has(String(album.id)))
+      .sort((left, right) => text(right.releaseDate).localeCompare(text(left.releaseDate)))
+      .slice(0, Math.max(2, homeAlbumColumns) * 2);
+  }, [homeAlbumColumns, library.albums, queryData?.recentAlbumIds]);
+  const homeTopRatedAlbums = useMemo(
     () =>
-      [...library.albums]
-        .sort((left, right) => text(right.releaseDate).localeCompare(text(left.releaseDate)))
+      (queryData?.topRatedAlbumIds || [])
+        .map((id) => albumsById.get(id))
+        .filter(Boolean)
         .slice(0, Math.max(2, homeAlbumColumns) * 2),
-    [homeAlbumColumns, library.albums],
+    [albumsById, homeAlbumColumns, queryData?.topRatedAlbumIds],
   );
   const homeGenres = useMemo(
     () =>
@@ -2221,7 +2246,7 @@ function LibraryPage() {
     const tiles = [
       { label: "Artists", value: stats?.artists, path: "/library/artists" },
       { label: "Albums", value: stats?.albums, path: "/library/albums" },
-      { label: "Playable tracks", value: stats?.tracks, path: "" },
+      { label: "Playable tracks", value: stats?.tracks, path: "/library/tracks" },
       { label: "Genres", value: genreStats.length, path: "/library/genres", ready: true },
     ];
     return (
@@ -2257,6 +2282,14 @@ function LibraryPage() {
           {renderSectionHeader("Recently added", homeAlbums.length, "/library/albums")}
           <div ref={homeAlbumsGridRef} className="native-library-grid">
             {homeAlbums.map(renderAlbumCard)}
+          </div>
+        </section>
+      )}
+      {homeTopRatedAlbums.length > 0 && (
+        <section className="native-library-section">
+          {renderSectionHeader("Top rated", homeTopRatedAlbums.length)}
+          <div className="native-library-grid">
+            {homeTopRatedAlbums.map(renderAlbumCard)}
           </div>
         </section>
       )}

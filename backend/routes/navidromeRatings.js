@@ -4,11 +4,15 @@ import { noCache } from "../middleware/cache.js";
 import { isNavidromeUserAuthEnabled } from "../config/featureFlags.js";
 import { isNavidromeAuthError } from "../services/navidromeUserClient.js";
 import {
+  getTopRatedAlbums,
   importStarsFromNavidrome,
   lookupTrackAnnotations,
   setTrackRating,
   setTrackStarred,
 } from "../services/navidromeAnnotations.js";
+import { getCanonicalLibraryForAlbumIds } from "../services/libraryQueryService.js";
+import { getStarredIdentityKeys } from "../services/subsonicLibraryService.js";
+import { toPublicLibrary } from "./library/handlers/canonical.js";
 
 /**
  * Ratings and stars held in Navidrome, read and written as the signed-in
@@ -70,6 +74,19 @@ router.put("/track/star", noCache, async (req, res) => {
     return res.json(await setTrackStarred(req.user, { trackId, albumId }, starred));
   } catch (error) {
     return sendError(res, error, "Could not update the star in Navidrome");
+  }
+});
+
+// The user's highest-rated albums, with the canonical albums, tracks and
+// artists needed to draw and play them. `albums` keeps Navidrome's order.
+router.get("/top-albums", noCache, async (req, res) => {
+  if (!guard(res)) return undefined;
+  try {
+    const result = await getTopRatedAlbums(req.user, { limit: req.query.limit });
+    const library = getCanonicalLibraryForAlbumIds({ ids: result.albums.map((album) => album.albumId) });
+    return res.json({ ...result, library: toPublicLibrary(library, getStarredIdentityKeys(req.user)) });
+  } catch (error) {
+    return sendError(res, error, "Could not read top rated albums from Navidrome");
   }
 });
 

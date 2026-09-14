@@ -61,6 +61,11 @@ export const clearCanonicalLibraryPageCache = () => {
   });
 };
 
+// The signed-in user's highest-rated albums, read from Navidrome as them.
+// `albums` is the order; `library` holds what is needed to draw and play them.
+export const getTopRatedAlbums = ({ limit = 24, signal } = {}) =>
+  getData("/navidrome-ratings/top-albums", { params: { limit }, signal });
+
 export const requestLibraryRefresh = () => postData("/library/refresh", {});
 
 export const getActiveLibraryRefresh = () => getData("/library/refresh");

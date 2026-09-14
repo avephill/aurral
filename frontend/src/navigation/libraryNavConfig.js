@@ -3,9 +3,9 @@ export const DEFAULT_LIBRARY_VIEW = "home";
 export const LIBRARY_VIEWS = [
   { id: "favorites", label: "Favorites", path: "/library/favorites" },
   { id: "albums", label: "Albums", path: "/library/albums" },
-  // No "Tracks" view: a quarter of a million rows is not something anyone
-  // browses, and the page had to build the whole list to show the first screen.
-  // Track-level access is through an album, a search or a playlist.
+  // Tracks came back once the canonical endpoint paged on the server: the view
+  // now fetches one page of playable tracks rather than building the whole list.
+  { id: "tracks", label: "Tracks", path: "/library/tracks" },
   // One artist list, not two. "Album Artists" and "Artists" rendered the same
   // data here, and the distinction is a cataloguer's rather than a listener's:
   // the track-level credit fills the sidebar with everyone who guested once.

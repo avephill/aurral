@@ -142,6 +142,55 @@ export async function setTrackStarred(user, ref, starred) {
   return { trackId: normalized.trackId, songId, starred: Boolean(starred) };
 }
 
+const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
+
+/**
+ * The user's highest-rated albums, as canonical album ids in Navidrome's order.
+ *
+ * The ratings are Navidrome's album ratings for this user, read as them. Each
+ * album is matched to a file through its first song, the same way stars are,
+ * so an album this server does not index is dropped rather than shown empty.
+ */
+export async function getTopRatedAlbums(user, { limit = 12 } = {}) {
+  if (!isNavidromeUserAuthEnabled()) return { enabled: false, connected: false, albums: [] };
+  const client = createNavidromeUserClient(user);
+  if (!client) return { enabled: true, connected: false, albums: [] };
+  const size = Math.max(1, Math.min(50, Math.round(Number(limit) || 12)));
+
+  let rated = [];
+  try {
+    // Read twice what is wanted: some rated albums have no file here.
+    const data = await client.request("getAlbumList2", { type: "highest", size: size * 2 });
+    rated = asArray(data?.albumList2?.album).filter((album) => clampRating(album?.userRating) > 0);
+  } catch (error) {
+    if (isNavidromeAuthError(error)) return { enabled: true, connected: false, albums: [] };
+    throw error;
+  }
+
+  const firstSongIds = await mapLimit(rated, LOOKUP_CONCURRENCY, async (album) => {
+    try {
+      const data = await client.request("getAlbum", { id: album.id });
+      return String(asArray(data?.album?.song)[0]?.id || "") || null;
+    } catch (error) {
+      logger.warn("library", `[Navidrome] Could not read rated album ${album.id}: ${error.message}`);
+      return null;
+    }
+  });
+  const paths = await mediaPathsForNavidromeSongIds(firstSongIds.filter(Boolean));
+  const files = new Map(getCanonicalMediaFilesByPaths([...paths.values()]).map((file) => [file.path, file]));
+
+  const albums = [];
+  const seen = new Set();
+  rated.forEach((album, index) => {
+    const file = files.get(paths.get(firstSongIds[index]));
+    const albumId = Number(file?.albumId);
+    if (!Number.isSafeInteger(albumId) || albumId <= 0 || seen.has(albumId)) return;
+    seen.add(albumId);
+    albums.push({ albumId, rating: clampRating(album.userRating) });
+  });
+  return { enabled: true, connected: true, albums: albums.slice(0, size) };
+}
+
 /**
  * Aurral favourite ids look like "song:<identityKey>" or "album:<identityKey>".
  * Resolve the song ones to canonical refs; album ones to any track on the
