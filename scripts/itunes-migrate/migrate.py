@@ -57,6 +57,25 @@ MECHANICAL_PLAYLISTS = {
 }
 RATING_LIST = re.compile(r"\b(rated|top rated)\b", re.I)
 
+# Navidrome 0.64 re-encoded every id from 32 lowercase hex characters (a 128-bit
+# value) to the same 128 bits in base62, digits then lower then upper case,
+# zero-padded to 22. State files written before that upgrade still spell ids the
+# old way; this reads them the new way. Anything else passes through unchanged,
+# including ids that were already base62.
+_BASE62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_LEGACY_ID = re.compile(r"^[0-9a-f]{32}$")
+
+
+def canonical_id(item_id):
+    if not isinstance(item_id, str) or not _LEGACY_ID.match(item_id):
+        return item_id
+    value = int(item_id, 16)
+    digits = ""
+    while value:
+        value, rem = divmod(value, 62)
+        digits = _BASE62[rem] + digits
+    return digits.rjust(22, _BASE62[0])
+
 
 # --------------------------------------------------------------------------- Navidrome client
 
@@ -303,12 +322,20 @@ def load_state(path):
     playlists = raw.get("playlists") or {}
     if isinstance(playlists, list):
         playlists = {e["name"]: e.get("resolved", []) for e in playlists}
+    # Ids are read in Navidrome's current spelling, so a state file written
+    # before its 0.64 id migration still lines up with this run's plan.
     return {
-        "playlists": playlists,
-        "ratings": raw.get("ratings") or {},
-        "album_ratings": raw.get("album_ratings") or {},
-        "loved": raw.get("loved") or [],
+        "playlists": {name: [canonical_id(i) for i in ids] for name, ids in playlists.items()},
+        "ratings": {canonical_id(k): v for k, v in (raw.get("ratings") or {}).items()},
+        "album_ratings": {canonical_id(k): v for k, v in (raw.get("album_ratings") or {}).items()},
+        "loved": [canonical_id(i) for i in raw.get("loved") or []],
     }
+
+
+def live_track_ids(nd, playlist_id):
+    """The song ids a playlist holds in Navidrome right now."""
+    data = nd.subsonic("getPlaylist", id=playlist_id)
+    return [entry.get("id") for entry in (data.get("playlist") or {}).get("entry") or []]
 
 
 def apply_playlists(nd, chosen, public, previous, replace_existing=False, delete_file_backed=False):
@@ -341,6 +368,15 @@ def apply_playlists(nd, chosen, public, previous, replace_existing=False, delete
         ours = [pl for pl in mine_by_name.get(e["name"], []) if (pl.get("comment") or "").startswith(MARKER)]
         if ours and previous["playlists"].get(e["name"]) == e["resolved"]:
             continue  # same tracks as last time; leave it alone
+        # The state can name ids Navidrome no longer has (a rescan retired a
+        # row, or an id migration the conversion above could not follow). Before
+        # deleting and recreating someone's playlist on that evidence, ask
+        # Navidrome: if it already holds exactly the plan, there is nothing to do.
+        # Only checked when the state disagrees, so a playlist the person edited
+        # by hand is still left alone whenever the plan itself has not changed.
+        if len(ours) == 1 and live_track_ids(nd, ours[0]["id"]) == e["resolved"]:
+            print(f"  {e['name']!r} already matches the plan in Navidrome; state was stale")
+            continue
         for pl in mine_by_name.get(e["name"], []):
             if replace_existing or (pl.get("comment") or "").startswith(MARKER):
                 nd.native("DELETE", f"/api/playlist/{pl['id']}")
