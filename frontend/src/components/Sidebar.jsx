@@ -411,8 +411,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       {stageBackdropVariant ? <SidebarStageBackdrop variant={stageBackdropVariant} /> : null}
       <div className="sidebar-logo-row">
         <Link to="/" className="sidebar-logo-link">
-          <img src="/arralogo.svg" alt="Aurral Logo" className="sidebar-logo" />
-          {!isIcons && <span className="sidebar-title">Aurral</span>}
+          <img src="/icons/psalter-180.png" alt="Psalter" className="sidebar-logo" />
+          {!isIcons && <span className="sidebar-title">Psalter</span>}
         </Link>
       </div>
 
@@ -492,7 +492,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
                 onMouseEnter={positionSidebarTooltip}
                 onFocus={positionSidebarTooltip}
                 className={`sidebar-link sidebar-link--${isIcons ? "icons" : "full"}`}
-                aria-label="Back to Aurral"
+                aria-label="Back to Psalter"
               >
                 <span className="sidebar-link__icon-wrap">
                   <ArrowLeft className="sidebar-link__icon" aria-hidden="true" />
