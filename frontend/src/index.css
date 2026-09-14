@@ -7659,6 +7659,54 @@ textarea {
   border-bottom: 0;
 }
 
+/* A row of plain library totals under the home title. Each tile opens the
+   view it counts, so the number always matches what that view shows. */
+.native-library-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.25rem 0 2.25rem;
+}
+
+.native-library-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+
+a.native-library-stat:hover,
+a.native-library-stat:focus-visible {
+  border-color: var(--aurral-border-strong);
+}
+
+.native-library-stat__value {
+  color: var(--aurral-text);
+  font-size: 1.35rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.native-library-stat__label {
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 560px) {
+  .native-library-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .native-library-title-row {
   display: flex;
   min-height: 3.5rem;

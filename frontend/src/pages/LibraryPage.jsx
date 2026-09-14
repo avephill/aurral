@@ -676,6 +676,32 @@ function LibraryPage() {
     },
   });
 
+  // Totals for the home stats row. Each is read the same way as the view its
+  // tile opens (albums and artists include albums with no playable file yet,
+  // tracks count only playable ones), so a tile never disagrees with the page
+  // behind it. One-row pages: only `total` is wanted. Keyed under the library
+  // view prefix, so finishing a library refresh refetches these too.
+  const homeStatsQuery = useQuery({
+    queryKey: queryKeys.libraryView({ section: "home-stats" }),
+    enabled: !forcePreview && section === "home" && !isDetail,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const [artists, albums, tracks] = await Promise.all([
+        fetchCanonicalLibraryPage({ kind: "artists", page: 1, pageSize: 1 }, { signal }),
+        fetchCanonicalLibraryPage({ kind: "albums", page: 1, pageSize: 1 }, { signal }),
+        fetchCanonicalLibraryPage(
+          { kind: "tracks", page: 1, pageSize: 1, availableOnly: true },
+          { signal },
+        ),
+      ]);
+      return {
+        artists: Number(artists?.total) || 0,
+        albums: Number(albums?.total) || 0,
+        tracks: Number(tracks?.total) || 0,
+      };
+    },
+  });
+
   const queryData = libraryQuery.data;
   const isPreviewLibrary = forcePreview || queryData?.isPreview === true;
   const library = queryData?.library || (forcePreview ? libraryPreviewData : EMPTY_LIBRARY);
@@ -2189,8 +2215,51 @@ function LibraryPage() {
     </div>
   );
 
+  const renderHomeStats = () => {
+    const stats = homeStatsQuery.data;
+    const format = (value) => (stats ? value.toLocaleString() : "–");
+    const tiles = [
+      { label: "Artists", value: stats?.artists, path: "/library/artists" },
+      { label: "Albums", value: stats?.albums, path: "/library/albums" },
+      { label: "Playable tracks", value: stats?.tracks, path: "" },
+      { label: "Genres", value: genreStats.length, path: "/library/genres", ready: true },
+    ];
+    return (
+      <div className="native-library-stats">
+        {tiles.map((tile) => {
+          const body = (
+            <>
+              <span className="native-library-stat__value">
+                {tile.ready ? tile.value.toLocaleString() : format(tile.value)}
+              </span>
+              <span className="native-library-stat__label">{tile.label}</span>
+            </>
+          );
+          return tile.path ? (
+            <Link className="native-library-stat" key={tile.label} to={tile.path + previewQuery}>
+              {body}
+            </Link>
+          ) : (
+            <div className="native-library-stat" key={tile.label}>
+              {body}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   const renderHome = () => (
     <div className="native-library-home">
+      {!forcePreview && renderHomeStats()}
+      {homeAlbums.length > 0 && (
+        <section className="native-library-section">
+          {renderSectionHeader("Recently added", homeAlbums.length, "/library/albums")}
+          <div ref={homeAlbumsGridRef} className="native-library-grid">
+            {homeAlbums.map(renderAlbumCard)}
+          </div>
+        </section>
+      )}
       {homeGenres.length > 0 && (
         <section className="native-library-section">
           {renderSectionHeader("Genres", null, "/library/genres" + previewQuery, "View more")}
@@ -2208,14 +2277,6 @@ function LibraryPage() {
                 {genre.name}
               </Link>
             ))}
-          </div>
-        </section>
-      )}
-      {homeAlbums.length > 0 && (
-        <section className="native-library-section">
-          {renderSectionHeader("Recently added", homeAlbums.length, "/library/albums")}
-          <div ref={homeAlbumsGridRef} className="native-library-grid">
-            {homeAlbums.map(renderAlbumCard)}
           </div>
         </section>
       )}
@@ -2692,15 +2753,12 @@ function LibraryPage() {
     pageData?.kind === tab && tab !== "genres"
       ? Math.ceil(pageData.total / pageData.pageSize)
       : 0;
-  const pageCount =
-    section === "home"
-      ? pageData?.total ?? library.albums.length + ownedLibraryTracks.length
-      : activeCount;
-  // The toolbar renders everywhere, home included, so its controls have one
-  // place to live as home grows. Controls that have nothing to act on there
-  // are hidden individually below rather than by dropping the whole bar.
-  const showToolbar = true;
   const isHome = section === "home";
+  // Home carries its totals in the stats row, so its title goes without a count.
+  const pageCount = isHome ? null : activeCount;
+  // Home has nothing to search, sort or filter; its one control, Refresh, sits
+  // in the title row instead, so home skips the toolbar row entirely.
+  const showToolbar = !isHome;
   const hasActiveFilters = Boolean(selectedGenre);
 
   return (
@@ -2751,7 +2809,17 @@ function LibraryPage() {
               >
                 <Search aria-hidden="true" />
               </TooltipButton>
-            ) : null}
+            ) : (
+              <TooltipButton
+                className="native-library-icon-button"
+                onClick={refreshLibrary}
+                disabled={refreshing}
+                label={refreshing ? "Refreshing library…" : "Refresh"}
+                aria-label="Refresh library"
+              >
+                {refreshing ? <DotLoader size="sm" label={null} /> : <RefreshCw aria-hidden="true" />}
+              </TooltipButton>
+            )}
           </div>
         </div>
         {showToolbar && (
