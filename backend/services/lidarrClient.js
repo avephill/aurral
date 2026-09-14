@@ -510,7 +510,11 @@ export class LidarrClient {
               "Content-Type": "application/json",
               Accept: "application/json",
             },
-            timeout: this.config.timeoutMs,
+            // A caller can ask for longer than the client default: background
+            // library indexing reads whole-artist track lists that Lidarr can
+            // take minutes to answer, where an interactive call should not wait.
+            timeout:
+              Number(options?.timeoutMs) > 0 ? Number(options.timeoutMs) : this.config.timeoutMs,
             httpAgent: this._httpAgent,
             httpsAgent:
               isHttps && this.config.insecure ? this._httpsInsecureAgent : this._httpsAgent,
@@ -1351,7 +1355,12 @@ export class LidarrClient {
   }
 
   async getAllTracks(options = {}) {
-    const { artistIds, throwOnError = false, ...requestOptions } = options;
+    const {
+      artistIds,
+      throwOnError = false,
+      concurrency = LIDARR_MAX_CONCURRENT,
+      ...requestOptions
+    } = options;
     try {
       const normalizedArtistIds = normalizeLidarrArtistIds(artistIds);
       if (normalizedArtistIds.length === 0) {
@@ -1359,7 +1368,7 @@ export class LidarrClient {
       }
       const results = await mapWithConcurrency(
         normalizedArtistIds,
-        LIDARR_MAX_CONCURRENT,
+        concurrency,
         async (artistId) => {
           try {
             const result = await this.request(
@@ -1390,7 +1399,12 @@ export class LidarrClient {
   }
 
   async getAllTrackFiles(options = {}) {
-    const { artistIds, throwOnError = false, ...requestOptions } = options;
+    const {
+      artistIds,
+      throwOnError = false,
+      concurrency = LIDARR_MAX_CONCURRENT,
+      ...requestOptions
+    } = options;
     try {
       const normalizedArtistIds = normalizeLidarrArtistIds(artistIds);
       if (normalizedArtistIds.length === 0) {
@@ -1398,7 +1412,7 @@ export class LidarrClient {
       }
       const results = await mapWithConcurrency(
         normalizedArtistIds,
-        LIDARR_MAX_CONCURRENT,
+        concurrency,
         async (artistId) => {
           try {
             const result = await this.request(
@@ -1429,7 +1443,7 @@ export class LidarrClient {
   }
 
   async getTrackFilesByIds(trackFileIds, options = {}) {
-    const { throwOnError = false, ...requestOptions } = options;
+    const { throwOnError = false, concurrency = LIDARR_MAX_CONCURRENT, ...requestOptions } = options;
     try {
       const normalizedTrackFileIds = normalizeLidarrTrackFileIds(trackFileIds);
       if (normalizedTrackFileIds.length === 0) return [];
@@ -1445,7 +1459,7 @@ export class LidarrClient {
       }
       const results = await mapWithConcurrency(
         batches,
-        LIDARR_MAX_CONCURRENT,
+        concurrency,
         async (batch) => {
           const query = batch
             .map((trackFileId) => `trackFileIds=${encodeURIComponent(trackFileId)}`)

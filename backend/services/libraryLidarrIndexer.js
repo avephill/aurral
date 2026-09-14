@@ -76,6 +76,18 @@ function buildBulkAlbumTrackData(albums, tracks, files) {
   });
 }
 
+// How the index reads Lidarr. It runs in the background, where a slow answer
+// is fine and a failed one throws the whole scan away: with the client's 30s
+// interactive timeout and twelve artists asked for at once, one heavy artist's
+// track list timing out twice aborted every index for weeks. So give these
+// reads minutes rather than seconds, and ask for fewer at a time.
+export const LIDARR_INDEX_READ = Object.freeze({
+  forceRefresh: true,
+  throwOnError: true,
+  timeoutMs: 5 * 60 * 1000,
+  concurrency: 4,
+});
+
 async function loadAlbumTrackData(client, albums, artistIds) {
   const loadPerAlbumTrackData = () =>
     mapWithConcurrency(albums, 4, async (album) => {
@@ -99,26 +111,18 @@ async function loadAlbumTrackData(client, albums, artistIds) {
     let tracks;
     let files;
     if (typeof client.getTrackFilesByIds === "function") {
-      tracks = await client.getAllTracks({
-        artistIds,
-        forceRefresh: true,
-        throwOnError: true,
-      });
+      tracks = await client.getAllTracks({ artistIds, ...LIDARR_INDEX_READ });
       files = await client.getTrackFilesByIds(
         tracks.map((track) => track?.trackFileId),
-        { forceRefresh: true, throwOnError: true },
+        LIDARR_INDEX_READ,
       ).catch((error) => {
         if (typeof client.getAllTrackFiles !== "function") throw error;
-        return client.getAllTrackFiles({
-          artistIds,
-          forceRefresh: true,
-          throwOnError: true,
-        });
+        return client.getAllTrackFiles({ artistIds, ...LIDARR_INDEX_READ });
       });
     } else {
       [tracks, files] = await Promise.all([
-        client.getAllTracks({ artistIds, forceRefresh: true, throwOnError: true }),
-        client.getAllTrackFiles({ artistIds, forceRefresh: true, throwOnError: true }),
+        client.getAllTracks({ artistIds, ...LIDARR_INDEX_READ }),
+        client.getAllTrackFiles({ artistIds, ...LIDARR_INDEX_READ }),
       ]);
     }
     return buildBulkAlbumTrackData(albums, tracks, files);
@@ -166,9 +170,12 @@ export async function indexLidarrLibrary({ client, syncSearch = true } = {}) {
     return { skipped: true, filesSeen: 0, filesIndexed: 0, filesFailed: 0 };
   }
 
+  // The album list is one response covering every album Lidarr knows, so it
+  // gets the index's timeout too rather than the interactive default.
+  const indexRead = { forceRefresh: true, timeoutMs: LIDARR_INDEX_READ.timeoutMs };
   const [artists, albums, rootFolders] = await Promise.all([
-    client.request("/artist", "GET", null, false, { forceRefresh: true }),
-    client.getAllAlbums({ forceRefresh: true }),
+    client.request("/artist", "GET", null, false, indexRead),
+    client.getAllAlbums(indexRead),
     client.getRootFolders(),
   ]);
   if (
