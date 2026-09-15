@@ -40,6 +40,20 @@ export function SettingsRequestsTab({ asPage = false }) {
   const [includeAdmins, setIncludeAdmins] = useState(false);
   const queryClient = useQueryClient();
   const { showError } = useToast();
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refresh asks the server for a new report rather than its kept copy, so a
+  // file that arrived in Lidarr a moment ago shows up.
+  const refreshReport = async () => {
+    setRefreshing(true);
+    try {
+      queryClient.setQueryData(REPORT_QUERY_KEY, await getAlbumRequestReport({ refresh: true }));
+    } catch (error) {
+      showError(error?.response?.data?.message || error?.message || "Could not refresh requests");
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const report = useQuery({
     queryKey: REPORT_QUERY_KEY,
     queryFn: ({ signal }) => getAlbumRequestReport({ signal }),
@@ -105,10 +119,10 @@ export function SettingsRequestsTab({ asPage = false }) {
         <button
           type="button"
           className="btn btn-secondary btn-sm"
-          onClick={() => report.refetch()}
-          disabled={report.isFetching}
+          onClick={refreshReport}
+          disabled={refreshing || report.isFetching}
         >
-          {report.isFetching ? (
+          {refreshing || report.isFetching ? (
             <DotLoader size="sm" label={null} />
           ) : (
             <RefreshCw className="settings-requests__icon" aria-hidden="true" />

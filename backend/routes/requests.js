@@ -155,7 +155,12 @@ router.get("/", requireAuth, noCache, async (req, res) => {
 router.get("/report", requireAuth, requireAdmin, noCache, async (req, res) => {
   try {
     const { getAlbumRequestReport } = await import("../services/albumRequestService.js");
-    res.json(getAlbumRequestReport({ limit: req.query.limit }));
+    const { lidarrClient } = await import("../services/lidarrClient.js");
+    res.json(await getAlbumRequestReport({
+      limit: req.query.limit,
+      refresh: req.query.refresh === "1" || req.query.refresh === "true",
+      lidarrClient,
+    }));
   } catch (error) {
     res.status(500).json({ error: "Failed to build the request report", message: error.message });
   }

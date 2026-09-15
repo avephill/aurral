@@ -373,8 +373,9 @@ export const getRequests = ({ refresh = false, signal } = {}) =>
 
 // Admin only: everyone's album requests, with who asked and how much of each
 // album is on disk.
-export const getAlbumRequestReport = ({ signal } = {}) =>
-  getData("/requests/report", { signal });
+// `refresh` skips the server's kept copy and asks Lidarr again.
+export const getAlbumRequestReport = ({ signal, refresh = false } = {}) =>
+  getData("/requests/report", { signal, ...(refresh ? { params: { refresh: 1 } } : {}) });
 
 // Admin only: hide one request from the report. Lidarr is not touched.
 export const dismissAlbumRequest = (id) =>

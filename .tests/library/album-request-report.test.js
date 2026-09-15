@@ -58,12 +58,12 @@ test.after(async () => {
   await cleanupIsolatedState(isolatedState);
 });
 
-test("a request reports who asked and how much of the album is on disk", () => {
+test("a request reports who asked and how much of the album is on disk", async () => {
   requests.resetAlbumRequestReport();
   requests.recordAlbumRequest({ user: dad, lidarrAlbumId: 42, albumName: "Getting Killed", artistName: "Geese", at: 1000 });
   requests.recordAlbumRequest({ user: dad, albumMbid: "rg-unknown", albumName: "Unreleased", artistName: "Nobody", at: 2000 });
 
-  const { items } = requests.getAlbumRequestReport();
+  const { items } = await requests.getAlbumRequestReport();
   assert.equal(items.length, 2);
   assert.equal(items[0].albumName, "Unreleased", "newest first");
   assert.equal(items[0].availability.status, "not_indexed");
@@ -77,7 +77,7 @@ test("a request reports who asked and how much of the album is on disk", () => {
   assert.equal(gettingKilled.requestedBy.isAdmin, false);
 });
 
-test("asking again is the same request, and an album matches by MusicBrainz id too", () => {
+test("asking again is the same request, and an album matches by MusicBrainz id too", async () => {
   requests.resetAlbumRequestReport();
   requests.recordAlbumRequest({ user: dad, lidarrAlbumId: 42, albumName: "Getting Killed", at: 5000 });
   requests.recordAlbumRequest({
@@ -88,7 +88,7 @@ test("asking again is the same request, and an album matches by MusicBrainz id t
     at: 6000,
   });
 
-  const { items } = requests.getAlbumRequestReport();
+  const { items } = await requests.getAlbumRequestReport();
   const dadsRequests = items.filter(
     (item) => item.requestedBy.username === "dunshill" && item.albumName === "Getting Killed",
   );
@@ -102,7 +102,56 @@ test("asking again is the same request, and an album matches by MusicBrainz id t
   assert.equal(adminsRequest.availability.status, "partial");
 });
 
-test("requests still in the activity history are copied in, once", () => {
+test("Lidarr's file count answers for albums the library index has not caught up on", async () => {
+  requests.resetAlbumRequestReport();
+  requests.recordAlbumRequest({ user: dad, lidarrAlbumId: 77, albumName: "tiarn", artistName: "Hana Stretton", at: 9000 });
+  const asked = [];
+  const lidarrClient = {
+    isConfigured: () => true,
+    getAlbum: async (id) => {
+      asked.push(Number(id));
+      if (Number(id) === 77) return { id: 77, monitored: true, statistics: { trackCount: 9, trackFileCount: 9 } };
+      if (Number(id) === 42) return { id: 42, monitored: true, statistics: { trackCount: 2, trackFileCount: 2 } };
+      return null;
+    },
+    getAlbumByMbid: async () => {
+      throw new Error("Lidarr is down");
+    },
+  };
+
+  const { items } = await requests.getAlbumRequestReport({ refresh: true, lidarrClient });
+  const tiarn = items.find((item) => item.albumName === "tiarn");
+  assert.equal(tiarn.availability.status, "complete", "not in the index, but Lidarr has every file");
+  assert.equal(tiarn.availability.source, "lidarr");
+  assert.equal(tiarn.activity.label, "Downloaded", "a stale Searching gives way to the files");
+
+  const gettingKilled = items.find((item) => item.albumName === "Getting Killed" && item.requestedBy.username === "dunshill");
+  assert.equal(gettingKilled.availability.status, "complete", "Lidarr is newer than the index");
+
+  const unreleased = items.find((item) => item.albumName === "Unreleased");
+  assert.equal(unreleased.availability.status, "not_indexed", "a Lidarr error leaves the index's answer");
+});
+
+test("the report is kept for a moment, and refresh asks again", async () => {
+  requests.resetAlbumRequestReport();
+  let calls = 0;
+  const lidarrClient = {
+    isConfigured: () => true,
+    getAlbum: async () => {
+      calls += 1;
+      return null;
+    },
+    getAlbumByMbid: async () => null,
+  };
+  await requests.getAlbumRequestReport({ lidarrClient });
+  const afterFirst = calls;
+  await requests.getAlbumRequestReport({ lidarrClient });
+  assert.equal(calls, afterFirst, "kept copy");
+  await requests.getAlbumRequestReport({ lidarrClient, refresh: true });
+  assert.ok(calls > afterFirst, "refresh goes back to Lidarr");
+});
+
+test("requests still in the activity history are copied in, once", async () => {
   db.prepare(
     `INSERT INTO aurral_history (id, kind, title, status, metadata, created_at)
      VALUES (?, 'album_requested', ?, 'completed', ?, ?)`,
@@ -114,25 +163,25 @@ test("requests still in the activity history are copied in, once", () => {
   );
 
   requests.resetAlbumRequestReport();
-  const first = requests.getAlbumRequestReport().items.filter((item) => item.albumName === "Old Record");
+  const first = (await requests.getAlbumRequestReport()).items.filter((item) => item.albumName === "Old Record");
   requests.resetAlbumRequestReport();
-  const second = requests.getAlbumRequestReport().items.filter((item) => item.albumName === "Old Record");
+  const second = (await requests.getAlbumRequestReport()).items.filter((item) => item.albumName === "Old Record");
   assert.equal(first.length, 1);
   assert.equal(first[0].availability.status, "not_indexed");
   assert.equal(second.length, 1, "copying again adds nothing");
 });
 
-test("a dismissed request leaves the report until the same person asks again", () => {
+test("a dismissed request leaves the report until the same person asks again", async () => {
   requests.resetAlbumRequestReport();
-  const target = requests.getAlbumRequestReport().items.find((item) => item.albumName === "Unreleased");
+  const target = (await requests.getAlbumRequestReport()).items.find((item) => item.albumName === "Unreleased");
   assert.ok(target);
 
   assert.equal(requests.dismissAlbumRequest(target.id), true);
-  assert.ok(!requests.getAlbumRequestReport().items.some((item) => item.id === target.id));
+  assert.ok(!(await requests.getAlbumRequestReport()).items.some((item) => item.id === target.id));
 
   requests.resetAlbumRequestReport();
   assert.ok(
-    !requests.getAlbumRequestReport().items.some((item) => item.id === target.id),
+    !(await requests.getAlbumRequestReport()).items.some((item) => item.id === target.id),
     "copying the history in again does not bring it back",
   );
 
@@ -143,6 +192,6 @@ test("a dismissed request leaves the report until the same person asks again", (
     artistName: "Nobody",
     at: Date.now() + 1000,
   });
-  assert.ok(requests.getAlbumRequestReport().items.some((item) => item.id === target.id));
+  assert.ok((await requests.getAlbumRequestReport()).items.some((item) => item.id === target.id));
   assert.equal(requests.dismissAlbumRequest(999999), false);
 });

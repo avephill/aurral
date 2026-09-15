@@ -7,12 +7,15 @@ import { logger } from "./logger.js";
  *
  * Every album request is written here as well as to the activity history,
  * because the history is pruned after 30 days and an unfilled request is
- * exactly the kind that grows old. The report joins each request to the
- * library index to say how much of the album is on disk, which is the answer
- * an admin needs when deciding what to buy or rip.
+ * exactly the kind that grows old. The report says how much of each album is
+ * on disk. Lidarr is asked first, since it is what actually holds the files;
+ * Psalter's library index only catches up at the next scan, and an album
+ * added to Lidarr since then is not in it at all. The index answers when
+ * Lidarr cannot.
  */
 
 const REPORT_CACHE_MS = 30_000;
+const LIDARR_CONCURRENCY = 4;
 
 const upsertStmt = db.prepare(`
   INSERT INTO album_requests (
@@ -143,7 +146,7 @@ function latestActivityByLidarrAlbumId() {
 
 function availabilityFor(match) {
   if (!match) {
-    return { status: "not_indexed", label: "Not in library index", trackCount: 0, availableTrackCount: 0 };
+    return { status: "not_indexed", label: "Not found", trackCount: 0, availableTrackCount: 0 };
   }
   const { trackCount, availableTrackCount } = match;
   if (trackCount > 0 && availableTrackCount >= trackCount) {
@@ -155,14 +158,45 @@ function availabilityFor(match) {
   return { status: "missing", label: "Not on disk", ...match };
 }
 
+// Lidarr's own count of files for each album, read a few at a time. A request
+// Lidarr cannot answer for (album removed, Lidarr down) is simply left out,
+// and the library index answers for it instead.
+async function lidarrAvailability(lidarrClient, rows) {
+  const byRowId = new Map();
+  if (!rows.length || !lidarrClient?.isConfigured?.()) return byRowId;
+  const queue = [...rows];
+  const worker = async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
+      try {
+        const album = row.lidarr_album_id
+          ? await lidarrClient.getAlbum(row.lidarr_album_id)
+          : row.album_mbid
+            ? await lidarrClient.getAlbumByMbid(row.album_mbid, { forceRefresh: true })
+            : null;
+        const statistics = album?.statistics;
+        if (!album || !statistics) continue;
+        byRowId.set(row.id, {
+          source: "lidarr",
+          trackCount: Number(statistics.trackCount) || 0,
+          availableTrackCount: Number(statistics.trackFileCount) || 0,
+          monitored: album.monitored === true,
+        });
+      } catch {}
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LIDARR_CONCURRENCY, queue.length) }, worker));
+  return byRowId;
+}
+
 let reportCache = null;
 
 /**
  * Recent album requests, newest first, each with who asked, whether they are
- * an admin, and how much of the album is on disk.
+ * an admin, and how much of the album is on disk. `refresh` skips the kept
+ * copy, for the Refresh button.
  */
-export function getAlbumRequestReport({ limit = 500 } = {}) {
-  if (reportCache && Date.now() - reportCache.at < REPORT_CACHE_MS) return reportCache.data;
+export async function getAlbumRequestReport({ limit = 500, refresh = false, lidarrClient = null } = {}) {
+  if (!refresh && reportCache && Date.now() - reportCache.at < REPORT_CACHE_MS) return reportCache.data;
   backfillFromHistory();
   const rows = db.prepare(
     `SELECT * FROM album_requests
@@ -176,13 +210,20 @@ export function getAlbumRequestReport({ limit = 500 } = {}) {
     lidarrAlbumIds: rows.map((row) => row.lidarr_album_id).filter(Boolean),
     mbids: rows.map((row) => row.album_mbid).filter(Boolean),
   });
+  const indexMatch = (row) =>
+    (row.lidarr_album_id && byLidarrId.get(String(row.lidarr_album_id))) ||
+    (row.album_mbid && byMbid.get(String(row.album_mbid))) ||
+    null;
+  // Albums the index already shows complete are done; ask Lidarr about the rest.
+  const fromLidarr = await lidarrAvailability(
+    lidarrClient,
+    rows.filter((row) => availabilityFor(indexMatch(row)).status !== "complete"),
+  );
   const activity = latestActivityByLidarrAlbumId();
 
   const items = rows.map((row) => {
-    const match =
-      (row.lidarr_album_id && byLidarrId.get(String(row.lidarr_album_id))) ||
-      (row.album_mbid && byMbid.get(String(row.album_mbid))) ||
-      null;
+    const availability = availabilityFor(fromLidarr.get(row.id) || indexMatch(row));
+    const lastActivity = (row.lidarr_album_id && activity.get(String(row.lidarr_album_id))) || null;
     return {
       id: row.id,
       albumName: row.album_name,
@@ -197,8 +238,11 @@ export function getAlbumRequestReport({ limit = 500 } = {}) {
       },
       firstRequestedAt: row.first_requested_at,
       lastRequestedAt: row.last_requested_at,
-      availability: availabilityFor(match),
-      activity: (row.lidarr_album_id && activity.get(String(row.lidarr_album_id))) || null,
+      availability,
+      // The history's "Searching" goes stale once files arrive; the files win.
+      activity: availability.status === "complete"
+        ? { status: "completed", label: "Downloaded" }
+        : lastActivity,
     };
   });
   const data = { items, generatedAt: Date.now() };
