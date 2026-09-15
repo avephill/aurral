@@ -128,6 +128,31 @@ const hasAurralTrackFile = (track) =>
 
 const EMPTY_LIBRARY = { artists: [], albums: [], tracks: [], genres: [] };
 
+// How many columns a CSS grid actually lays out right now, read from the
+// browser rather than estimated from card widths, so a shelf can hold exactly
+// one row whatever the grid's own sizing rules are.
+function useGridColumnCount(fallback = 6) {
+  const [element, setElement] = useState(null);
+  const [count, setCount] = useState(fallback);
+  const ref = useCallback((node) => setElement(node), []);
+  useEffect(() => {
+    if (!element) return undefined;
+    const update = () => {
+      const columns = getComputedStyle(element).gridTemplateColumns.split(" ").filter(Boolean).length;
+      if (columns > 0) setCount(columns);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      return () => window.removeEventListener("resize", update);
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+  return [ref, count];
+}
+
 const normalizeLibraryPages = (pages) => pages.reduce(
   (result, page) => {
     ["artists", "albums", "tracks"].forEach((kind) => {
@@ -449,6 +474,10 @@ function LibraryPage() {
   const [homeAlbumsGridRef, homeAlbumColumns] = useResponsiveReleaseLimit({
     cardMinWidth: 152,
   });
+  // The two Recently added shelves are one row each. Artist cards are
+  // narrower than album cards, so each grid is measured on its own.
+  const [homeRecentAlbumsGridRef, homeRecentAlbumColumns] = useGridColumnCount();
+  const [homeRecentArtistsGridRef, homeRecentArtistColumns] = useGridColumnCount(7);
 
   const handleLibraryScanMessage = useCallback((message) => {
     if (message?.type !== "library_scan_completed") return;
@@ -1381,8 +1410,8 @@ function LibraryPage() {
     const albums = queryData?.recentAlbumIds
       ? queryData.recentAlbumIds.map((id) => albumsById.get(id)).filter(Boolean)
       : library.albums;
-    return albums.slice(0, Math.max(2, homeAlbumColumns) * 2);
-  }, [albumsById, homeAlbumColumns, library.albums, queryData?.recentAlbumIds]);
+    return albums.slice(0, Math.max(1, homeRecentAlbumColumns));
+  }, [albumsById, homeRecentAlbumColumns, library.albums, queryData?.recentAlbumIds]);
   const homeTopRatedAlbums = useMemo(
     () =>
       (queryData?.topRatedAlbumIds || [])
@@ -1396,8 +1425,8 @@ function LibraryPage() {
       (queryData?.recentArtistIds || [])
         .map((id) => artistsById.get(id))
         .filter(Boolean)
-        .slice(0, Math.max(2, homeAlbumColumns) * 2),
-    [artistsById, homeAlbumColumns, queryData?.recentArtistIds],
+        .slice(0, Math.max(1, homeRecentArtistColumns)),
+    [artistsById, homeRecentArtistColumns, queryData?.recentArtistIds],
   );
   const homeGenres = useMemo(
     () =>
@@ -2331,7 +2360,7 @@ function LibraryPage() {
       {homeAlbums.length > 0 && (
         <section className="native-library-section">
           {renderSectionHeader("Recently added albums", homeAlbums.length, "/library/albums")}
-          <div ref={homeAlbumsGridRef} className="native-library-grid">
+          <div ref={homeRecentAlbumsGridRef} className="native-library-grid">
             {homeAlbums.map(renderAlbumCard)}
           </div>
         </section>
@@ -2339,7 +2368,7 @@ function LibraryPage() {
       {homeRecentArtists.length > 0 && (
         <section className="native-library-section">
           {renderSectionHeader("Recently added artists", homeRecentArtists.length, "/library/artists")}
-          <div className="native-library-grid native-library-grid--artists">
+          <div ref={homeRecentArtistsGridRef} className="native-library-grid native-library-grid--artists">
             {homeRecentArtists.map(renderArtistCard)}
           </div>
         </section>
@@ -2347,7 +2376,7 @@ function LibraryPage() {
       {homeTopRatedAlbums.length > 0 && (
         <section className="native-library-section">
           {renderSectionHeader("Top rated", homeTopRatedAlbums.length)}
-          <div className="native-library-grid">
+          <div ref={homeAlbumsGridRef} className="native-library-grid">
             {homeTopRatedAlbums.map(renderAlbumCard)}
           </div>
         </section>
