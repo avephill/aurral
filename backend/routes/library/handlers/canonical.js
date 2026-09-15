@@ -198,7 +198,7 @@ export function registerCanonical(router) {
         const scoped = await scopeCanonicalArtistsToUser(req.user);
         if (Array.isArray(scoped)) artistIds = scoped.map((artist) => artist.id);
       }
-      return res.json(toPublicLibraryPage(getCanonicalLibraryPage({
+      const page = getCanonicalLibraryPage({
         source: req.query.source,
         availableOnly: req.query.availableOnly === "true",
         kind,
@@ -214,7 +214,14 @@ export function registerCanonical(router) {
         trackIdentityKeys,
         excludeTrackIds,
         artistIds,
-      }), favoriteKeys));
+      });
+      // An album's songs carry their own artist from the file tags, so a
+      // compilation lists who sings each one rather than "Various Artists".
+      if (kind === "tracks" && req.query.albumId) {
+        const { addTrackPerformers } = await import("../../../services/trackPerformerTags.js");
+        await addTrackPerformers(page.tracks);
+      }
+      return res.json(toPublicLibraryPage(page, favoriteKeys));
     } catch (error) {
       if (
         error.message.startsWith("Unsupported library source:") ||

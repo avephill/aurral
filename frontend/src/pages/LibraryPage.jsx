@@ -1838,7 +1838,11 @@ function LibraryPage() {
           const active =
             String(currentTrack?.id) === String(track.id) &&
             matchesSource(librarySource);
-          const artistName = artist?.name || track.artistName || "Unknown Artist";
+          // A song's own artist, from its file tags, when it differs from the
+          // album's, as on a compilation. Otherwise the album artist, linked.
+          const performer =
+            track.performerName && track.performerName !== artist?.name ? track.performerName : null;
+          const artistName = performer || artist?.name || track.artistName || "Unknown Artist";
           const albumName = album?.title || track.albumName || track.album || "Unknown Album";
           const trackNumber = track.albums?.find(
             (entry) => String(entry.albumId) === String(album?.id),
@@ -1966,7 +1970,7 @@ function LibraryPage() {
               <span>{track.title || "Unknown Track"}</span>
               <small>{artistName}</small>
             </button>
-            {artist ? (
+            {artist && !performer ? (
               <button
                 type="button"
                 className="native-library-track__link native-library-track__artist"
