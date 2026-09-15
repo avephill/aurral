@@ -476,8 +476,12 @@ export function AudioQueueProvider({ children }) {
   }, [currentTrack, player.isPlaying]);
 
   // iTunes keys: Space plays and pauses, Command (or Ctrl) with the left and
-  // right arrows skips. Left alone while typing, and Space is left to a
-  // focused button, which already treats it as a click.
+  // right arrows skips. Left alone while typing.
+  //
+  // Space takes precedence over a focused button. After clicking a song's play
+  // button that button keeps focus, and letting Space "click" it again
+  // restarted the song instead of pausing it. Enter still presses buttons;
+  // sliders, dialogs and menus keep Space for themselves.
   useEffect(() => {
     const isTyping = (target) =>
       Boolean(target) &&
@@ -486,7 +490,9 @@ export function AudioQueueProvider({ children }) {
       if (event.defaultPrevented || isTyping(event.target)) return;
       if (stateRef.current.queue.length === 0) return;
       if (event.key === " " && !event.metaKey && !event.ctrlKey && !event.altKey) {
-        if (event.target?.closest?.("button, a, [role='button'], [role='slider'], [role='tab']")) return;
+        if (event.target?.closest?.("[role='slider'], [role='dialog'], dialog, [role='menu'], [role='listbox']")) {
+          return;
+        }
         event.preventDefault();
         togglePlayPause();
         return;
