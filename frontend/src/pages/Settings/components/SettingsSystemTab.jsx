@@ -186,6 +186,15 @@ function LidarrWebhookStatusRow() {
       parts.push(`Last indexed after ${status.lastIndexed.type}, ${ago(status.lastIndexed.processedAt)}.`);
     }
     if (status.pending) parts.push(`${status.pending} waiting to be indexed.`);
+    if (status.catchUp) {
+      const recentMiss =
+        status.catchUp.lastMissedAt && Date.now() - status.catchUp.lastMissedAt < 7 * 24 * 60 * 60 * 1000;
+      parts.push(
+        recentMiss
+          ? `The 15-minute check of Lidarr's history found albums the webhook missed, most recently ${ago(status.catchUp.lastMissedAt)}.`
+          : `The 15-minute check of Lidarr's history last ran ${ago(status.catchUp.lastRunAt)} and found nothing missed.`,
+      );
+    }
     if (status.lastError) {
       parts.push(
         `${status.lastError.status === "failed" ? "Gave up on" : "Retrying"} a ${status.lastError.type} event: ${status.lastError.message}`,

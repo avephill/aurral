@@ -99,6 +99,15 @@ const PermissionRoute = ({ children, permission }) => {
   return children;
 };
 
+// Screens for running the server rather than listening: shows, news, the
+// download queue and history, wanted and the blocklist. Anyone without
+// settings access who follows a link to one lands on their library.
+const AdminRoute = ({ children }) => {
+  const { hasPermission } = useAuth();
+  if (!hasPermission("accessSettings")) return <Navigate to="/library" replace />;
+  return children;
+};
+
 function AppContent() {
   const basePath = getAppBasePath();
   const [isHealthy, setIsHealthy] = useState(null);
@@ -260,7 +269,7 @@ function AppContent() {
                           ahead of what you do. */}
                       <Route path="/" element={<Navigate to="/library" replace />} />
                       <Route path="/shows" element={<Navigate to="/shows/all" replace />} />
-                      <Route path="/shows/:filter" element={<ShowsPage />} />
+                      <Route path="/shows/:filter" element={<AdminRoute><ShowsPage /></AdminRoute>} />
                       <Route path="/search" element={<SearchResultsPage />} />
                       <Route
                         path="/discover"
@@ -274,7 +283,7 @@ function AppContent() {
                       />
                       <Route path="/discover/playlists/:presetId" element={<DiscoverPlaylistDetailPage />} />
                       <Route path="/discover/playlists" element={<DiscoverPlaylistsPage />} />
-                      <Route path="/discover/news" element={<NewsPage />} />
+                      <Route path="/discover/news" element={<AdminRoute><NewsPage /></AdminRoute>} />
                       {/* When playlists live in Navidrome they are the
                           person's own lists, read and written as them, so
                           accessFlow has nothing to say about them; it gates
@@ -315,7 +324,7 @@ function AppContent() {
                       <Route path="/history" element={<Navigate to="/activity/history" replace />} />
                       <Route path="/history/:legacyTab" element={<LegacyHistoryRedirect />} />
                       <Route path="/activity" element={<ActivityRootRedirect />} />
-                      <Route path="/activity/:view" element={<ActivityPage />} />
+                      <Route path="/activity/:view" element={<AdminRoute><ActivityPage /></AdminRoute>} />
                       <Route path="/activity/:view/:source" element={<ActivitySourceRedirect />} />
                       <Route
                         path="/artist/:mbid/albums"
@@ -336,7 +345,7 @@ function AppContent() {
                         }
                       />
                       <Route path="/profile" element={<ProfilePage />} />
-                      <Route path="/blocklist" element={<BlocklistPage />} />
+                      <Route path="/blocklist" element={<AdminRoute><BlocklistPage /></AdminRoute>} />
                     </Routes>
                   </Suspense>
                 </Layout>

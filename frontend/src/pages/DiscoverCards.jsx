@@ -316,7 +316,7 @@ export const AlbumCard = memo(
                 icon={isRequested ? Check : undefined}
                 isLoading={isPending}
                 disabled={isPending || isRequested}
-                label={isRequested ? "Requested" : "Add to Lidarr"}
+                label={isRequested ? "Requested" : "Request"}
               />
             </div>
           ) : null}

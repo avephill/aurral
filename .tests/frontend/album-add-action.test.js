@@ -18,9 +18,9 @@ test("shouldTriggerAlbumSearch follows monitored state", () => {
 });
 
 test("getAlbumAddButtonLabel matches trigger semantics", () => {
-  assert.equal(getAlbumAddButtonLabel({ status: "monitored" }), "Search Album");
-  assert.equal(getAlbumAddButtonLabel({ status: "unmonitored" }), "Add to Lidarr");
-  assert.equal(getAlbumAddButtonLabel({ inLibrary: true, monitored: false }), "Add to Lidarr");
+  assert.equal(getAlbumAddButtonLabel({ status: "monitored" }), "Search again");
+  assert.equal(getAlbumAddButtonLabel({ status: "unmonitored" }), "Request");
+  assert.equal(getAlbumAddButtonLabel({ inLibrary: true, monitored: false }), "Request");
 });
 
 test("isAlbumCompleteInLibrary only treats on-disk albums as complete", () => {

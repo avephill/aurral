@@ -70,7 +70,7 @@ const SsoComplete = () => {
       <main className="login-page sso-complete-page">
         <div className="login-card">
           <div className="login-header">
-            <img src="/arralogo.svg" alt="Aurral" className="login-logo" />
+            <img src="/icons/psalter-192.png" alt="Psalter" className="login-logo" />
             <h1 className="login-title">Sign-in failed</h1>
             <p className="login-subtitle login-subtitle--error" role="alert">
               {error}
@@ -88,7 +88,7 @@ const SsoComplete = () => {
     <main className="login-page sso-complete-page">
       <div className="login-card sso-complete-card">
         <div className="login-header">
-          <img src="/arralogo.svg" alt="Aurral" className="login-logo" />
+          <img src="/icons/psalter-192.png" alt="Psalter" className="login-logo" />
           <h1 className="login-title">Signing you in</h1>
           <p className="login-subtitle" role="status" aria-live="polite">
             Completing your SSO session…

@@ -61,7 +61,7 @@ const Login = () => {
     <main className="login-page">
       <div className="login-card">
         <div className="login-header">
-          <img src="/arralogo.svg" alt="Aurral" className="login-logo" />
+          <img src="/icons/psalter-192.png" alt="Psalter" className="login-logo" />
           <h1 className="login-title">Sign in</h1>
         </div>
 

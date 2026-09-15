@@ -216,6 +216,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
               icon: Ticket,
               section: "shows",
               subnav: SHOWS_FILTERS,
+              adminOnly: true,
             },
           ]
         : []),
@@ -226,6 +227,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
               label: "News",
               icon: Newspaper,
               section: "news",
+              adminOnly: true,
             },
           ]
         : []),
@@ -246,6 +248,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         icon: Activity,
         section: "activity",
         subnav: ACTIVITY_VIEWS.filter((view) => view.id !== "missing"),
+        adminOnly: true,
       },
       {
         path: buildWantedPath(),
@@ -253,6 +256,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         icon: AlertTriangle,
         section: "wanted",
         subnav: WANTED_VIEWS,
+        adminOnly: true,
         permission: "accessFlow",
       },
       // What people have asked for and whether it has arrived. Admins act on
@@ -260,10 +264,17 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       ...(user?.role === "admin"
         ? [{ path: "/requests", label: "Requests", icon: Inbox }]
         : []),
-      { path: "/blocklist", label: "Blocklist", icon: Ban },
+      { path: "/blocklist", label: "Blocklist", icon: Ban, adminOnly: true },
     ];
-    return items.filter((item) => !item.permission || hasPermission(item.permission));
+    // Shows, news, downloads, wanted and the blocklist are for running the
+    // server. For anyone else the sidebar is their music and Discover.
+    return items.filter(
+      (item) =>
+        (!item.permission || hasPermission(item.permission)) &&
+        (!item.adminOnly || canAccessSettings),
+    );
   }, [
+    canAccessSettings,
     newsConfigured,
     ticketmasterConfigured,
     hasPermission,

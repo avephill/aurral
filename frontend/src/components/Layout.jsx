@@ -165,14 +165,16 @@ function Layout({ children, headerActions }) {
 
   const mobileOverflowItems = useMemo(() => {
     const items = [
-      { path: "/shows/all", label: "Shows", icon: Ticket },
+      // Shows and Activity are for running the server, so admins only; the
+      // sidebar hides them the same way.
+      { path: "/shows/all", label: "Shows", icon: Ticket, permission: "accessSettings" },
       {
         path: "/flows",
         label: "Flows",
         icon: Workflow,
         permission: "accessFlow",
       },
-      { path: "/activity/queue", label: "Activity", icon: Activity },
+      { path: "/activity/queue", label: "Activity", icon: Activity, permission: "accessSettings" },
       { path: "/profile", label: "Profile", icon: User },
       {
         path: `/settings/${DEFAULT_SETTINGS_TAB}`,

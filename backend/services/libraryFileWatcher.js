@@ -4,10 +4,8 @@ import { Worker } from "node:worker_threads";
 
 import { resolvePlaylistRoot } from "./playlistPaths.js";
 import { isLibraryScanExcludedDirectory } from "./libraryFileScanner.js";
-import { lidarrClient } from "./lidarrClient.js";
 import { logger as defaultLogger } from "./logger.js";
 import { scheduleLibraryScan } from "./libraryScanWorker.js";
-import { getPathMappings, resolveLocalPath } from "./pathMappings.js";
 
 const DEFAULT_DEBOUNCE_MS = 2000;
 
@@ -123,19 +121,14 @@ export function createThreadedLibraryFileWatcher({
   };
 }
 
+// Only Psalter's own download folder is watched. Lidarr's folders used to be
+// watched too, and every change there queued a full index of the whole
+// library; Lidarr's webhook now reports those changes album by album, a
+// 15-minute check of Lidarr's history catches any the webhook missed, and a
+// full scan runs nightly (see lidarrWebhookService). Not watching them also
+// spares the minutes-long walk of the library that every watch setup cost.
 async function resolveLibraryWatchRoots() {
-  const roots = [resolvePlaylistRoot()];
-  if (lidarrClient.isConfigured()) {
-    try {
-      const rootFolders = await lidarrClient.getRootFolders();
-      roots.push(
-        ...(Array.isArray(rootFolders)
-          ? rootFolders.map((folder) => resolveLocalPath(folder?.path, getPathMappings("lidarr")))
-          : []),
-      );
-    } catch {}
-  }
-  return roots.filter(Boolean);
+  return [resolvePlaylistRoot()].filter(Boolean);
 }
 
 let watcherStarted = false;
@@ -144,7 +137,6 @@ let activeWatcher = null;
 export async function refreshLibraryFileWatcher({ logger = defaultLogger } = {}) {
   if (!watcherStarted) return false;
   activeWatcher?.close();
-  const playlistRoot = path.resolve(resolvePlaylistRoot());
   const roots = await resolveLibraryWatchRoots();
   // Registering the watches happens on a worker thread and this returns without
   // waiting for it, so neither startup nor a settings save waits on a walk of
@@ -152,9 +144,8 @@ export async function refreshLibraryFileWatcher({ logger = defaultLogger } = {})
   // took a while to be noticed.
   activeWatcher = createThreadedLibraryFileWatcher({
     roots,
-    onChange: (changedRoots) => scheduleLibraryScan({
-      includeLidarr: changedRoots.some((root) => path.resolve(root) !== playlistRoot),
-    }),
+    // The watched folder is Psalter's own, so its scan never needs Lidarr.
+    onChange: () => scheduleLibraryScan({ includeLidarr: false }),
     onError: (error, root) => {
       logger.warn?.("library", `Failed to watch ${root ?? "library roots"}: ${error?.message || error}`);
     },

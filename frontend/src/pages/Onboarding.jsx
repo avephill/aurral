@@ -184,7 +184,7 @@ function Onboarding() {
       : lidarrTestSuccess
         ? submitting
           ? "Saving…"
-          : "Go to Aurral"
+          : "Go to Psalter"
         : testingLidarr
           ? "Testing…"
           : "Test connection";
@@ -199,8 +199,8 @@ function Onboarding() {
           className="onboarding-card"
         >
           <img
-            src="/arralogo.svg"
-            alt="Aurral"
+            src="/icons/psalter-192.png"
+            alt="Psalter"
             aria-hidden={step > 0}
             className={`onboarding-brand-mark${animateStepHeight ? " onboarding-brand-mark--animate" : ""}`}
             style={logoFlyout}
@@ -242,7 +242,7 @@ function Onboarding() {
                     aria-hidden="true"
                   />
                   <OnboardingStepHeader
-                    title="Welcome to Aurral"
+                    title="Welcome to Psalter"
                     titleClassName="onboarding-title--hero"
                   />
                   <div className="onboarding-fields">

@@ -39,8 +39,10 @@ export const shouldTriggerAlbumSearch = ({
   return Boolean(inLibrary && monitored);
 };
 
+// Worded for the person asking, not for the software behind it: most people
+// using this do not know what Lidarr is, and asking is what the button does.
 export const getAlbumAddButtonLabel = (input = {}) =>
-  shouldTriggerAlbumSearch(input) ? "Search Album" : "Add to Lidarr";
+  shouldTriggerAlbumSearch(input) ? "Search again" : "Request";
 
 export const isAlbumCompleteInLibrary = ({
   status = "",
