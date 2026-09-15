@@ -1361,13 +1361,14 @@ function LibraryPage() {
 
   // Home's library also holds the top-rated albums, so each shelf picks its own
   // albums out by id rather than taking every album the library has.
+  // Kept in the server's order, newest files first. Re-sorting here by release
+  // date used to put a 2023 album added last month ahead of one added today.
   const homeAlbums = useMemo(() => {
-    const recentIds = queryData?.recentAlbumIds ? new Set(queryData.recentAlbumIds) : null;
-    return library.albums
-      .filter((album) => !recentIds || recentIds.has(String(album.id)))
-      .sort((left, right) => text(right.releaseDate).localeCompare(text(left.releaseDate)))
-      .slice(0, Math.max(2, homeAlbumColumns) * 2);
-  }, [homeAlbumColumns, library.albums, queryData?.recentAlbumIds]);
+    const albums = queryData?.recentAlbumIds
+      ? queryData.recentAlbumIds.map((id) => albumsById.get(id)).filter(Boolean)
+      : library.albums;
+    return albums.slice(0, Math.max(2, homeAlbumColumns) * 2);
+  }, [albumsById, homeAlbumColumns, library.albums, queryData?.recentAlbumIds]);
   const homeTopRatedAlbums = useMemo(
     () =>
       (queryData?.topRatedAlbumIds || [])
