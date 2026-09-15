@@ -84,7 +84,14 @@ import { queryClient, queryKeys } from "../queryClient.js";
 
 // "album-artists" is no longer offered in the sidebar but stays routable, so a
 // bookmark or an old link lands on the artist list rather than the home view.
-const LIBRARY_VIEW_IDS = new Set([...LIBRARY_VIEWS.map((view) => view.id), "album-artists"]);
+// Views that still open though the sidebar no longer lists them, so old
+// links keep working: album artists became artists, and favorites is a view
+// reached by link now that hearted songs live in a playlist.
+const LIBRARY_VIEW_IDS = new Set([
+  ...LIBRARY_VIEWS.map((view) => view.id),
+  "album-artists",
+  "favorites",
+]);
 
 const text = (value) => String(value || "").trim();
 
@@ -638,8 +645,10 @@ function LibraryPage() {
   // An old /library/album-artists link lands on the artist list, so it should
   // read "Artists" rather than fall back to the generic heading.
   const sectionLabel =
-    LIBRARY_VIEWS.find((view) => view.id === (section === "album-artists" ? "artists" : section))
-      ?.label || "Library";
+    section === "favorites"
+      ? "Favorites"
+      : LIBRARY_VIEWS.find((view) => view.id === (section === "album-artists" ? "artists" : section))
+          ?.label || "Library";
   const librarySource = useMemo(() => ({ type: "native-library", id: "library" }), []);
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
