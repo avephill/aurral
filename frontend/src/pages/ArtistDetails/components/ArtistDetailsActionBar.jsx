@@ -12,6 +12,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   Trash2,
+  UserMinus,
 } from "lucide-react";
 import { DotLoader } from "../../../components/DotLoader";
 import AddActionButton from "../../../components/AddActionButton";
@@ -48,6 +49,102 @@ export function ArtistDetailsActionBar({
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const currentMonitorOption = library.getCurrentMonitorOption?.();
   const isPreviewPlaying = isArtistPlaybackActive;
+  // With personal libraries on, "library" means the person's own. Whether the
+  // artist is on the server is an admin concern, kept inside a menu, so the
+  // bar never shows two buttons that both say "Library" and mean different
+  // things.
+  const personalLibraryOn = userLibrary?.enabled === true;
+  const hasServerActions = Boolean(canChangeMonitoring || canDeleteArtist);
+
+  const closeLibraryMenu = () => {
+    library.setShowMonitorOptionMenu(false);
+    library.setShowRemoveDropdown(false);
+  };
+
+  const renderServerMenuItems = () => (
+    <>
+      {canChangeMonitoring && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            library.setShowMonitorOptionMenu(!library.showMonitorOptionMenu);
+          }}
+          disabled={library.updatingMonitor}
+          className="artist-menu-item"
+        >
+          <span>Monitor: {library.getCurrentMonitorOption()}</span>
+          <ChevronDown
+            className={`artist-icon-sm${library.showMonitorOptionMenu ? " artist-chevron--open" : ""}`}
+          />
+        </button>
+      )}
+      {canChangeMonitoring && library.showMonitorOptionMenu && (
+        <div className="artist-menu-section">
+          {MONITOR_OPTIONS.map((option) => {
+            const isActive = option.value === currentMonitorOption;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  library.handleUpdateMonitorOption(option.value);
+                  closeLibraryMenu();
+                }}
+                disabled={library.updatingMonitor}
+                className={`artist-menu-item${isActive ? " is-active" : ""}`}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {canDeleteArtist && (
+        <button
+          type="button"
+          onClick={() => {
+            library.handleDeleteClick();
+            library.setShowRemoveDropdown(false);
+          }}
+          className="artist-menu-item artist-menu-item--danger"
+        >
+          <Trash2 className="artist-icon-sm" />
+          {personalLibraryOn ? "Delete from Server" : "Remove from Library"}
+        </button>
+      )}
+    </>
+  );
+
+  const renderLibraryMenu = ({ label, className, icon, items }) => (
+    <div className="artist-relative">
+      <button
+        type="button"
+        onClick={() => library.setShowRemoveDropdown(!library.showRemoveDropdown)}
+        className={className}
+        aria-haspopup="menu"
+        aria-expanded={library.showRemoveDropdown}
+      >
+        {icon}
+        {label}
+        <ChevronDown
+          className={`artist-icon-sm${library.showRemoveDropdown ? " artist-chevron--open" : ""}`}
+        />
+      </button>
+      {library.showRemoveDropdown && (
+        <>
+          <button
+            type="button"
+            className="artist-backdrop-button"
+            onClick={closeLibraryMenu}
+            aria-label="Close library actions"
+          />
+          <div className="artist-dropdown artist-dropdown--left">{items}</div>
+        </>
+      )}
+    </div>
+  );
 
   const renderLibraryAction = () => {
     if (loadingLibrary) {
@@ -59,88 +156,75 @@ export function ArtistDetailsActionBar({
       );
     }
 
-    if (existsInLibrary) {
-      return (
-        <div className="artist-relative">
-          <button
-            type="button"
-            onClick={() => library.setShowRemoveDropdown(!library.showRemoveDropdown)}
-            className="btn btn-neutral-active btn--bold btn-min-h"
-          >
-            <SearchLibraryCheck size="sm" />
-            In Library
-            {(canChangeMonitoring || canDeleteArtist) && (
-              <ChevronDown
-                className={`artist-icon-sm${library.showRemoveDropdown ? " artist-chevron--open" : ""}`}
-              />
-            )}
-          </button>
-          {library.showRemoveDropdown && (canChangeMonitoring || canDeleteArtist) && (
+    if (existsInLibrary && personalLibraryOn) {
+      if (userLibrary.inMyLibrary) {
+        // Already in the person's library: one settled button, with removing
+        // it one deliberate step away inside the menu.
+        return renderLibraryMenu({
+          label: "In My Library",
+          className: "btn btn-neutral-active btn--bold btn-min-h",
+          icon: userLibrary.pending ? <DotLoader size="sm" label={null} /> : <SearchLibraryCheck size="sm" />,
+          items: (
             <>
               <button
                 type="button"
-                className="artist-backdrop-button"
-                onClick={() => library.setShowRemoveDropdown(false)}
-                aria-label="Close library actions"
-              />
-              <div className="artist-dropdown artist-dropdown--left">
-                {canChangeMonitoring && (
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      library.setShowMonitorOptionMenu(!library.showMonitorOptionMenu);
-                    }}
-                    disabled={library.updatingMonitor}
-                    className="artist-menu-item"
-                  >
-                    <span>Monitor: {library.getCurrentMonitorOption()}</span>
-                    <ChevronDown
-                      className={`artist-icon-sm${library.showMonitorOptionMenu ? " artist-chevron--open" : ""}`}
-                    />
-                  </button>
-                )}
-                {canChangeMonitoring && library.showMonitorOptionMenu && (
-                  <div className="artist-menu-section">
-                    {MONITOR_OPTIONS.map((option) => {
-                      const isActive = option.value === currentMonitorOption;
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            library.handleUpdateMonitorOption(option.value);
-                            library.setShowMonitorOptionMenu(false);
-                            library.setShowRemoveDropdown(false);
-                          }}
-                          disabled={library.updatingMonitor}
-                          className={`artist-menu-item${isActive ? " is-active" : ""}`}
-                        >
-                          {option.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {canDeleteArtist && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      library.handleDeleteClick();
-                      library.setShowRemoveDropdown(false);
-                    }}
-                    className="artist-menu-item artist-menu-item--danger"
-                  >
-                    <Trash2 className="artist-icon-sm" />
-                    Remove from Library
-                  </button>
-                )}
-              </div>
+                onClick={() => {
+                  userLibrary.remove();
+                  closeLibraryMenu();
+                }}
+                disabled={userLibrary.pending}
+                className="artist-menu-item"
+              >
+                <UserMinus className="artist-icon-sm" />
+                Remove from My Library
+              </button>
+              {hasServerActions && renderServerMenuItems()}
             </>
-          )}
-        </div>
+          ),
+        });
+      }
+      return (
+        <>
+          <button
+            type="button"
+            onClick={userLibrary.add}
+            disabled={userLibrary.pending}
+            className="btn btn-primary btn--bold btn-min-h"
+            title="Add this artist to my library"
+          >
+            {userLibrary.pending ? (
+              <DotLoader size="sm" label={null} />
+            ) : (
+              <Library className="artist-icon-sm" />
+            )}
+            Add to My Library
+          </button>
+          {hasServerActions &&
+            renderLibraryMenu({
+              label: "On Server",
+              className: "btn btn-secondary btn--bold btn-min-h",
+              icon: <SearchLibraryCheck size="sm" />,
+              items: renderServerMenuItems(),
+            })}
+        </>
       );
+    }
+
+    if (existsInLibrary) {
+      if (!hasServerActions) {
+        return (
+          <div className="btn btn-neutral-active btn--bold btn-min-h" aria-disabled="true">
+            <SearchLibraryCheck size="sm" />
+            In Library
+          </div>
+        );
+      }
+      return renderLibraryMenu({
+        label: "In Library",
+        className: "btn btn-neutral-active btn--bold btn-min-h",
+        icon: <SearchLibraryCheck size="sm" />,
+        items: renderServerMenuItems(),
+      });
     }
 
     if (!canAddArtist) return null;
@@ -161,44 +245,6 @@ export function ArtistDetailsActionBar({
           className="btn-add-action-options"
         />
       </div>
-    );
-  };
-
-  const renderUserLibraryAction = () => {
-    if (!userLibrary?.enabled || !existsInLibrary || loadingLibrary) return null;
-    if (userLibrary.inMyLibrary) {
-      return (
-        <button
-          type="button"
-          onClick={userLibrary.remove}
-          disabled={userLibrary.pending}
-          className="btn btn-neutral-active btn--bold btn-min-h"
-          title="Remove from my library"
-        >
-          {userLibrary.pending ? (
-            <DotLoader size="sm" label={null} />
-          ) : (
-            <SearchLibraryCheck size="sm" />
-          )}
-          In My Library
-        </button>
-      );
-    }
-    return (
-      <button
-        type="button"
-        onClick={userLibrary.add}
-        disabled={userLibrary.pending}
-        className="btn btn-secondary btn--bold btn-min-h"
-        title="Add this artist to my library"
-      >
-        {userLibrary.pending ? (
-          <DotLoader size="sm" label={null} />
-        ) : (
-          <Library className="artist-icon-sm" />
-        )}
-        Add to My Library
-      </button>
     );
   };
 
@@ -223,7 +269,6 @@ export function ArtistDetailsActionBar({
             )}
           </button>
           {renderLibraryAction()}
-          {renderUserLibraryAction()}
         </div>
 
         <div className="artist-row-actions">
