@@ -1,5 +1,5 @@
 import express from "express";
-import { requireAuth, requirePermission } from "../middleware/requirePermission.js";
+import { requireAuth } from "../middleware/requirePermission.js";
 import { noCache } from "../middleware/cache.js";
 import {
   getNavidromeUserAuthMode,
@@ -38,9 +38,13 @@ import {
  * visible here on the next load.
  */
 
+// Signed in is enough. These are each person's own Navidrome playlists, read
+// and written as them, so Navidrome only lets them change their own; the few
+// edits that go through the admin connection check ownership above. The
+// accessFlow permission gates the playlists Aurral generates and downloads,
+// a different thing, and requiring it here kept listeners out of their own.
 const router = express.Router();
 router.use(requireAuth);
-router.use(requirePermission("accessFlow"));
 
 const MAX_TRACKS_PER_REQUEST = 200;
 
