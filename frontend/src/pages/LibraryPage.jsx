@@ -214,6 +214,13 @@ const favoriteIdsFromPages = (pages) => new Set(
 // then simply waits for the server as before.
 const HOME_CACHE_KEY = "psalter.libraryHome";
 
+// Artist records reach the page in two shapes: page rows carry `albumCount`
+// (or the ids of the albums loaded with them), the artist projection behind
+// Recently added carries `statistics.albumCount`. Reading only the first
+// shape showed every recently added artist as "0 albums".
+const artistAlbumCount = (artist) =>
+  Number(artist?.albumCount ?? artist?.statistics?.albumCount ?? artist?.albumIds?.length ?? 0) || 0;
+
 const readCachedHome = (userId) => {
   if (userId == null) return null;
   try {
@@ -237,7 +244,10 @@ const homeQueryDataFromResponse = (home) => {
   const recentPage = home?.recentAlbums || {};
   const topRatedPage = home?.topRatedLibrary || {};
   const artistsPage = { artists: Array.isArray(home?.recentArtists) ? home.recentArtists : [] };
-  const pageResults = [recentPage, topRatedPage, artistsPage];
+  // Artists first: merging keeps the first copy of each artist, and the full
+  // artist record must win over the partial one an album page carries, whose
+  // album ids cover only the albums on that page.
+  const pageResults = [artistsPage, recentPage, topRatedPage];
   return {
     nextData: home,
     pageResults,
@@ -2155,7 +2165,7 @@ function LibraryPage() {
             />
           </div>
           <span className="native-library-card__meta">
-            {artist.albumCount ?? artist.albumIds?.length ?? 0} album{(artist.albumCount ?? artist.albumIds?.length ?? 0) === 1 ? "" : "s"}
+            {artistAlbumCount(artist)} album{artistAlbumCount(artist) === 1 ? "" : "s"}
           </span>
         </div>
       </article>
