@@ -445,6 +445,11 @@ httpServer.listen(PORT, async () => {
       .then(([home, { userOps }]) => home.warmLibraryHomes(userOps.getAllUsers()))
       .catch((error) => logger.warn("library", `[Home] Warm-up failed: ${error.message}`));
   }, 60_000).unref?.();
+  // Act on Lidarr webhook events a restart left waiting, and retry any that
+  // failed once they are due.
+  import("./services/lidarrWebhookService.js")
+    .then(({ startLidarrWebhookProcessor }) => startLidarrWebhookProcessor())
+    .catch((error) => logger.warn("library", `[LidarrWebhook] Processor did not start: ${error.message}`));
 });
 
 httpServer.on("error", (error) => {

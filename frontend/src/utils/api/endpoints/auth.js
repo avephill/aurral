@@ -61,6 +61,9 @@ export const getLidarrWebhookKey = () => getData("/auth/lidarr-webhook-key");
 
 export const rotateLidarrWebhookKey = () => postData("/auth/lidarr-webhook-key/rotate");
 
+// Whether Lidarr's webhook events are arriving and being acted on.
+export const getLidarrWebhookStatus = () => getData("/webhooks/lidarr/status");
+
 export const completeOnboarding = async (payload) => {
   const result = await postData("/onboarding/complete", payload);
   invalidateBootstrapCache();

@@ -4,6 +4,7 @@ import { DotLoader } from "../../../components/DotLoader";
 import {
   getApiKey,
   getLidarrWebhookKey,
+  getLidarrWebhookStatus,
   rotateApiKey,
   rotateLidarrWebhookKey,
 } from "../../../utils/api/endpoints/auth";
@@ -126,6 +127,89 @@ function SecretKeyRow({ label, description, load, rotate, pick, showSuccess, sho
   );
 }
 
+const relativeTime = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+
+const ago = (timestamp) => {
+  const seconds = Math.round((Number(timestamp) - Date.now()) / 1000);
+  const units = [
+    ["day", 86400],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  const [unit, size] = units.find(([, unitSeconds]) => Math.abs(seconds) >= unitSeconds) || ["second", 1];
+  return relativeTime.format(Math.round(seconds / size), unit);
+};
+
+// Whether Lidarr's webhook is arriving and being acted on. The library relies
+// on it for new albums, so a quiet or failing webhook should be seen here.
+function LidarrWebhookStatusRow() {
+  const [status, setStatus] = useState(null);
+  const [failedToLoad, setFailedToLoad] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      getLidarrWebhookStatus()
+        .then((next) => {
+          if (cancelled) return;
+          setStatus(next);
+          setFailedToLoad(false);
+        })
+        .catch(() => {
+          if (!cancelled) setFailedToLoad(true);
+        });
+    load();
+    const timer = setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  let summary;
+  let value;
+  if (failedToLoad) {
+    summary = "Could not read the webhook status.";
+    value = "Unknown";
+  } else if (!status) {
+    summary = "Loading…";
+    value = <DotLoader size="sm" label={null} />;
+  } else if (!status.lastEvent) {
+    summary = "No events received yet. Press Test in Lidarr's webhook settings to check the connection.";
+    value = "Nothing yet";
+  } else {
+    const parts = [
+      `Last event: ${status.lastEvent.type}, ${ago(status.lastEvent.receivedAt)}.`,
+      `${status.lastDay} in the last day.`,
+    ];
+    if (status.lastIndexed) {
+      parts.push(`Last indexed after ${status.lastIndexed.type}, ${ago(status.lastIndexed.processedAt)}.`);
+    }
+    if (status.pending) parts.push(`${status.pending} waiting to be indexed.`);
+    if (status.lastError) {
+      parts.push(
+        `${status.lastError.status === "failed" ? "Gave up on" : "Retrying"} a ${status.lastError.type} event: ${status.lastError.message}`,
+      );
+    }
+    summary = parts.join(" ");
+    value = status.failed ? `${status.failed} failed` : "Receiving";
+  }
+
+  return (
+    <div className="settings-system__row">
+      <div className="settings-system__copy">
+        <div className="settings-system__label">Status</div>
+        <p className="settings-system__description">{summary}</p>
+      </div>
+      <div
+        className={`settings-system__value${failedToLoad || status?.failed ? " settings-system__value--error" : ""}`}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
 const pickApiKey = (response) => response?.apiKey;
 const pickWebhookKey = (response) => response?.key;
 
@@ -230,6 +314,7 @@ export function SettingsSystemTab({ health, settings, updateSettings, showSucces
           </p>
         </div>
         <div className="settings-system__rows">
+          <LidarrWebhookStatusRow />
           <SecretKeyRow
             label="Webhook key"
             description="Opens the Lidarr webhook and nothing else. Rotating it only stops the webhook until Lidarr has the new key."

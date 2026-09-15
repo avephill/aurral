@@ -392,6 +392,28 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_album_requests_last_requested
     ON album_requests (last_requested_at DESC);
 
+  -- Every webhook Lidarr sends, kept until it has been acted on. The library
+  -- relies on these to pick up new albums, so an event is written here first
+  -- and indexed after; a failure is retried instead of lost. status is one of
+  -- pending, done, ignored or failed.
+  CREATE TABLE IF NOT EXISTS lidarr_webhook_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type TEXT NOT NULL,
+    received_at INTEGER NOT NULL,
+    payload TEXT,
+    status TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at INTEGER,
+    processed_at INTEGER,
+    error TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_lidarr_webhook_events_due
+    ON lidarr_webhook_events (status, next_attempt_at);
+
+  CREATE INDEX IF NOT EXISTS idx_lidarr_webhook_events_received
+    ON lidarr_webhook_events (received_at DESC);
+
   CREATE TABLE IF NOT EXISTS inbox_items (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,

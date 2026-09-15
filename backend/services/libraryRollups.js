@@ -72,6 +72,39 @@ export function rebuildLibraryRollups() {
 }
 
 /**
+ * Rebuild the rollups for a few artists and their albums only, after indexing
+ * a single album or artist. The whole-library rebuild above stays for scans.
+ */
+export function rebuildLibraryRollupsForArtists(artistIds = []) {
+  const ids = [...new Set((Array.isArray(artistIds) ? artistIds : [])
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value > 0))];
+  if (!ids.length) return true;
+  const startedAt = Date.now();
+  const json = JSON.stringify(ids);
+  const artistFilter = "SELECT CAST(value AS INTEGER) FROM json_each(?)";
+  try {
+    db.transaction(() => {
+      db.prepare(`DELETE FROM library_artist_stats WHERE artist_id IN (${artistFilter})`).run(json);
+      db.prepare(
+        ARTIST_STATS_SQL.replace("GROUP BY artist.id", `WHERE artist.id IN (${artistFilter})\n  GROUP BY artist.id`),
+      ).run(startedAt, json);
+      db.prepare(
+        `DELETE FROM library_album_stats
+         WHERE album_id IN (SELECT id FROM library_albums WHERE artist_id IN (${artistFilter}))`,
+      ).run(json);
+      db.prepare(
+        ALBUM_STATS_SQL.replace("GROUP BY album.id", `WHERE album.artist_id IN (${artistFilter})\n  GROUP BY album.id`),
+      ).run(startedAt, json);
+    })();
+  } catch (error) {
+    logger.warn("library", `Library rollup rebuild for ${ids.length} artist(s) failed: ${error.message}`);
+    return false;
+  }
+  return true;
+}
+
+/**
  * Builds the rollups if they are missing but the library is populated, which
  * is the case exactly once per database: the upgrade that introduced them.
  * Reads fall back to zeroed counts until this runs, so it is safe to call

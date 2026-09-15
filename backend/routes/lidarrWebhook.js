@@ -1,6 +1,12 @@
 import express from "express";
 import { isLidarrWebhookKey } from "../middleware/auth.js";
+import { requireAdmin, requireAuth } from "../middleware/requirePermission.js";
 import { recordAlbumImportCompleted } from "../services/aurralHistoryService.js";
+import {
+  getLidarrWebhookStatus,
+  processLidarrWebhookEvents,
+  recordLidarrWebhookEvent,
+} from "../services/lidarrWebhookService.js";
 import { scheduleUserLibraryReconcile } from "../services/userLibraryService.js";
 
 export const LIDARR_WEBHOOK_KEY_HEADER = "x-webhook-key";
@@ -21,6 +27,13 @@ export const requireLidarrWebhookKey = (req, res, next) => {
 
 export const handleLidarrWebhook = (req, res) => {
   const body = req.body || {};
+  // Written down before anything else happens, so a failure below, or the
+  // server stopping, cannot lose the event. Indexing runs after the answer.
+  recordLidarrWebhookEvent(body);
+  setImmediate(() => {
+    processLidarrWebhookEvents().catch(() => {});
+  });
+
   const eventType = String(body.eventType || body.EventType || "")
     .trim()
     .toLowerCase();
@@ -45,6 +58,12 @@ export const handleLidarrWebhook = (req, res) => {
 };
 
 const router = express.Router();
+// Whether events are arriving and being acted on. Signed-in admins only; this
+// path is not the webhook itself, so normal auth applies.
+router.get("/status", requireAuth, requireAdmin, (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(getLidarrWebhookStatus());
+});
 router.post("/", requireLidarrWebhookKey, handleLidarrWebhook);
 
 export default router;
