@@ -423,6 +423,88 @@ export function AudioQueueProvider({ children }) {
     [state.source],
   );
 
+  // The Mac's play and skip keys, headphone buttons and the Now Playing panel
+  // reach a web page through the Media Session API. Without handlers they did
+  // nothing, and the panel showed no song.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return undefined;
+    const session = navigator.mediaSession;
+    const handlers = {
+      play: () => {
+        if (!playerRef.current.isPlaying) togglePlayPause();
+      },
+      pause: () => {
+        if (playerRef.current.isPlaying) togglePlayPause();
+      },
+      nexttrack: () => playNext(),
+      previoustrack: () => playPrevious(),
+    };
+    for (const [action, handler] of Object.entries(handlers)) {
+      try {
+        session.setActionHandler(action, handler);
+      } catch {}
+    }
+    return () => {
+      for (const action of Object.keys(handlers)) {
+        try {
+          session.setActionHandler(action, null);
+        } catch {}
+      }
+    };
+  }, [playNext, playPrevious, togglePlayPause]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return;
+    const session = navigator.mediaSession;
+    if (!currentTrack) {
+      session.metadata = null;
+      return;
+    }
+    if (typeof window.MediaMetadata === "function") {
+      session.metadata = new window.MediaMetadata({
+        title: currentTrack.title || "",
+        artist: currentTrack.artist || "",
+        album: currentTrack.album || "",
+        artwork: currentTrack.artwork ? [{ src: currentTrack.artwork }] : [],
+      });
+    }
+  }, [currentTrack]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return;
+    navigator.mediaSession.playbackState = !currentTrack ? "none" : player.isPlaying ? "playing" : "paused";
+  }, [currentTrack, player.isPlaying]);
+
+  // iTunes keys: Space plays and pauses, Command (or Ctrl) with the left and
+  // right arrows skips. Left alone while typing, and Space is left to a
+  // focused button, which already treats it as a click.
+  useEffect(() => {
+    const isTyping = (target) =>
+      Boolean(target) &&
+      (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+    const onKeyDown = (event) => {
+      if (event.defaultPrevented || isTyping(event.target)) return;
+      if (stateRef.current.queue.length === 0) return;
+      if (event.key === " " && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (event.target?.closest?.("button, a, [role='button'], [role='slider'], [role='tab']")) return;
+        event.preventDefault();
+        togglePlayPause();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          playNext();
+        } else if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          playPrevious();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [playNext, playPrevious, togglePlayPause]);
+
   const value = useMemo(
     () => ({
       queue: state.queue,

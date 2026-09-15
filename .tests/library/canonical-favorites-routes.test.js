@@ -183,9 +183,11 @@ test("native favorites include the canonical favorite subset", () => {
   assert.equal(response.body.library.tracks[0].files[0].path, undefined);
 });
 
-test("canonical library pages return bounded collection responses", () => {
+// The route is async: a track page reads each song's artist from its file
+// before it answers, so the response is only complete once it resolves.
+test("canonical library pages return bounded collection responses", async () => {
   const response = responseFor();
-  getRoute("GET /canonical")(
+  await getRoute("GET /canonical")(
     { user, query: { kind: "tracks", page: "1", pageSize: "1" } },
     response,
   );
@@ -203,7 +205,7 @@ test("canonical library pages return bounded collection responses", () => {
   assert.equal(response.body.items[0].files[0].path, undefined);
 
   const availableResponse = responseFor();
-  getRoute("GET /canonical")(
+  await getRoute("GET /canonical")(
     { user, query: { kind: "albums", page: "1", pageSize: "1", availableOnly: "true" } },
     availableResponse,
   );
@@ -211,7 +213,7 @@ test("canonical library pages return bounded collection responses", () => {
   assert.equal(availableResponse.body.items[0].availableTrackCount, 1);
 
   const artistResponse = responseFor();
-  getRoute("GET /canonical")(
+  await getRoute("GET /canonical")(
     { user, query: { kind: "artists", page: "1", pageSize: "1" } },
     artistResponse,
   );

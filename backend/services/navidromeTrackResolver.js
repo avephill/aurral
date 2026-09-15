@@ -631,7 +631,10 @@ export async function mapNavidromeEntriesToTracks(
     return {
       ...base,
       title: track.title || base.title,
-      artistName: artist?.name || track.artistName || base.artistName,
+      // Navidrome's entry names the song's own artist, read from the file's
+      // tags; the canonical artist is the album's ("Various Artists" on a
+      // compilation). Keep the song's, falling back to the album's.
+      artistName: base.artistName || artist?.name || track.artistName,
       albumTitle: album?.title || base.albumTitle,
       trackId: track.id,
       albumId: track.albumId,

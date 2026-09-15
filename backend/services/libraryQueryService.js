@@ -1715,6 +1715,7 @@ function buildPageQuery({
   trackIdentityKeys = null,
   excludeTrackIds = null,
   artistIds = null,
+  trackRatings = null,
 }) {
   const where = [];
   const parameters = [];
@@ -1763,7 +1764,7 @@ function buildPageQuery({
     }
   } else {
     entityKind = "track";
-    const needsRelations = Boolean(artistId || albumId || genre || sort === "artist")
+    const needsRelations = Boolean(artistId || albumId || genre || sort === "artist" || sort === "album")
       || Boolean(query && !searchMatch);
     from = needsRelations
       ? `FROM library_tracks AS track
@@ -1839,6 +1840,18 @@ function buildPageQuery({
     parameters.push(...predicate.parameters);
   }
 
+  // Sorting tracks by rating joins the person's ratings in as a table. Its
+  // placeholder sits in FROM, after the search join's and before WHERE's.
+  const sortByRating =
+    kind === "tracks" && sort === "rating" && trackRatings && typeof trackRatings === "object";
+  if (sortByRating) {
+    from += `
+      LEFT JOIN (
+        SELECT CAST(key AS INTEGER) AS track_id, value AS rating FROM json_each(?)
+      ) AS user_rating ON user_rating.track_id = track.id`;
+    parameters.splice(searchMatch ? 1 : 0, 0, JSON.stringify(trackRatings));
+  }
+
   const orderDirection = direction === "desc" ? "DESC" : "ASC";
   let orderBy;
   if (sort === "newest" && (kind === "albums" || kind === "tracks")) {
@@ -1849,6 +1862,16 @@ function buildPageQuery({
     orderBy = `artist.name COLLATE NOCASE ${orderDirection}, ${kind === "albums" ? "album.title" : "track.title"} COLLATE NOCASE ${orderDirection}`;
     if (kind === "albums") orderBy += ", album.id";
     else orderBy += ", track.id";
+  } else if (kind === "tracks" && sort === "album") {
+    orderBy = `album.title COLLATE NOCASE ${orderDirection}, album_track.disc_number, album_track.track_number, track.id`;
+  } else if (kind === "tracks" && sort === "duration") {
+    orderBy = `COALESCE((
+      SELECT MAX(duration_media.duration_ms)
+      FROM library_media_files AS duration_media
+      WHERE duration_media.track_id = track.id
+    ), 0) ${orderDirection}, track.title COLLATE NOCASE, track.id`;
+  } else if (sortByRating) {
+    orderBy = `COALESCE(user_rating.rating, 0) ${orderDirection}, track.title COLLATE NOCASE, track.id`;
   } else if (kind === "artists") {
     orderBy = `coalesce(artist.sort_name, artist.name) COLLATE NOCASE ${orderDirection}, artist.name COLLATE NOCASE ${orderDirection}, artist.id ${orderDirection}`;
   } else {
@@ -2161,6 +2184,8 @@ export function getCanonicalLibraryPage({
   // Album pages only: narrow to these canonical artist ids (a person's
   // library). An empty list matches nothing; null, everything.
   artistIds = null,
+  // Track pages sorted by rating: the person's ratings, { trackId: 1-5 }.
+  trackRatings = null,
 } = {}) {
   const normalizedKind = text(kind).toLocaleLowerCase();
   if (!PAGE_KINDS.has(normalizedKind)) {
@@ -2233,6 +2258,7 @@ export function getCanonicalLibraryPage({
     trackIdentityKeys,
     excludeTrackIds,
     artistIds,
+    trackRatings,
   });
   const total = db.prepare(
     `SELECT COUNT(DISTINCT ${queryDefinition.idExpression}) AS total

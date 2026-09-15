@@ -198,6 +198,12 @@ export function registerCanonical(router) {
         const scoped = await scopeCanonicalArtistsToUser(req.user);
         if (Array.isArray(scoped)) artistIds = scoped.map((artist) => artist.id);
       }
+      // Sorting tracks by rating needs the person's own ratings.
+      let trackRatings;
+      if (kind === "tracks" && req.query.sort === "rating" && req.user) {
+        const result = await getUserTrackRatings(req.user);
+        if (result.connected) trackRatings = Object.fromEntries(result.ratings);
+      }
       const page = getCanonicalLibraryPage({
         source: req.query.source,
         availableOnly: req.query.availableOnly === "true",
@@ -214,10 +220,12 @@ export function registerCanonical(router) {
         trackIdentityKeys,
         excludeTrackIds,
         artistIds,
+        trackRatings,
       });
-      // An album's songs carry their own artist from the file tags, so a
-      // compilation lists who sings each one rather than "Various Artists".
-      if (kind === "tracks" && req.query.albumId) {
+      // Songs carry their own artist from the file tags, so a compilation
+      // lists who sings each one rather than "Various Artists". A page is at
+      // most 100 tracks, and each file's tags are read once until it changes.
+      if (kind === "tracks") {
         const { addTrackPerformers } = await import("../../../services/trackPerformerTags.js");
         await addTrackPerformers(page.tracks);
       }

@@ -26,6 +26,7 @@ import {
 import ArtistImage from "../components/ArtistImage";
 import { DotLoader } from "../components/DotLoader";
 import { TrackRating } from "../components/StarRating";
+import { getKnownTrackRating } from "../hooks/useTrackRating.js";
 import { LibraryItemMenu, LibraryItemSubmenu } from "../components/LibraryItemMenu";
 import TooltipButton from "../components/TooltipButton";
 import { useAuth } from "../contexts/AuthContext";
@@ -537,6 +538,9 @@ function LibraryPage() {
   // narrower than album cards, so each grid is measured on its own.
   const [homeRecentAlbumsGridRef, homeRecentAlbumColumns] = useGridColumnCount();
   const [homeRecentArtistsGridRef, homeRecentArtistColumns] = useGridColumnCount(7);
+  // Column sorting for track lists shown whole (an album, favorites). null
+  // keeps the list's own order; a third click on a column returns to it.
+  const [trackListSort, setTrackListSort] = useState(null);
 
   const handleLibraryScanMessage = useCallback((message) => {
     if (message?.type !== "library_scan_completed") return;
@@ -657,6 +661,7 @@ function LibraryPage() {
     setSortMode("name");
     setSortDirection("asc");
     setViewMode(section === "tracks" || section === "genres" ? "list" : "grid");
+    setTrackListSort(null);
     setSearchOpen(false);
     setFiltersOpen(false);
     setPageIndex(1);
@@ -1391,6 +1396,9 @@ function LibraryPage() {
   }, [filteredAlbums, getArtistForAlbum, sortDirection, sortMode]);
 
   const sortedTracks = useMemo(() => {
+    // The Tracks page is one page of a list the server has already sorted, by
+    // columns (album, time, rating) this page cannot sort by itself.
+    if (section === "tracks") return filteredTracks;
     const items = [...filteredTracks];
     items.sort((left, right) => {
       if (sortMode === "artist") {
@@ -1401,7 +1409,7 @@ function LibraryPage() {
       return text(left.title).localeCompare(text(right.title));
     });
     return sortDirection === "asc" ? items : items.reverse();
-  }, [filteredTracks, getAlbumForTrack, getArtistForAlbum, sortDirection, sortMode]);
+  }, [filteredTracks, getAlbumForTrack, getArtistForAlbum, section, sortDirection, sortMode]);
 
   const sortedGenres = useMemo(() => {
     const items = [...visibleGenreStats].sort((left, right) =>
@@ -1767,6 +1775,9 @@ function LibraryPage() {
         ? [
             { value: "name", label: "Name" },
             { value: "artist", label: "Artist" },
+            { value: "album", label: "Album" },
+            { value: "duration", label: "Time" },
+            { value: "rating", label: "Rating" },
           ]
         : section === "artists" || section === "album-artists"
           ? [{ value: "name", label: "Name" }]
@@ -1818,20 +1829,96 @@ function LibraryPage() {
     setSearchParams(next);
   };
 
-  const renderTrackList = (tracks, label) => (
+  // Click a column to sort by it, as in iTunes. Lists shown whole sort here;
+  // the Tracks page asks the server, since it only holds one page.
+  const trackSortValue = (track, key) => {
+    const album = getAlbumForTrack(track);
+    switch (key) {
+      case "artist":
+        return text(track.performerName || getArtistForAlbum(album)?.name || track.artistName).toLocaleLowerCase();
+      case "album":
+        return text(album?.title || track.albumName).toLocaleLowerCase();
+      case "duration":
+        return Number(firstAvailableFile(track)?.durationMs || 0);
+      case "rating":
+        return getKnownTrackRating(track.id);
+      default:
+        return text(track.title).toLocaleLowerCase();
+    }
+  };
+
+  const sortTrackRows = (tracks) => {
+    if (!trackListSort) return tracks;
+    const factor = trackListSort.direction === "desc" ? -1 : 1;
+    return [...tracks].sort((left, right) => {
+      const a = trackSortValue(left, trackListSort.key);
+      const b = trackSortValue(right, trackListSort.key);
+      return (typeof a === "number" ? a - b : String(a).localeCompare(String(b))) * factor;
+    });
+  };
+
+  // Ratings read best highest first; everything else A to Z first.
+  const firstDirection = (key) => (key === "rating" ? "desc" : "asc");
+
+  const clientTrackSort = {
+    key: trackListSort?.key || null,
+    direction: trackListSort?.direction || "asc",
+    onSort: (key) =>
+      setTrackListSort((current) => {
+        if (current?.key !== key) return { key, direction: firstDirection(key) };
+        if (current.direction === firstDirection(key)) {
+          return { key, direction: firstDirection(key) === "asc" ? "desc" : "asc" };
+        }
+        return null;
+      }),
+  };
+
+  const serverTrackSort = {
+    key: sortMode,
+    direction: sortDirection,
+    onSort: (key) => {
+      setPageIndex(1);
+      if (sortMode === key) {
+        setSortDirection((value) => (value === "asc" ? "desc" : "asc"));
+      } else {
+        setSortMode(key);
+        setSortDirection(firstDirection(key));
+      }
+    },
+  };
+
+  const renderSortHeading = (sort, key, labelText, className) => {
+    if (!sort || !labelText) return <span className={className}>{labelText}</span>;
+    const active = sort.key === key;
+    return (
+      <span className={className}>
+        <button
+          type="button"
+          className={`native-library-track__sort${active ? " is-active" : ""}`}
+          onClick={() => sort.onSort(key)}
+          aria-label={`Sort by ${labelText}${active ? (sort.direction === "desc" ? ", descending" : ", ascending") : ""}`}
+        >
+          {labelText}
+          {active ? <span aria-hidden="true">{sort.direction === "desc" ? " ▾" : " ▴"}</span> : null}
+        </button>
+      </span>
+    );
+  };
+
+  const renderTrackList = (tracks, label, sort = null) => (
     <div className="native-library-track-list">
       <div
         className="native-library-track native-library-track--heading"
-        aria-hidden="true"
+        aria-hidden={sort ? undefined : "true"}
       >
         <span />
         <span className="native-library-track__number">#</span>
         <span />
-        <span>Title</span>
-        <span>Artist</span>
-        <span>Album</span>
-        <span className="native-library-track__time">Time</span>
-        <span className="native-library-track__rating">{ratingsEnabled ? "Rating" : ""}</span>
+        {renderSortHeading(sort, "name", "Title")}
+        {renderSortHeading(sort, "artist", "Artist")}
+        {renderSortHeading(sort, "album", "Album")}
+        {renderSortHeading(sort, "duration", "Time", "native-library-track__time")}
+        {renderSortHeading(sort, "rating", ratingsEnabled ? "Rating" : "", "native-library-track__rating")}
         <span />
         <span />
       </div>
@@ -2446,7 +2533,7 @@ function LibraryPage() {
         {favoriteTracks.length > 0 && (
           <section className="native-library-section">
             {renderSectionHeader("Tracks", favoriteTracks.length)}
-            {renderTrackList(favoriteTracks, "Favorite tracks")}
+            {renderTrackList(sortTrackRows(favoriteTracks), "Favorite tracks", clientTrackSort)}
           </section>
         )}
       </div>
@@ -2610,7 +2697,7 @@ function LibraryPage() {
             <h3>Tracks</h3>
             <span>{availability.total}</span>
           </div>
-          {renderTrackList(albumTracks, libraryAlbum.title + " tracks")}
+          {renderTrackList(sortTrackRows(albumTracks), libraryAlbum.title + " tracks", clientTrackSort)}
         </section>
       </section>
     );
@@ -2875,7 +2962,7 @@ function LibraryPage() {
               </div>
             )
             : tab === "tracks"
-              ? renderTrackList(sortedTracks, "Library tracks")
+              ? renderTrackList(sortedTracks, "Library tracks", serverTrackSort)
               : renderGenres();
 
   const pageTitle =

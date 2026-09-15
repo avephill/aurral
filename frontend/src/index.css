@@ -8449,6 +8449,23 @@ button.native-library-card__artist:focus-visible {
   letter-spacing: 0;
 }
 
+/* A column heading you can click to sort by, as in iTunes. */
+.native-library-track__sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.native-library-track__sort:hover,
+.native-library-track__sort:focus-visible,
+.native-library-track__sort.is-active {
+  color: var(--aurral-text);
+}
+
 .native-library-track:not(.native-library-track--heading):hover,
 .native-library-track.is-active {
   background: var(--aurral-surface-selected);

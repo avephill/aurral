@@ -39,6 +39,11 @@ function read(trackId) {
   return entries.get(String(trackId)) || EMPTY;
 }
 
+/** The rating already loaded for a track, or 0, for sorting a list by rating. */
+export function getKnownTrackRating(trackId) {
+  return Number(read(trackId).rating) || 0;
+}
+
 function setEntry(trackId, patch) {
   const key = String(trackId);
   entries.set(key, { ...(entries.get(key) || EMPTY), ...patch });
