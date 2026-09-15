@@ -13,6 +13,11 @@ export const isPlaylistsEnabled = () => process.env.AURRAL_PLAYLISTS_ENABLED !==
 // one, so this exists to keep it from running at all.
 export const isDiscoveryEnabled = () => process.env.AURRAL_DISCOVERY_ENABLED !== "false";
 
+// The "Connect Last.fm" banner on Discover. Off unless
+// AURRAL_LASTFM_PROMPT_ENABLED=true: most people using this server cannot
+// open the Settings page it points to, and Discover works without Last.fm.
+export const isLastfmPromptEnabled = () => process.env.AURRAL_LASTFM_PROMPT_ENABLED === "true";
+
 // AURRAL_LIBRARY_RECOMMENDATIONS_ENABLED=false drops the whole-library
 // recommendation engine: no taste profile, no recommendation pipeline, no
 // genre stats, and the three rails built from them ("Recommended", "Global

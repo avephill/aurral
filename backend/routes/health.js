@@ -12,6 +12,7 @@ import { APP_VERSION } from "../config/constants.js";
 import {
   isDiscoveryEnabled,
   isLibraryRecommendationsEnabled,
+  isLastfmPromptEnabled,
   isPlaylistsEnabled,
   isAutomaticPlaylistsEnabled,
   isNavidromePlaylistsEnabled,
@@ -265,6 +266,7 @@ function buildBootstrapPayload(req) {
     navidromeRatingsEnabled: isNavidromeUserAuthEnabled(),
     discoveryEnabled: isDiscoveryEnabled(),
     libraryRecommendationsEnabled: isLibraryRecommendationsEnabled(),
+    lastfmPromptEnabled: isLastfmPromptEnabled(),
     discoverDefaultLayout: getDefaultDiscoverLayout(),
     onboardingRequired: !onboardingDone,
     dateTimeFormat: settings.dateTimeFormat,

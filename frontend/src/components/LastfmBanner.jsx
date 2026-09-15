@@ -38,6 +38,9 @@ const LastfmBanner = () => {
     setDismissed(readDismissed(user));
   }, [user]);
 
+  // Off unless the server turns it on (AURRAL_LASTFM_PROMPT_ENABLED=true).
+  if (bootstrap?.lastfmPromptEnabled !== true) return null;
+
   if (dismissed || lastfmConfigured === null || lastfmConfigured) {
     return null;
   }
