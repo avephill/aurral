@@ -37,6 +37,7 @@ const canonicalLibraryPageParams = (options = {}) => Object.fromEntries(
     availableOnly: options.availableOnly === true ? "true" : "false",
     minRating: options.minRating || undefined,
     favorites: options.favorites === true ? "true" : undefined,
+    unrated: options.unrated === true ? "true" : undefined,
   }).filter(([, value]) => value !== undefined && value !== null && value !== ""),
 );
 
@@ -45,7 +46,7 @@ export const fetchCanonicalLibraryPage = (options = {}, { signal } = {}) =>
     params: canonicalLibraryPageParams(options),
     signal,
     // A person's first rating filter reads all their ratings from Navidrome.
-    ...(options.minRating ? { timeout: SLOW_LIBRARY_REQUEST_TIMEOUT_MS } : {}),
+    ...(options.minRating || options.unrated ? { timeout: SLOW_LIBRARY_REQUEST_TIMEOUT_MS } : {}),
   });
 
 export const getCanonicalLibraryPage = (options = {}, { signal } = {}) => {

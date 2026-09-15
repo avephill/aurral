@@ -550,6 +550,7 @@ function LibraryPage() {
   const ratingParam = Math.round(Number(searchParams.get("rating")) || 0);
   const selectedRating = section === "tracks" && ratingParam >= 1 && ratingParam <= 5 ? ratingParam : 0;
   const favoritesOnly = section === "tracks" && searchParams.get("favorites") === "1";
+  const unratedOnly = section === "tracks" && searchParams.get("rating") === "unrated";
   const forcePreview = import.meta.env.DEV && searchParams.get("preview") === "1";
   const previewQuery = forcePreview ? "?preview=1" : "";
   // An old /library/album-artists link lands on the artist list, so it should
@@ -580,7 +581,7 @@ function LibraryPage() {
       pageIndex,
       query: normalizedQuery,
       genre: selectedGenre,
-      rating: selectedRating,
+      rating: unratedOnly ? "unrated" : selectedRating,
       favorites: favoritesOnly,
       sort: sortMode,
       direction: sortDirection,
@@ -598,6 +599,7 @@ function LibraryPage() {
       sortDirection,
       sortMode,
       tab,
+      unratedOnly,
     ],
   );
   const libraryQuery = useQuery({
@@ -663,6 +665,7 @@ function LibraryPage() {
                 availableOnly: tab === "tracks",
                 minRating: selectedRating || undefined,
                 favorites: favoritesOnly,
+                unrated: unratedOnly,
               }, { signal });
       const pageResults = section === "favorites"
         ? [nextData?.library || EMPTY_LIBRARY]
@@ -2817,7 +2820,7 @@ function LibraryPage() {
   // Home has nothing to search, sort or filter; its one control, Refresh, sits
   // in the title row instead, so home skips the toolbar row entirely.
   const showToolbar = !isHome;
-  const hasActiveFilters = Boolean(selectedGenre || selectedRating || favoritesOnly);
+  const hasActiveFilters = Boolean(selectedGenre || selectedRating || favoritesOnly || unratedOnly);
 
   return (
     <main className="library-page native-library-page">
@@ -3013,7 +3016,7 @@ function LibraryPage() {
                     <label>
                       <span>Rating</span>
                       <select
-                        value={String(selectedRating)}
+                        value={unratedOnly ? "unrated" : String(selectedRating)}
                         onChange={(event) =>
                           updateSearchFilter("rating", event.target.value === "0" ? "" : event.target.value)
                         }
@@ -3025,6 +3028,7 @@ function LibraryPage() {
                         <option value="3">3 stars and up</option>
                         <option value="2">2 stars and up</option>
                         <option value="1">Rated</option>
+                        <option value="unrated">Unrated</option>
                       </select>
                     </label>
                     <label>

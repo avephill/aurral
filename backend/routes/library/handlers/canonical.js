@@ -141,15 +141,21 @@ export function registerCanonical(router) {
       // person's own tracks. Ratings live in Navidrome; favourites here.
       let trackIds;
       let trackIdentityKeys;
+      let excludeTrackIds;
       const minRating = kind === "tracks" ? Math.round(Number(req.query.minRating) || 0) : 0;
-      if (minRating >= 1 && minRating <= 5) {
+      const unratedOnly = kind === "tracks" && req.query.unrated === "true";
+      if ((minRating >= 1 && minRating <= 5) || unratedOnly) {
         const result = req.user ? await getUserTrackRatings(req.user) : { connected: false };
         if (!result.connected) {
           return res.status(503).json({ error: "Ratings are not available from Navidrome" });
         }
-        trackIds = [...result.ratings]
-          .filter(([, rating]) => rating >= minRating)
-          .map(([trackId]) => trackId);
+        if (unratedOnly) {
+          excludeTrackIds = [...result.ratings.keys()];
+        } else {
+          trackIds = [...result.ratings]
+            .filter(([, rating]) => rating >= minRating)
+            .map(([trackId]) => trackId);
+        }
       }
       if (kind === "tracks" && req.query.favorites === "true") {
         trackIdentityKeys = [...(favoriteKeys || [])]
@@ -170,6 +176,7 @@ export function registerCanonical(router) {
         albumId: req.query.albumId,
         trackIds,
         trackIdentityKeys,
+        excludeTrackIds,
       }), favoriteKeys));
     } catch (error) {
       if (

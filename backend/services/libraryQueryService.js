@@ -1713,6 +1713,7 @@ function buildPageQuery({
   albumId,
   trackIds = null,
   trackIdentityKeys = null,
+  excludeTrackIds = null,
 }) {
   const where = [];
   const parameters = [];
@@ -1792,6 +1793,10 @@ function buildPageQuery({
     if (Array.isArray(trackIdentityKeys)) {
       where.push("track.identity_key IN (SELECT value FROM json_each(?))");
       parameters.push(JSON.stringify(trackIdentityKeys.map(String)));
+    }
+    if (Array.isArray(excludeTrackIds) && excludeTrackIds.length) {
+      where.push("track.id NOT IN (SELECT CAST(value AS INTEGER) FROM json_each(?))");
+      parameters.push(JSON.stringify(excludeTrackIds.map(Number).filter(Number.isSafeInteger)));
     }
   }
 
@@ -2145,6 +2150,9 @@ export function getCanonicalLibraryPage({
   // rated or favourite tracks). An empty list matches nothing; null, everything.
   trackIds = null,
   trackIdentityKeys = null,
+  // Track pages only: leave these track ids out (a person's rated tracks, for
+  // the unrated filter).
+  excludeTrackIds = null,
 } = {}) {
   const normalizedKind = text(kind).toLocaleLowerCase();
   if (!PAGE_KINDS.has(normalizedKind)) {
@@ -2215,6 +2223,7 @@ export function getCanonicalLibraryPage({
     albumId,
     trackIds,
     trackIdentityKeys,
+    excludeTrackIds,
   });
   const total = db.prepare(
     `SELECT COUNT(DISTINCT ${queryDefinition.idExpression}) AS total

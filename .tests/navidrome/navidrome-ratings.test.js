@@ -258,7 +258,7 @@ test("top rated albums rank by the median of the user's own song ratings", async
   assert.deepEqual(result.albums, [{ albumId: album.id, median: 5, mean: 5, rated: 1, trackCount: 1 }]);
   const call = fake.state.requests.find((request) => request.path === "/rest/search3");
   assert.equal(call.headers["x-authentik-username"], "dunshill");
-  assert.equal(call.params.get("query"), "");
+  assert.equal(call.params.get("query"), '""', "every song is asked for the OpenSubsonic way");
   // By default one rated song is not enough to rank an album.
   assert.deepEqual((await annotations.getTopRatedAlbums(user)).albums, []);
 
@@ -301,6 +301,8 @@ test("a track page can be narrowed to given track ids or identity keys", () => {
   assert.equal(page({ trackIds: [] }).total, 0, "nobody's rated tracks means no tracks, not all of them");
   assert.equal(page({ trackIdentityKeys: ["a-new-day-yesterday"] }).total, 1);
   assert.equal(page({ trackIdentityKeys: ["something-else"] }).total, 0);
+  assert.equal(page({ excludeTrackIds: [track.id] }).total, 0, "unrated leaves rated tracks out");
+  assert.equal(page({ excludeTrackIds: [] }).total, 1, "and with nothing rated, every track is unrated");
 });
 
 test("with nothing remembered, stars are matched by reading the songs themselves", () => {

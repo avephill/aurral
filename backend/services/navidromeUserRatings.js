@@ -8,8 +8,8 @@ import { logger } from "./logger.js";
  * Each person's song ratings, keyed by canonical track id.
  *
  * Navidrome holds the ratings and has no call that lists only rated songs, so
- * this pages through every song the person can reach with Subsonic search3 (an
- * empty query lists them all), read as that person so every rating is their
+ * this pages through every song the person can reach with Subsonic search3 (a
+ * query of `""` lists them all), read as that person so every rating is their
  * own. For a large library that is many requests, so the answer is kept per
  * person and refreshed in the background once stale, and a rating set in
  * Psalter updates the kept answer straight away.
@@ -26,27 +26,39 @@ const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
 async function readRatedSongIds(client) {
   const rated = new Map();
+  let seen = 0;
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const data = await client.request("search3", {
-      query: "",
+      // The OpenSubsonic way to ask for every song is a query of two double
+      // quotes. A bare empty query is not handled the same by every version.
+      query: '""',
       songCount: PAGE_SIZE,
       songOffset: page * PAGE_SIZE,
       artistCount: 0,
       albumCount: 0,
     });
     const songs = asArray(data?.searchResult3?.song);
+    seen += songs.length;
     for (const song of songs) {
       const rating = clampRating(song?.userRating);
       if (rating > 0 && song?.id) rated.set(String(song.id), rating);
     }
     if (songs.length < PAGE_SIZE) break;
   }
-  return rated;
+  return { rated, seen };
 }
 
 async function loadRatings(client) {
-  const rated = await readRatedSongIds(client);
-  if (!rated.size) return new Map();
+  const startedAt = Date.now();
+  const { rated, seen } = await readRatedSongIds(client);
+  const report = (matched) => logger.info(
+    "library",
+    `[Navidrome] Ratings for ${client.user}: ${seen} song(s) read, ${rated.size} rated, ${matched} matched to tracks (${Date.now() - startedAt}ms)`,
+  );
+  if (!rated.size) {
+    report(0);
+    return new Map();
+  }
   const paths = await mediaPathsForNavidromeSongIds([...rated.keys()], {
     maxLookups: Number.POSITIVE_INFINITY,
   });
@@ -61,6 +73,7 @@ async function loadRatings(client) {
     // copy, so they agree; the higher one covers a copy that missed a write.
     ratings.set(trackId, Math.max(ratings.get(trackId) || 0, rating));
   }
+  report(ratings.size);
   return ratings;
 }
 
