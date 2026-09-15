@@ -129,6 +129,13 @@ export async function setTrackRating(user, ref, rating) {
   const song = await client.getSong(songId).catch(() => null);
   const saved = song ? clampRating(song.userRating) : value;
   noteTrackRating(user, normalized.trackId, saved);
+  // Smart playlists built from ratings follow the change.
+  import("./tagPlaylistService.js")
+    .then(({ noteOwnerTrackRating, scheduleTagPlaylistRebuild }) => {
+      noteOwnerTrackRating(user.username, normalized.trackId, saved);
+      scheduleTagPlaylistRebuild(user.username, { reason: "rating changed" });
+    })
+    .catch(() => {});
   return { trackId: normalized.trackId, songId, rating: saved, starred: Boolean(song?.starred) };
 }
 

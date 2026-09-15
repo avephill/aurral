@@ -414,6 +414,92 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_lidarr_webhook_events_received
     ON lidarr_webhook_events (received_at DESC);
 
+  -- One person's songs as their old music library knew them, with the tags
+  -- they gave each one. The record is the song's identity for that person and
+  -- outlives any file: which file it is lives in song_record_links, so a song
+  -- not on the server yet keeps its tags until it arrives. source_key is the
+  -- iTunes path tail (or artist|album|title|length), stable across exports.
+  CREATE TABLE IF NOT EXISTS song_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_key TEXT NOT NULL,
+    title TEXT,
+    artist TEXT,
+    album_artist TEXT,
+    album TEXT,
+    disc_number INTEGER,
+    track_number INTEGER,
+    duration_ms INTEGER,
+    year INTEGER,
+    genre TEXT,
+    comment TEXT,
+    rating INTEGER NOT NULL DEFAULT 0,
+    loved INTEGER NOT NULL DEFAULT 0,
+    play_count INTEGER NOT NULL DEFAULT 0,
+    date_added TEXT,
+    track_type TEXT,
+    metadata_json TEXT,
+    dismissed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (owner, source, source_key)
+  );
+
+  -- Which canonical track a record is. status: linked (trusted), review (a
+  -- guess an admin should confirm), confirmed (an admin said so), rejected (an
+  -- admin said no; the matcher will not offer this track again).
+  CREATE TABLE IF NOT EXISTS song_record_links (
+    record_id INTEGER PRIMARY KEY,
+    track_id INTEGER NOT NULL,
+    method TEXT,
+    status TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (record_id) REFERENCES song_records(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_song_record_links_track ON song_record_links (track_id);
+
+  -- Old playlists a record belonged to, by name, for the missing-music report
+  -- and for judging how well a smart playlist's rules reproduce the original.
+  CREATE TABLE IF NOT EXISTS song_record_playlists (
+    owner TEXT NOT NULL,
+    name TEXT NOT NULL,
+    kind TEXT,
+    record_ids_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (owner, name)
+  );
+
+  -- Smart playlists Psalter evaluates over a person's tags and ratings and
+  -- writes to Navidrome as ordinary playlists. Nothing is written until
+  -- enabled; last_song_ids_json is what was last written, so an unchanged
+  -- result writes nothing.
+  CREATE TABLE IF NOT EXISTS tag_playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    name TEXT NOT NULL,
+    rules_json TEXT NOT NULL,
+    unsupported_json TEXT,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    navidrome_playlist_id TEXT,
+    last_song_ids_json TEXT,
+    last_built_at INTEGER,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (owner, name)
+  );
+
+  -- A playlist's songs just before Psalter first replaced them, for undo.
+  CREATE TABLE IF NOT EXISTS tag_playlist_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tag_playlist_id INTEGER NOT NULL,
+    navidrome_playlist_id TEXT,
+    song_ids_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS inbox_items (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,

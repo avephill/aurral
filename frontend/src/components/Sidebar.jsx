@@ -8,6 +8,7 @@ import {
   Ban,
   Inbox,
   Library,
+  ListMusic,
   Newspaper,
   Settings,
   Sparkles,
@@ -262,7 +263,12 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       // What people have asked for and whether it has arrived. Admins act on
       // it, so only they see it; the same report is also under Settings.
       ...(user?.role === "admin"
-        ? [{ path: "/requests", label: "Requests", icon: Inbox }]
+        ? [
+          { path: "/requests", label: "Requests", icon: Inbox },
+          // Someone's old iTunes library: what still needs finding, and the
+          // smart playlists rebuilt from their tags.
+          { path: "/itunes-library", label: "iTunes Library", icon: ListMusic },
+        ]
         : []),
       { path: "/blocklist", label: "Blocklist", icon: Ban, adminOnly: true },
     ];

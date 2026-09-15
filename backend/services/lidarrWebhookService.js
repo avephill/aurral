@@ -99,6 +99,10 @@ async function defaultAfterIndex(outcome) {
   invalidateLibraryHome();
   resetAlbumRequestReport();
   websocketService.broadcast("library", { type: "library_scan_completed" });
+  // A ripped or bought album may be songs someone's old library was waiting
+  // for; linking them brings their tags and playlists along.
+  const { scheduleSongRecordRelink } = await import("./songRecordService.js");
+  scheduleSongRecordRelink();
 }
 
 let running = null;
@@ -326,6 +330,10 @@ function scheduleNightlyScan() {
       const { scheduleLibraryScan } = await import("./libraryScanWorker.js");
       scheduleLibraryScan({ includeLidarr: true });
       logger.info("library", "[Library] Nightly full scan queued");
+      // After the scan has had time to finish: link anything it found, then
+      // rebuild switched-on smart playlists against fresh ratings.
+      const { scheduleSongRecordRelink } = await import("./songRecordService.js");
+      scheduleSongRecordRelink({ delayMs: 45 * 60 * 1000 });
     } catch (error) {
       logger.warn("library", `[Library] Nightly full scan could not be queued: ${error.message}`);
     } finally {

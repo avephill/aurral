@@ -109,6 +109,25 @@ export function getMediaPathsForNavidromeSongIds(songIds = []) {
   return found;
 }
 
+/**
+ * The Navidrome library each song id belongs to, where known, as a Map keyed
+ * by song id. Ids stored without a library are left out.
+ */
+export function getLibraryIdsForNavidromeSongIds(songIds = []) {
+  const ids = [...new Set((Array.isArray(songIds) ? songIds : []).map(clean).filter(Boolean))];
+  const found = new Map();
+  for (let index = 0; index < ids.length; index += CHUNK) {
+    const chunk = ids.slice(index, index + CHUNK);
+    const rows = db.prepare(
+      `SELECT song_id AS songId, library_id AS libraryId
+       FROM navidrome_song_ids
+       WHERE song_id IN (${chunk.map(() => "?").join(",")}) AND library_id >= 0`,
+    ).all(...chunk);
+    for (const row of rows) found.set(row.songId, row.libraryId);
+  }
+  return found;
+}
+
 /** Drop an id Navidrome no longer recognises. */
 export function forgetNavidromeSongId(songId) {
   const id = clean(songId);

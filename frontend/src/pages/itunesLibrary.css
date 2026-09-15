@@ -1,0 +1,276 @@
+/* iTunes Library (admin): missing music, guessed matches, smart playlists. */
+
+.itunes-library {
+  display: grid;
+  gap: 1rem;
+  width: 100%;
+  max-width: 100rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding-bottom: 3rem;
+}
+
+.itunes-library__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.itunes-library__panel {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.itunes-library__lede {
+  max-width: 52rem;
+  margin: 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.itunes-library__totals {
+  margin: 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.itunes-library__icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.itunes-library__tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-self: start;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.itunes-library__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border: 0;
+  border-radius: calc(var(--aurral-radius-sm) - 2px);
+  background: transparent;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.itunes-library__tab.is-active {
+  background: var(--aurral-surface-selected);
+  color: var(--aurral-text);
+}
+
+.itunes-library__tab:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.itunes-library__count {
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.itunes-library__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.itunes-library__search {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+}
+
+.itunes-library__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.itunes-library__state {
+  padding: 2rem 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.itunes-library__table-wrap {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.itunes-library__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.itunes-library__table th {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--aurral-border);
+  color: var(--aurral-text-muted);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.itunes-library__table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--aurral-border);
+  color: var(--aurral-text);
+  vertical-align: top;
+}
+
+.itunes-library__table tr:last-child td {
+  border-bottom: 0;
+}
+
+.itunes-library__table .is-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.itunes-library__song-row td {
+  padding-block: 0.3rem;
+  background: var(--aurral-surface-muted, transparent);
+}
+
+.itunes-library__song-row td:first-child {
+  padding-left: 2.5rem;
+}
+
+.itunes-library__album-row.is-hidden,
+.itunes-library__song-row.is-hidden {
+  opacity: 0.5;
+}
+
+.itunes-library__expand {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.itunes-library__expand svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.1rem;
+  color: var(--aurral-text-muted);
+}
+
+.itunes-library__album {
+  display: block;
+  font-weight: 600;
+}
+
+.itunes-library__artist,
+.itunes-library__muted {
+  color: var(--aurral-text-muted);
+}
+
+.itunes-library__expand .itunes-library__artist {
+  display: block;
+}
+
+.itunes-library__track-number {
+  display: inline-block;
+  min-width: 1.75rem;
+  color: var(--aurral-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.itunes-library__stars {
+  color: var(--aurral-text-muted);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.itunes-library__tag,
+.itunes-library__playlists {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: 999px;
+  color: var(--aurral-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 400;
+}
+
+.itunes-library__warning {
+  display: block;
+  color: var(--aurral-warning, #b7791f);
+  font-size: 0.75rem;
+}
+
+.itunes-library__warning-list {
+  color: var(--aurral-warning, #b7791f);
+}
+
+.itunes-library__actions {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.itunes-library__actions > * + * {
+  margin-left: 0.4rem;
+}
+
+.itunes-library__detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+  padding: 0.25rem 0 0.5rem 1.35rem;
+}
+
+.itunes-library__detail h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--aurral-text-muted);
+}
+
+.itunes-library__detail ul {
+  margin: 0;
+  padding-left: 1rem;
+  line-height: 1.5;
+}
+
+.itunes-library__detail p {
+  margin: 0.35rem 0 0;
+}
+
+@media (max-width: 640px) {
+  .itunes-library__header {
+    flex-direction: column;
+  }
+}

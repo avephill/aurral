@@ -42,6 +42,10 @@ const FIELDS = [
   { name: "dateadded", type: "date", label: "Date added" },
   { name: "lastplayed", type: "date", label: "Last played" },
   { name: "datemodified", type: "date", label: "Date modified" },
+  // Navidrome 0.64 can keep a rule to one library. Without it a rule matches
+  // every library the owner can see, and a song in both the shared library
+  // and their own shows up twice.
+  { name: "library_id", type: "number", label: "Library" },
 ];
 
 const OPERATORS_BY_TYPE = {
