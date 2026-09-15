@@ -63,6 +63,45 @@ export const getApiKey = () => {
   return key;
 };
 
+// Lidarr's webhook gets a key of its own. It opens that one endpoint and
+// nothing else, so Lidarr never has to hold the admin API key, and rotating
+// it cannot break anything but the webhook.
+const LIDARR_WEBHOOK_KEY_SETTINGS_KEY = "lidarrWebhookKey";
+
+const writeGeneralSecret = (settingsKey, value) => {
+  const settings = dbOps.getSettings();
+  dbOps.updateSettings({
+    ...settings,
+    integrations: {
+      ...(settings.integrations || {}),
+      general: {
+        ...(settings.integrations?.general || {}),
+        [settingsKey]: value,
+      },
+    },
+  });
+  return value;
+};
+
+export const getLidarrWebhookKey = () => {
+  const existing = dbOps.getSettings().integrations?.general?.[LIDARR_WEBHOOK_KEY_SETTINGS_KEY];
+  if (typeof existing === "string" && existing.length >= 32) return existing;
+  return writeGeneralSecret(LIDARR_WEBHOOK_KEY_SETTINGS_KEY, crypto.randomBytes(32).toString("hex"));
+};
+
+export const rotateLidarrWebhookKey = () =>
+  writeGeneralSecret(LIDARR_WEBHOOK_KEY_SETTINGS_KEY, crypto.randomBytes(32).toString("hex"));
+
+export const isLidarrWebhookKey = (value) => {
+  const incoming = String(value || "").trim();
+  if (!incoming) return false;
+  try {
+    return safeCompare(incoming, getLidarrWebhookKey());
+  } catch {
+    return false;
+  }
+};
+
 export const rotateApiKey = () => {
   const settings = dbOps.getSettings();
   const key = crypto.randomBytes(32).toString("hex");
@@ -663,6 +702,8 @@ export const authMiddleware = (req, res, next) => {
       req.path === "/api/health" ||
       req.path === "/api/health/live" ||
       req.path === "/api/health/bootstrap" ||
+      // Lidarr calls this with no session; the route checks its own key.
+      req.path.replace(/\/+$/, "") === "/api/webhooks/lidarr" ||
       req.path === "/api/image-proxy" ||
       req.path.startsWith("/api/image-proxy/") ||
       (req.method === "GET" && /^\/api\/feeds\/lidarr\/flows\/[^/]+\.json$/i.test(req.path))

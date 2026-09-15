@@ -1,61 +1,135 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, Check, Copy, RotateCcw } from "lucide-react";
 import { DotLoader } from "../../../components/DotLoader";
-import { getApiKey, rotateApiKey } from "../../../utils/api/endpoints/auth";
+import {
+  getApiKey,
+  getLidarrWebhookKey,
+  rotateApiKey,
+  rotateLidarrWebhookKey,
+} from "../../../utils/api/endpoints/auth";
 import { SettingsSystemSection } from "./SettingsStorageSection";
 import { SettingsSelect } from "./SettingsField";
 import PillToggle from "../../../components/PillToggle";
 import { setDateTimeFormat } from "../../../utils/dateTime.js";
 
-export function SettingsSystemTab({ health, settings, updateSettings, showSuccess, showError }) {
-  const [apiKey, setApiKey] = useState(null);
+// One secret shown with copy and rotate buttons: the API key and the Lidarr
+// webhook key work the same way here.
+function SecretKeyRow({ label, description, load, rotate, pick, showSuccess, showError }) {
+  const [value, setValue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [rotating, setRotating] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const fetchKey = useCallback(async () => {
+  const fetchValue = useCallback(async () => {
     try {
-      const res = await getApiKey();
-      setApiKey(res?.apiKey || null);
+      setValue(pick(await load()) || null);
     } catch {
-      setApiKey(null);
+      setValue(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [load, pick]);
 
   useEffect(() => {
-    fetchKey();
-  }, [fetchKey]);
+    fetchValue();
+  }, [fetchValue]);
 
   const handleCopy = async () => {
-    if (!apiKey) return;
+    if (!value) return;
     if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      showError("Failed to copy API key. Select the key and copy it manually.");
+      showError(`Failed to copy the ${label}. Select it and copy it manually.`);
       return;
     }
     try {
-      await navigator.clipboard.writeText(apiKey);
+      await navigator.clipboard.writeText(value);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      showError("Failed to copy API key. Select the key and copy it manually.");
+      showError(`Failed to copy the ${label}. Select it and copy it manually.`);
     }
   };
 
   const handleRotate = async () => {
     setRotating(true);
     try {
-      const res = await rotateApiKey();
-      setApiKey(res?.apiKey || null);
-      showSuccess("API key rotated");
+      setValue(pick(await rotate()) || null);
+      showSuccess(`${label} rotated`);
     } catch {
-      showError("Failed to rotate API key");
+      showError(`Failed to rotate the ${label}`);
     } finally {
       setRotating(false);
     }
   };
 
+  if (loading) {
+    return (
+      <div className="settings-system__row">
+        <div className="settings-system__copy">
+          <div className="settings-system__label">{label}</div>
+        </div>
+        <div className="settings-system__value">
+          <DotLoader size="sm" label={null} /> Loading…
+        </div>
+      </div>
+    );
+  }
+
+  if (!value) {
+    return (
+      <div className="settings-system__row">
+        <div className="settings-system__copy">
+          <div className="settings-system__label">{label}</div>
+        </div>
+        <div className="settings-system__value settings-system__value--error">
+          <AlertCircle className="artist-icon-xs" aria-hidden />
+          Unable to load the {label}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-system__row">
+      <div className="settings-system__copy">
+        <div className="settings-system__label">{label}</div>
+        <p className="settings-system__description">{description}</p>
+      </div>
+      <div className="settings-system__api-value">
+        <code className="settings-system__api-key" title={label}>
+          {value}
+        </code>
+        <button
+          type="button"
+          className="arr-btn arr-btn--ghost arr-btn--icon"
+          onClick={handleCopy}
+          title={copied ? "Copied" : "Copy to clipboard"}
+          aria-label={copied ? "Copied" : `Copy ${label}`}
+        >
+          {copied ? <Check className="artist-icon-xs" /> : <Copy className="artist-icon-xs" />}
+        </button>
+        <button
+          type="button"
+          className="arr-btn arr-btn--ghost arr-btn--icon"
+          onClick={handleRotate}
+          disabled={rotating}
+          title={`Rotate ${label}`}
+          aria-label={`Rotate ${label}`}
+        >
+          {rotating ? (
+            <DotLoader size="xs" label={null} />
+          ) : (
+            <RotateCcw className="artist-icon-xs" aria-hidden />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const pickApiKey = (response) => response?.apiKey;
+const pickWebhookKey = (response) => response?.key;
+
+export function SettingsSystemTab({ health, settings, updateSettings, showSuccess, showError }) {
   return (
     <div className="arr-page settings-system">
       <SettingsSystemSection health={health} />
@@ -134,65 +208,37 @@ export function SettingsSystemTab({ health, settings, updateSettings, showSucces
           </p>
         </div>
         <div className="settings-system__rows">
-          {loading ? (
-            <div className="settings-system__row">
-              <div className="settings-system__copy">
-                <div className="settings-system__label">API key</div>
-              </div>
-              <div className="settings-system__value">
-                <DotLoader size="sm" label={null} /> Loading…
-              </div>
-            </div>
-          ) : apiKey ? (
-            <div className="settings-system__row">
-              <div className="settings-system__copy">
-                <div className="settings-system__label">API key</div>
-                <p className="settings-system__description">Keep this key private.</p>
-              </div>
-              <div className="settings-system__api-value">
-                <code className="settings-system__api-key" title="API key">
-                  {apiKey}
-                </code>
-                <button
-                  type="button"
-                  className="arr-btn arr-btn--ghost arr-btn--icon"
-                  onClick={handleCopy}
-                  title={copied ? "Copied" : "Copy to clipboard"}
-                  aria-label={copied ? "Copied" : "Copy API key"}
-                >
-                  {copied ? (
-                    <Check className="artist-icon-xs" />
-                  ) : (
-                    <Copy className="artist-icon-xs" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="arr-btn arr-btn--ghost arr-btn--icon"
-                  onClick={handleRotate}
-                  disabled={rotating}
-                  title="Rotate API key"
-                  aria-label="Rotate API key"
-                >
-                  {rotating ? (
-                    <DotLoader size="xs" label={null} />
-                  ) : (
-                    <RotateCcw className="artist-icon-xs" aria-hidden />
-                  )}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="settings-system__row">
-              <div className="settings-system__copy">
-                <div className="settings-system__label">API key</div>
-              </div>
-              <div className="settings-system__value settings-system__value--error">
-                <AlertCircle className="artist-icon-xs" aria-hidden />
-                Unable to load API key
-              </div>
-            </div>
-          )}
+          <SecretKeyRow
+            label="API key"
+            description="Admin access to everything. Keep this key private."
+            load={getApiKey}
+            rotate={rotateApiKey}
+            pick={pickApiKey}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+        </div>
+      </section>
+
+      <section className="settings-system__section settings-system__api-section">
+        <div className="settings-system__section-header">
+          <h2 className="settings-system__section-title">Lidarr webhook</h2>
+          <p className="settings-system__section-description">
+            In Lidarr, add a Webhook under Settings → Connect. Set the URL to an address of Psalter
+            that Lidarr can reach, ending in <code>/api/webhooks/lidarr</code>, and add a header named{" "}
+            <code>X-Webhook-Key</code> with the key below.
+          </p>
+        </div>
+        <div className="settings-system__rows">
+          <SecretKeyRow
+            label="Webhook key"
+            description="Opens the Lidarr webhook and nothing else. Rotating it only stops the webhook until Lidarr has the new key."
+            load={getLidarrWebhookKey}
+            rotate={rotateLidarrWebhookKey}
+            pick={pickWebhookKey}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
         </div>
       </section>
     </div>

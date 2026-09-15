@@ -56,6 +56,11 @@ export const getApiKey = () => getData("/auth/api-key");
 
 export const rotateApiKey = () => postData("/auth/api-key/rotate");
 
+// The key Lidarr sends with its webhook. It opens only that endpoint.
+export const getLidarrWebhookKey = () => getData("/auth/lidarr-webhook-key");
+
+export const rotateLidarrWebhookKey = () => postData("/auth/lidarr-webhook-key/rotate");
+
 export const completeOnboarding = async (payload) => {
   const result = await postData("/onboarding/complete", payload);
   invalidateBootstrapCache();

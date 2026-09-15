@@ -1,8 +1,14 @@
 import express from "express";
 import { userOps } from "../db/helpers/index.js";
 import { createSession, deleteSession, getSessionByToken } from "../config/session-helpers.js";
-import { requireAuth } from "../middleware/requirePermission.js";
-import { getApiKey, isOidcRequired, rotateApiKey } from "../middleware/auth.js";
+import { requireAdmin, requireAuth } from "../middleware/requirePermission.js";
+import {
+  getApiKey,
+  getLidarrWebhookKey,
+  isOidcRequired,
+  rotateApiKey,
+  rotateLidarrWebhookKey,
+} from "../middleware/auth.js";
 import { hashPassword, verifyPassword, needsRehash } from "../middleware/passwordHash.js";
 import { clearOidcTransactionCookie, exchangeOidcCallback, startOidcLogin } from "../services/oidcAuth.js";
 import { logger } from "../services/logger.js";
@@ -79,13 +85,24 @@ router.get("/me", requireAuth, (req, res) => {
   });
 });
 
-router.get("/api-key", requireAuth, (req, res) => {
+// The API key is admin access to everything, so only admins may read or
+// rotate it. These used to need nothing more than being signed in.
+router.get("/api-key", requireAuth, requireAdmin, (req, res) => {
   res.json({ apiKey: getApiKey() });
 });
 
-router.post("/api-key/rotate", requireAuth, (req, res) => {
+router.post("/api-key/rotate", requireAuth, requireAdmin, (req, res) => {
   const newKey = rotateApiKey();
   res.json({ apiKey: newKey });
+});
+
+// The key Lidarr sends with its webhook; it opens only that endpoint.
+router.get("/lidarr-webhook-key", requireAuth, requireAdmin, (req, res) => {
+  res.json({ key: getLidarrWebhookKey() });
+});
+
+router.post("/lidarr-webhook-key/rotate", requireAuth, requireAdmin, (req, res) => {
+  res.json({ key: rotateLidarrWebhookKey() });
 });
 
 router.get("/oidc/login", async (req, res) => {

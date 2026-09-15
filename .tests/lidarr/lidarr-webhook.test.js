@@ -7,15 +7,16 @@ import {
   resetDatabase,
 } from "../helpers/backendTestHarness.js";
 
-const [isolatedState, { db }, history, webhook] = await setupIsolatedBackend(
+const [isolatedState, { db }, history, webhook, auth] = await setupIsolatedBackend(
   "lidarr-webhook",
   "backend/config/db-sqlite.js",
   "backend/services/aurralHistoryService.js",
   "backend/routes/lidarrWebhook.js",
+  "backend/middleware/auth.js",
 );
 
 const { upsertAurralHistory } = history;
-const { handleLidarrWebhook } = webhook;
+const { handleLidarrWebhook, requireLidarrWebhookKey } = webhook;
 
 function createResponse() {
   const result = { statusCode: 200, body: undefined, ended: false };
@@ -45,21 +46,24 @@ test.after(async () => {
   await cleanupIsolatedState(isolatedState);
 });
 
-test("Lidarr Download webhook marks the matching request available", () => {
+const requestSearching = (metadata) =>
   upsertAurralHistory({
     referenceId: "42",
     kind: "album_requested",
     title: "Requested Blue Train",
     status: "processing",
     statusLabel: "Searching",
-    metadata: {
-      albumId: 42,
-      albumName: "Blue Train",
-      artistName: "John Coltrane",
-      artistMbid: "artist-mbid",
-      userId: 7,
-      username: "alice",
-    },
+    metadata,
+  });
+
+test("Lidarr Download webhook marks the matching request available", () => {
+  requestSearching({
+    albumId: 42,
+    albumName: "Blue Train",
+    artistName: "John Coltrane",
+    artistMbid: "artist-mbid",
+    userId: 7,
+    username: "alice",
   });
 
   const response = createResponse();
@@ -88,15 +92,32 @@ test("Lidarr Download webhook marks the matching request available", () => {
   assert.equal(JSON.parse(entry.metadata).username, "alice");
 });
 
+test("the artist is read from beside the album, where Lidarr actually sends it", () => {
+  requestSearching({ albumId: 42, albumName: "Blue Train" });
+
+  const response = createResponse();
+  handleLidarrWebhook(
+    {
+      body: {
+        eventType: "Download",
+        artist: { id: 3, name: "John Coltrane", mbId: "artist-mbid" },
+        album: { id: 42, title: "Blue Train" },
+        trackFiles: [],
+      },
+    },
+    response,
+  );
+
+  assert.deepEqual(response.result.body, { handled: true });
+  const metadata = JSON.parse(
+    db.prepare("SELECT metadata FROM aurral_history WHERE id = ?").get("aurral-album_requested-42").metadata,
+  );
+  assert.equal(metadata.artistName, "John Coltrane");
+  assert.equal(metadata.artistMbid, "artist-mbid");
+});
+
 test("Lidarr Download webhook ignores unrelated albums", () => {
-  upsertAurralHistory({
-    referenceId: "42",
-    kind: "album_requested",
-    title: "Requested Blue Train",
-    status: "processing",
-    statusLabel: "Searching",
-    metadata: { albumId: 42, albumName: "Blue Train" },
-  });
+  requestSearching({ albumId: 42, albumName: "Blue Train" });
 
   const response = createResponse();
   handleLidarrWebhook(
@@ -142,4 +163,34 @@ test("Lidarr non-download events are acknowledged without changing history", () 
   handleLidarrWebhook({ body: { eventType: "Test" } }, response);
   assert.equal(response.result.statusCode, 204);
   assert.equal(response.result.ended, true);
+});
+
+test("only the webhook key opens the webhook, and it opens nothing else", () => {
+  const webhookKey = auth.getLidarrWebhookKey();
+  const apiKey = auth.getApiKey();
+  assert.notEqual(webhookKey, apiKey);
+
+  const attempt = (headers) => {
+    let passed = false;
+    const response = createResponse();
+    requireLidarrWebhookKey({ headers }, response, () => {
+      passed = true;
+    });
+    return { passed, statusCode: response.result.statusCode };
+  };
+
+  assert.equal(attempt({ "x-webhook-key": webhookKey }).passed, true);
+  assert.deepEqual(attempt({}), { passed: false, statusCode: 401 });
+  assert.equal(attempt({ "x-webhook-key": "wrong" }).passed, false);
+  assert.equal(attempt({ "x-webhook-key": apiKey }).passed, false, "the admin API key is not a webhook key");
+  assert.equal(attempt({ "x-api-key": apiKey }).passed, false);
+
+  // The webhook key is not an API key anywhere else.
+  assert.equal(auth.resolveRequestUser({ headers: { "x-api-key": webhookKey }, query: {} }), null);
+
+  // Rotating retires the old key.
+  const rotated = auth.rotateLidarrWebhookKey();
+  assert.notEqual(rotated, webhookKey);
+  assert.equal(attempt({ "x-webhook-key": webhookKey }).passed, false);
+  assert.equal(attempt({ "x-webhook-key": rotated }).passed, true);
 });
