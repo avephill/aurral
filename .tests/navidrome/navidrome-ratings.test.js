@@ -11,7 +11,7 @@ import {
 process.env.AURRAL_NAVIDROME_USER_AUTH = "reverse-proxy";
 process.env.AURRAL_NAVIDROME_USER_HEADER = "X-Authentik-Username";
 
-const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars, songIdStore, userRatings, libraryQuery] =
+const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars, songIdStore, userRatings, libraryQuery, libraryHome] =
   await setupIsolatedBackend(
     "navidrome-ratings",
     "backend/config/db-sqlite.js",
@@ -23,6 +23,7 @@ const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, res
     "backend/services/navidromeSongIdStore.js",
     "backend/services/navidromeUserRatings.js",
     "backend/services/libraryQueryService.js",
+    "backend/services/libraryHomeService.js",
   );
 
 const RELATIVE = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
@@ -303,6 +304,32 @@ test("a track page can be narrowed to given track ids or identity keys", () => {
   assert.equal(page({ trackIdentityKeys: ["something-else"] }).total, 0);
   assert.equal(page({ excludeTrackIds: [track.id] }).total, 0, "unrated leaves rated tracks out");
   assert.equal(page({ excludeTrackIds: [] }).total, 1, "and with nothing rated, every track is unrated");
+});
+
+test("the library home is kept, fills in top rated once ratings load, and rebuilds after a scan", async () => {
+  userRatings.resetUserTrackRatings();
+  libraryHome.resetLibraryHome();
+  resolver.resetNavidromeTrackResolver();
+
+  const first = await libraryHome.getLibraryHome(user);
+  assert.equal(first.recentAlbums.total, 1);
+  assert.equal(first.recentArtists.length, 1);
+  assert.deepEqual(first.stats, { artists: 1, albums: 1, tracks: 1 });
+  assert.equal(first.topRatedPending, true, "ratings were not loaded, so top rated waits instead of the page");
+  assert.equal(first.refreshing, true);
+
+  await userRatings.getUserTrackRatings(user);
+  const second = await libraryHome.getLibraryHome(user);
+  assert.equal(second.topRatedPending, false);
+  assert.equal(second.refreshing, false);
+  assert.equal(second.recentAlbums, first.recentAlbums, "answered from the kept home, not rebuilt");
+
+  libraryHome.invalidateLibraryHome({ rebuild: false });
+  const third = await libraryHome.getLibraryHome(user);
+  assert.equal(third.recentAlbums.total, 1, "the old answer is served straight away");
+  assert.equal(third.refreshing, true, "while a new one builds");
+  await libraryHome.settleLibraryHome();
+  assert.equal((await libraryHome.getLibraryHome(user)).refreshing, false);
 });
 
 test("an album page can be narrowed to a person's artists", () => {

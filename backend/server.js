@@ -437,6 +437,14 @@ httpServer.listen(PORT, async () => {
   ensureLibraryRollups();
   bootstrapHonkerSchedules();
   initializeAppRuntime({ logger });
+  // Build each person's Library home, ratings included, before their first
+  // visit, so a restart does not make the next page wait on Navidrome. Delayed
+  // to stay out of the way of startup itself.
+  setTimeout(() => {
+    Promise.all([import("./services/libraryHomeService.js"), import("./db/helpers/index.js")])
+      .then(([home, { userOps }]) => home.warmLibraryHomes(userOps.getAllUsers()))
+      .catch((error) => logger.warn("library", `[Home] Warm-up failed: ${error.message}`));
+  }, 60_000).unref?.();
 });
 
 httpServer.on("error", (error) => {

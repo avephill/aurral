@@ -75,6 +75,10 @@ export const clearCanonicalLibraryPageCache = () => {
 export const getTopRatedAlbums = ({ limit = 24, signal } = {}) =>
   getData("/navidrome-ratings/top-albums", { params: { limit }, signal });
 
+// The whole Library home for the signed-in person, from the server's cache.
+export const getLibraryHome = ({ signal } = {}) =>
+  getData("/library/home", { signal, timeout: SLOW_LIBRARY_REQUEST_TIMEOUT_MS });
+
 export const requestLibraryRefresh = () => postData("/library/refresh", {});
 
 export const getActiveLibraryRefresh = () => getData("/library/refresh");

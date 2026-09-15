@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
+  ArrowLeft,
   Menu,
   Sparkles,
   Library,
@@ -23,6 +24,13 @@ import { useAuth } from "../contexts/AuthContext";
 import { useAudioQueue } from "../contexts/audioQueueContext";
 import { DEFAULT_SETTINGS_TAB } from "../pages/Settings/settingsTabsConfig";
 import { useModalDialog } from "../hooks/useModalDialog.js";
+
+// Installed as an app (a PWA window, or Safari's Add to Dock / Home Screen)
+// there is no browser toolbar, so no back button unless the page draws one.
+const isInstalledApp = () =>
+  typeof window !== "undefined" &&
+  (window.matchMedia?.("(display-mode: standalone)").matches === true ||
+    window.navigator?.standalone === true);
 
 const SIDEBAR_THRESHOLD = 100;
 const SIDEBAR_MIN = 56;
@@ -72,6 +80,11 @@ function Layout({ children, headerActions }) {
   );
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const closeMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
+  const navigate = useNavigate();
+  const [installedApp] = useState(isInstalledApp);
+  // React Router numbers history entries; 0 is where this window started, so
+  // there is nothing inside the app to go back to.
+  const canGoBack = typeof window !== "undefined" && (window.history.state?.idx ?? 0) > 0;
   const mobileMenuDialog = useModalDialog({
     open: mobileMenuPresence !== "closed",
     onClose: closeMobileMenu,
@@ -420,6 +433,18 @@ function Layout({ children, headerActions }) {
           >
             <Menu aria-hidden="true" />
           </TooltipButton>
+
+          {installedApp && (
+            <TooltipButton
+              label="Back"
+              type="button"
+              onClick={() => navigate(-1)}
+              disabled={!canGoBack}
+              className="app-nav-toggle"
+            >
+              <ArrowLeft aria-hidden="true" />
+            </TooltipButton>
+          )}
 
           <GlobalSearch settingsMode={isSettingsRoute} />
 

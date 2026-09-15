@@ -154,6 +154,9 @@ const {
     await scanConfiguredLibrary({ lidarrClient, includeLidarr });
     const { playlistManager } = await import("./weeklyFlow/weeklyFlowPlaylistManager.js");
     await playlistManager.scanLibrary();
+    // Kept Library homes predate this scan; rebuild them before anyone asks.
+    const { invalidateLibraryHome } = await import("./libraryHomeService.js");
+    invalidateLibraryHome();
     websocketService.broadcast("library", { type: "library_scan_completed" });
   },
   resolveRetry(error, job) {

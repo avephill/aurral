@@ -121,6 +121,24 @@ export async function getUserTrackRatings(user) {
   }
 }
 
+/**
+ * The person's kept ratings without waiting for Navidrome. When there are none
+ * yet, or they are stale, a load starts in the background; `ratings` is null
+ * until the first one finishes.
+ */
+export function peekUserTrackRatings(user) {
+  if (!isNavidromeUserAuthEnabled()) return { enabled: false, ratings: null };
+  const client = createNavidromeUserClient(user);
+  if (!client) return { enabled: false, ratings: null };
+  const entry = entries.get(client.user);
+  if (!entry?.ratings || Date.now() - entry.loadedAt >= FRESH_MS) {
+    refresh(client.user, client).catch((error) => {
+      logger.warn("library", `[Navidrome] Could not load ratings for ${client.user}: ${error.message}`);
+    });
+  }
+  return { enabled: true, ratings: entry?.ratings || null };
+}
+
 /** Keep a person's kept ratings in step with a rating just saved. */
 export function noteTrackRating(user, trackId, rating) {
   const entry = entries.get(String(user?.username || "").trim());

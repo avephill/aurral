@@ -45,8 +45,7 @@ import {
   deleteArtistFromLibrary,
   deleteTrackFromLibrary,
   fetchCanonicalLibraryPage,
-  getRecentlyAdded,
-  getTopRatedAlbums,
+  getLibraryHome,
   getActiveLibraryRefresh,
   getCanonicalLibraryPage,
   getLibraryFavorites,
@@ -209,6 +208,49 @@ const favoriteIdsFromPages = (pages) => new Set(
       )),
   ),
 );
+
+// The Library home as last seen on this device, per person, so the page opens
+// at once and then quietly updates. Storage can be missing or full; the page
+// then simply waits for the server as before.
+const HOME_CACHE_KEY = "psalter.libraryHome";
+
+const readCachedHome = (userId) => {
+  if (userId == null) return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(`${HOME_CACHE_KEY}:${userId}`) || "null");
+    return parsed?.data ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedHome = (userId, data) => {
+  if (userId == null) return;
+  try {
+    localStorage.setItem(`${HOME_CACHE_KEY}:${userId}`, JSON.stringify({ savedAt: Date.now(), data }));
+  } catch {}
+};
+
+// Turns the /library/home answer into the shape every other view's query
+// returns, plus the id lists that pick out each shelf.
+const homeQueryDataFromResponse = (home) => {
+  const recentPage = home?.recentAlbums || {};
+  const topRatedPage = home?.topRatedLibrary || {};
+  const artistsPage = { artists: Array.isArray(home?.recentArtists) ? home.recentArtists : [] };
+  const pageResults = [recentPage, topRatedPage, artistsPage];
+  return {
+    nextData: home,
+    pageResults,
+    recentAlbumIds: (recentPage.albums || []).map((album) => String(album.id)),
+    topRatedAlbumIds: (home?.topRated || []).map((entry) => String(entry.albumId)),
+    recentArtistIds: artistsPage.artists.map((artist) => String(artist.id)),
+    stats: home?.stats || null,
+    refreshing: home?.refreshing === true,
+    isPreview: false,
+    library: normalizeLibraryPages(pageResults),
+    favoriteIds: favoriteIdsFromPages(pageResults),
+  };
+};
 
 const favoriteIdsFromFavorites = (favorites) => new Set(
   ["artist", "album", "song"].flatMap((kind) =>
@@ -632,11 +674,27 @@ function LibraryPage() {
       unratedOnly,
     ],
   );
+  const isHomeView = !forcePreview && section === "home" && !isDetail;
   const libraryQuery = useQuery({
     queryKey: libraryQueryKey,
     enabled: !forcePreview,
     staleTime: 15_000,
+    // Home opens from the copy saved on this device, then asks the server, and
+    // asks again every few seconds while the server is building a newer one.
+    initialData: isHomeView
+      ? () => {
+          const cached = readCachedHome(user?.id);
+          return cached ? homeQueryDataFromResponse(cached.data) : undefined;
+        }
+      : undefined,
+    initialDataUpdatedAt: isHomeView ? () => readCachedHome(user?.id)?.savedAt : undefined,
+    refetchInterval: (query) => (query.state.data?.refreshing ? 5_000 : false),
     queryFn: async ({ signal }) => {
+      if (isHomeView) {
+        const home = await getLibraryHome({ signal });
+        writeCachedHome(user?.id, home);
+        return homeQueryDataFromResponse(home);
+      }
       const nextData = isDetail
         ? routeAlbumId
           ? await fetchCanonicalLibraryPage({
@@ -663,37 +721,7 @@ function LibraryPage() {
             ])
         : section === "favorites"
           ? await getLibraryFavorites({ signal })
-          : section === "home"
-            ? await Promise.all([
-                fetchCanonicalLibraryPage({
-                  kind: "albums",
-                  page: 1,
-                  pageSize,
-                  sort: "newest",
-                  scope: "mine",
-                }, { signal }),
-                fetchCanonicalLibraryPage({
-                  kind: "tracks",
-                  page: 1,
-                  pageSize: 12,
-                  sort: "newest",
-                  availableOnly: true,
-                }, { signal }),
-                // Optional: without Navidrome ratings home just has no Top
-                // rated shelf, so a failure here must not fail the page.
-                getTopRatedAlbums({ signal })
-                  .then((result) => ({ ...result.library, topRated: result.albums }))
-                  .catch(() => null),
-                // The same list as Discover's Recently Added: artists in this
-                // person's library, newest first. Optional like Top rated.
-                getRecentlyAdded({ signal })
-                  .then((artists) => ({
-                    artists: Array.isArray(artists) ? artists : [],
-                    recentArtists: true,
-                  }))
-                  .catch(() => null),
-              ])
-            : await fetchCanonicalLibraryPage({
+          : await fetchCanonicalLibraryPage({
                 kind: tab,
                 page: pageIndex,
                 pageSize,
@@ -720,22 +748,9 @@ function LibraryPage() {
         normalizedLibrary.artists.length === 0 &&
         normalizedLibrary.albums.length === 0 &&
         normalizedLibrary.tracks.length === 0;
-      const topRatedPage = section === "home" && !isDetail
-        ? pageResults.find((page) => Array.isArray(page?.topRated))
-        : null;
       return {
         nextData,
         pageResults,
-        recentAlbumIds: section === "home" && !isDetail
-          ? (pageResults[0]?.albums || []).map((album) => String(album.id))
-          : null,
-        topRatedAlbumIds: topRatedPage
-          ? topRatedPage.topRated.map((entry) => String(entry.albumId))
-          : [],
-        recentArtistIds: section === "home" && !isDetail
-          ? (pageResults.find((page) => page?.recentArtists)?.artists || [])
-              .map((artist) => String(artist.id))
-          : [],
         isPreview: usePreview,
         library: usePreview ? libraryPreviewData : normalizedLibrary,
         favoriteIds: usePreview
@@ -743,32 +758,6 @@ function LibraryPage() {
           : section === "favorites"
             ? favoriteIdsFromFavorites(nextData)
             : favoriteIdsFromPages(pageResults),
-      };
-    },
-  });
-
-  // Totals for the home stats row. Each is read the same way as the view its
-  // tile opens (albums and artists include albums with no playable file yet,
-  // tracks count only playable ones), so a tile never disagrees with the page
-  // behind it. One-row pages: only `total` is wanted. Keyed under the library
-  // view prefix, so finishing a library refresh refetches these too.
-  const homeStatsQuery = useQuery({
-    queryKey: queryKeys.libraryView({ section: "home-stats" }),
-    enabled: !forcePreview && section === "home" && !isDetail,
-    staleTime: 60_000,
-    queryFn: async ({ signal }) => {
-      const [artists, albums, tracks] = await Promise.all([
-        fetchCanonicalLibraryPage({ kind: "artists", page: 1, pageSize: 1 }, { signal }),
-        fetchCanonicalLibraryPage({ kind: "albums", page: 1, pageSize: 1 }, { signal }),
-        fetchCanonicalLibraryPage(
-          { kind: "tracks", page: 1, pageSize: 1, availableOnly: true },
-          { signal },
-        ),
-      ]);
-      return {
-        artists: Number(artists?.total) || 0,
-        albums: Number(albums?.total) || 0,
-        tracks: Number(tracks?.total) || 0,
       };
     },
   });
@@ -2321,7 +2310,9 @@ function LibraryPage() {
   );
 
   const renderHomeStats = () => {
-    const stats = homeStatsQuery.data;
+    // Counted on the server with the rest of home: each total is read the same
+    // way as the view its tile opens, so a tile never disagrees with that page.
+    const stats = queryData?.stats;
     const format = (value) => (stats ? value.toLocaleString() : "–");
     const tiles = [
       { label: "Artists", value: stats?.artists, path: "/library/artists" },

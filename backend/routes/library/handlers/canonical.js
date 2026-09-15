@@ -120,6 +120,31 @@ export function registerCanonical(router) {
     return res.json(status);
   });
 
+  // Everything the Library home shows, per person, answered from a cache kept
+  // on the server (see libraryHomeService). Favourites are read fresh on every
+  // request; `refreshing` says a newer answer is being built.
+  router.get("/home", requireAuth, noCache, async (req, res) => {
+    try {
+      const { getLibraryHome } = await import("../../../services/libraryHomeService.js");
+      const home = await getLibraryHome(req.user);
+      const favoriteKeys = getStarredIdentityKeys(req.user);
+      return res.json({
+        recentAlbums: toPublicLibraryPage(home.recentAlbums, favoriteKeys),
+        recentArtists: stripFilesystemPaths(home.recentArtists),
+        topRated: home.topRated,
+        topRatedLibrary: toPublicLibrary(home.topRatedLibrary, favoriteKeys),
+        topRatedPending: home.topRatedPending === true,
+        stats: home.stats,
+        refreshing: home.refreshing === true,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        error: "Failed to build the library home",
+        message: error.message,
+      });
+    }
+  });
+
   router.get("/canonical", noCache, async (req, res) => {
     try {
       const favoriteKeys = req.user ? getStarredIdentityKeys(req.user) : null;
