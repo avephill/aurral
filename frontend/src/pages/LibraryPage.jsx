@@ -45,6 +45,7 @@ import {
   deleteArtistFromLibrary,
   deleteTrackFromLibrary,
   fetchCanonicalLibraryPage,
+  getRecentlyAdded,
   getTopRatedAlbums,
   getActiveLibraryRefresh,
   getCanonicalLibraryPage,
@@ -640,6 +641,7 @@ function LibraryPage() {
                   page: 1,
                   pageSize,
                   sort: "newest",
+                  scope: "mine",
                 }, { signal }),
                 fetchCanonicalLibraryPage({
                   kind: "tracks",
@@ -652,6 +654,14 @@ function LibraryPage() {
                 // rated shelf, so a failure here must not fail the page.
                 getTopRatedAlbums({ signal })
                   .then((result) => ({ ...result.library, topRated: result.albums }))
+                  .catch(() => null),
+                // The same list as Discover's Recently Added: artists in this
+                // person's library, newest first. Optional like Top rated.
+                getRecentlyAdded({ signal })
+                  .then((artists) => ({
+                    artists: Array.isArray(artists) ? artists : [],
+                    recentArtists: true,
+                  }))
                   .catch(() => null),
               ])
             : await fetchCanonicalLibraryPage({
@@ -692,6 +702,10 @@ function LibraryPage() {
           : null,
         topRatedAlbumIds: topRatedPage
           ? topRatedPage.topRated.map((entry) => String(entry.albumId))
+          : [],
+        recentArtistIds: section === "home" && !isDetail
+          ? (pageResults.find((page) => page?.recentArtists)?.artists || [])
+              .map((artist) => String(artist.id))
           : [],
         isPreview: usePreview,
         library: usePreview ? libraryPreviewData : normalizedLibrary,
@@ -1376,6 +1390,14 @@ function LibraryPage() {
         .filter(Boolean)
         .slice(0, Math.max(2, homeAlbumColumns) * 2),
     [albumsById, homeAlbumColumns, queryData?.topRatedAlbumIds],
+  );
+  const homeRecentArtists = useMemo(
+    () =>
+      (queryData?.recentArtistIds || [])
+        .map((id) => artistsById.get(id))
+        .filter(Boolean)
+        .slice(0, Math.max(2, homeAlbumColumns) * 2),
+    [artistsById, homeAlbumColumns, queryData?.recentArtistIds],
   );
   const homeGenres = useMemo(
     () =>
@@ -2308,9 +2330,17 @@ function LibraryPage() {
       {!forcePreview && renderHomeStats()}
       {homeAlbums.length > 0 && (
         <section className="native-library-section">
-          {renderSectionHeader("Recently added", homeAlbums.length, "/library/albums")}
+          {renderSectionHeader("Recently added albums", homeAlbums.length, "/library/albums")}
           <div ref={homeAlbumsGridRef} className="native-library-grid">
             {homeAlbums.map(renderAlbumCard)}
+          </div>
+        </section>
+      )}
+      {homeRecentArtists.length > 0 && (
+        <section className="native-library-section">
+          {renderSectionHeader("Recently added artists", homeRecentArtists.length, "/library/artists")}
+          <div className="native-library-grid native-library-grid--artists">
+            {homeRecentArtists.map(renderArtistCard)}
           </div>
         </section>
       )}

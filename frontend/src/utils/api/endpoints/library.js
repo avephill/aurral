@@ -38,6 +38,7 @@ const canonicalLibraryPageParams = (options = {}) => Object.fromEntries(
     minRating: options.minRating || undefined,
     favorites: options.favorites === true ? "true" : undefined,
     unrated: options.unrated === true ? "true" : undefined,
+    scope: options.scope,
   }).filter(([, value]) => value !== undefined && value !== null && value !== ""),
 );
 

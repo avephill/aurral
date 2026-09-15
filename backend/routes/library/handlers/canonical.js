@@ -162,6 +162,17 @@ export function registerCanonical(router) {
           .filter((key) => key.startsWith("song:"))
           .map((key) => key.slice("song:".length));
       }
+      // "mine" narrows albums to the signed-in person's library, the same
+      // artists Discover uses. With personal libraries off there is no
+      // narrower library, so nothing is filtered.
+      let artistIds;
+      if (kind === "albums" && req.query.scope === "mine" && req.user) {
+        const { scopeCanonicalArtistsToUser } = await import(
+          "../../../services/userLibraryService.js"
+        );
+        const scoped = await scopeCanonicalArtistsToUser(req.user);
+        if (Array.isArray(scoped)) artistIds = scoped.map((artist) => artist.id);
+      }
       return res.json(toPublicLibraryPage(getCanonicalLibraryPage({
         source: req.query.source,
         availableOnly: req.query.availableOnly === "true",
@@ -177,6 +188,7 @@ export function registerCanonical(router) {
         trackIds,
         trackIdentityKeys,
         excludeTrackIds,
+        artistIds,
       }), favoriteKeys));
     } catch (error) {
       if (

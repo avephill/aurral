@@ -305,6 +305,14 @@ test("a track page can be narrowed to given track ids or identity keys", () => {
   assert.equal(page({ excludeTrackIds: [] }).total, 1, "and with nothing rated, every track is unrated");
 });
 
+test("an album page can be narrowed to a person's artists", () => {
+  const page = (options) => libraryQuery.getCanonicalLibraryPage({ kind: "albums", pageSize: 10, ...options });
+  const artistId = page({}).albums[0].artistId;
+  assert.equal(page({ artistIds: [artistId] }).total, 1);
+  assert.equal(page({ artistIds: [] }).total, 0, "an empty library holds no albums");
+  assert.equal(page({ artistIds: null }).total, 1, "and no scope means the whole server");
+});
+
 test("with nothing remembered, stars are matched by reading the songs themselves", () => {
   // The store is what makes a repeat pass cheap; this is the first pass.
   songIdStore.clearNavidromeSongIds();
