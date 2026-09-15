@@ -6,6 +6,7 @@ import {
   AudioWaveform,
   AlertTriangle,
   Ban,
+  Inbox,
   Library,
   Newspaper,
   Settings,
@@ -254,6 +255,11 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         subnav: WANTED_VIEWS,
         permission: "accessFlow",
       },
+      // What people have asked for and whether it has arrived. Admins act on
+      // it, so only they see it; the same report is also under Settings.
+      ...(user?.role === "admin"
+        ? [{ path: "/requests", label: "Requests", icon: Inbox }]
+        : []),
       { path: "/blocklist", label: "Blocklist", icon: Ban },
     ];
     return items.filter((item) => !item.permission || hasPermission(item.permission));
@@ -264,6 +270,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
     userLibrariesEnabled,
     discoveryEnabled,
     automaticPlaylistsEnabled,
+    user?.role,
   ]);
 
   const translateClass = mode === "hidden" ? "-translate-x-full" : "translate-x-0";

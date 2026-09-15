@@ -376,6 +376,10 @@ export const getRequests = ({ refresh = false, signal } = {}) =>
 export const getAlbumRequestReport = ({ signal } = {}) =>
   getData("/requests/report", { signal });
 
+// Admin only: hide one request from the report. Lidarr is not touched.
+export const dismissAlbumRequest = (id) =>
+  postData(`/requests/report/${encodeURIComponent(id)}/dismiss`, {});
+
 export const getRecentlyAdded = ({ signal } = {}) => getData("/library/recent", { signal });
 
 export const getRecentReleases = ({ signal } = {}) => getData("/library/recent-releases", { signal });

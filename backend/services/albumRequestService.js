@@ -80,6 +80,18 @@ export function recordAlbumRequest({
   }
 }
 
+/**
+ * Hide a request from the report without touching Lidarr. If the same person
+ * asks for the album again later, the request comes back.
+ */
+export function dismissAlbumRequest(id) {
+  const requestId = positiveInteger(id);
+  if (!requestId) return false;
+  const result = db.prepare("UPDATE album_requests SET dismissed_at = ? WHERE id = ?").run(Date.now(), requestId);
+  reportCache = null;
+  return result.changes > 0;
+}
+
 let backfilled = false;
 
 // Requests made before this table existed are still in the activity history
@@ -153,7 +165,9 @@ export function getAlbumRequestReport({ limit = 500 } = {}) {
   if (reportCache && Date.now() - reportCache.at < REPORT_CACHE_MS) return reportCache.data;
   backfillFromHistory();
   const rows = db.prepare(
-    "SELECT * FROM album_requests ORDER BY last_requested_at DESC LIMIT ?",
+    `SELECT * FROM album_requests
+     WHERE dismissed_at IS NULL OR last_requested_at > dismissed_at
+     ORDER BY last_requested_at DESC LIMIT ?`,
   ).all(Math.max(1, Math.min(2000, Number(limit) || 500)));
   const roles = new Map(
     db.prepare("SELECT id, role FROM users").all().map((user) => [Number(user.id), user.role]),

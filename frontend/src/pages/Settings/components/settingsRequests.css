@@ -6,6 +6,20 @@
   min-width: 0;
 }
 
+/* As its own page from the sidebar, rather than inside Settings. */
+.settings-requests--page {
+  width: 100%;
+  max-width: 90rem;
+  margin-inline: auto;
+  padding-bottom: 3rem;
+}
+
+.settings-requests__actions {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .settings-requests__header {
   display: flex;
   align-items: flex-start;

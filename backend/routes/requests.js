@@ -161,6 +161,18 @@ router.get("/report", requireAuth, requireAdmin, noCache, async (req, res) => {
   }
 });
 
+router.post("/report/:id/dismiss", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { dismissAlbumRequest } = await import("../services/albumRequestService.js");
+    if (!dismissAlbumRequest(req.params.id)) {
+      return res.status(404).json({ error: "Request not found" });
+    }
+    return res.json({ dismissed: true });
+  } catch (error) {
+    return res.status(500).json({ error: "Failed to dismiss the request", message: error.message });
+  }
+});
+
 router.delete(
   "/album/:albumId",
   requireAuth,

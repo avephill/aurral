@@ -121,3 +121,28 @@ test("requests still in the activity history are copied in, once", () => {
   assert.equal(first[0].availability.status, "not_indexed");
   assert.equal(second.length, 1, "copying again adds nothing");
 });
+
+test("a dismissed request leaves the report until the same person asks again", () => {
+  requests.resetAlbumRequestReport();
+  const target = requests.getAlbumRequestReport().items.find((item) => item.albumName === "Unreleased");
+  assert.ok(target);
+
+  assert.equal(requests.dismissAlbumRequest(target.id), true);
+  assert.ok(!requests.getAlbumRequestReport().items.some((item) => item.id === target.id));
+
+  requests.resetAlbumRequestReport();
+  assert.ok(
+    !requests.getAlbumRequestReport().items.some((item) => item.id === target.id),
+    "copying the history in again does not bring it back",
+  );
+
+  requests.recordAlbumRequest({
+    user: dad,
+    albumMbid: "rg-unknown",
+    albumName: "Unreleased",
+    artistName: "Nobody",
+    at: Date.now() + 1000,
+  });
+  assert.ok(requests.getAlbumRequestReport().items.some((item) => item.id === target.id));
+  assert.equal(requests.dismissAlbumRequest(999999), false);
+});
