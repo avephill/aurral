@@ -2340,6 +2340,56 @@ export function invalidateCanonicalLibraryCache({ persistedGenres = true } = {})
 export { normalizeSource };
 
 /**
+ * Indexed albums for a set of album requests, matched by the Lidarr album id
+ * kept in each album's metadata or by MusicBrainz id, with how many of their
+ * tracks are on disk. Both maps are keyed by string.
+ */
+export function getRequestedAlbumAvailability({ lidarrAlbumIds = [], mbids = [] } = {}) {
+  const ids = [...new Set((Array.isArray(lidarrAlbumIds) ? lidarrAlbumIds : [])
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value > 0))];
+  const references = [...new Set((Array.isArray(mbids) ? mbids : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean))];
+  const byLidarrId = new Map();
+  const byMbid = new Map();
+  const columns = `id, title, mbid, release_group_mbid,
+    CAST(json_extract(metadata_json, '$.id') AS INTEGER) AS lidarr_id,
+    json_extract(metadata_json, '$.monitored') AS monitored`;
+  const rows = [];
+  if (ids.length) {
+    rows.push(...db.prepare(
+      `SELECT ${columns} FROM library_albums
+       WHERE json_extract(metadata_json, '$.librarySource') = 'lidarr'
+         AND CAST(json_extract(metadata_json, '$.id') AS INTEGER)
+           IN (SELECT CAST(value AS INTEGER) FROM json_each(?))`,
+    ).all(JSON.stringify(ids)));
+  }
+  if (references.length) {
+    rows.push(...db.prepare(
+      `SELECT ${columns} FROM library_albums
+       WHERE mbid IN (SELECT value FROM json_each(?))
+          OR release_group_mbid IN (SELECT value FROM json_each(?))`,
+    ).all(JSON.stringify(references), JSON.stringify(references)));
+  }
+  if (!rows.length) return { byLidarrId, byMbid };
+  const stats = getAlbumStats([...new Set(rows.map((row) => row.id))], null);
+  for (const row of rows) {
+    const entry = {
+      canonicalAlbumId: String(row.id),
+      title: row.title,
+      monitored: row.monitored === 1 || row.monitored === true,
+      trackCount: stats.get(String(row.id))?.trackCount ?? 0,
+      availableTrackCount: stats.get(String(row.id))?.availableTrackCount ?? 0,
+    };
+    if (row.lidarr_id) byLidarrId.set(String(row.lidarr_id), entry);
+    if (row.mbid) byMbid.set(String(row.mbid), entry);
+    if (row.release_group_mbid) byMbid.set(String(row.release_group_mbid), entry);
+  }
+  return { byLidarrId, byMbid };
+}
+
+/**
  * Every album each of the given tracks appears on, with that album's track
  * count: { albumId, trackId, trackCount }. Used to rank albums by the ratings
  * of their songs.

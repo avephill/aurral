@@ -492,6 +492,7 @@ export function registerDownloads(router) {
       const { recordAlbumRequested } = await import("../../../services/aurralHistoryService.js");
       recordAlbumRequested({
         albumId,
+        albumMbid: album.foreignAlbumId || null,
         albumName: album.albumName,
         artistName: artist?.artistName || album.artistName,
         artistMbid: artist?.mbid || artist?.foreignArtistId,
@@ -557,6 +558,7 @@ export function registerDownloads(router) {
           await import("../../../services/aurralHistoryService.js");
         recordAlbumSearchStarted({
           albumId,
+          albumMbid: album.foreignAlbumId || null,
           albumName: album.albumName,
           artistName: artist?.artistName || album.artistName,
           artistMbid: artist?.mbid || artist?.foreignArtistId,

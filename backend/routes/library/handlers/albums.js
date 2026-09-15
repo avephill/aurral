@@ -113,6 +113,7 @@ export function registerAlbums(router) {
         );
         recordAlbumRequested({
           albumId: album.id,
+          albumMbid: album.foreignAlbumId || mbid,
           albumName: album.albumName || albumName,
           artistName: album.artistName,
           artistMbid: album.mbid || album.foreignAlbumId,
@@ -168,6 +169,7 @@ export function registerAlbums(router) {
         );
         const historyAlbum = {
           albumId: result?.album?.id || result?.id,
+          albumMbid,
           albumName: result?.album?.albumName || result?.albumName || albumName,
           artistName: result?.artist?.artistName || result?.artistName || artistName,
           artistMbid: result?.artist?.mbid || result?.mbid || artistMbid,

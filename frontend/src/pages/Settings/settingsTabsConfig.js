@@ -4,6 +4,7 @@ import {
   Database,
   Download,
   HardDrive,
+  Inbox,
   ListChecks,
   Monitor,
   Music,
@@ -16,6 +17,7 @@ import {
 export const SETTINGS_TABS = [
   { id: "system", label: "System", icon: Monitor },
   { id: "storage-health", label: "Storage health", icon: HardDrive },
+  { id: "requests", label: "Requests", icon: Inbox },
   { id: "tasks", label: "Tasks", icon: ListChecks },
   { id: "lidarr", label: "Lidarr", icon: Server },
   { id: "indexers", label: "Indexers", icon: DatabaseSearch },

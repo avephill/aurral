@@ -3,6 +3,8 @@ import { dbOps } from "../db/helpers/index.js";
 import { resolveBlockedJobSourceFilename } from "./playlistDownloadUtils.js";
 import { flowPlaylistConfig } from "./weeklyFlow/weeklyFlowPlaylistConfig.js";
 
+import { recordAlbumRequest } from "./albumRequestService.js";
+
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const STALE_TRACK_JOB_MS = 15 * 60 * 1000;
 const STALE_AURRAL_JOB_MS = 60 * 60 * 1000;
@@ -252,6 +254,7 @@ const queueRequestNotification = (notifyName, { albumName, artistName, requester
 
 export const recordAlbumRequested = ({
   albumId,
+  albumMbid = null,
   albumName,
   artistName,
   artistMbid,
@@ -275,12 +278,27 @@ export const recordAlbumRequested = ({
     href: buildArtistHref(artistMbid),
     metadata: {
       albumId,
+      ...(albumMbid ? { albumMbid } : {}),
       albumName: name,
       artistName: artist,
       artistMbid,
       ...requester,
     },
   });
+  // The history above is pruned after 30 days; the request itself is kept
+  // for the admin Requests report. Only a person's own request counts, not a
+  // search re-run with no one attached.
+  if (requester?.userId != null) {
+    recordAlbumRequest({
+      userId: requester.userId,
+      username: requester.username,
+      lidarrAlbumId: albumId,
+      albumMbid,
+      albumName: name,
+      artistName: artist,
+      artistMbid,
+    });
+  }
   queueRequestNotification("notifyRequestMade", {
     albumName: name,
     artistName: artist,
@@ -291,6 +309,7 @@ export const recordAlbumRequested = ({
 
 export const recordAlbumSearchStarted = ({
   albumId,
+  albumMbid = null,
   albumName,
   artistName,
   artistMbid,
@@ -298,6 +317,7 @@ export const recordAlbumSearchStarted = ({
 } = {}) =>
   recordAlbumRequested({
     albumId,
+    albumMbid,
     albumName,
     artistName,
     artistMbid,

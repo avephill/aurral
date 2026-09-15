@@ -371,6 +371,27 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 
+  -- Album requests, kept for good. aurral_history holds the same events but is
+  -- pruned after 30 days, which would lose exactly the old, still-unfilled
+  -- requests an admin needs to see. One row per album per person.
+  CREATE TABLE IF NOT EXISTS album_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_key TEXT NOT NULL,
+    user_id INTEGER,
+    username TEXT,
+    lidarr_album_id INTEGER,
+    album_mbid TEXT,
+    album_name TEXT NOT NULL,
+    artist_name TEXT,
+    artist_mbid TEXT,
+    first_requested_at INTEGER NOT NULL,
+    last_requested_at INTEGER NOT NULL,
+    UNIQUE(request_key, user_id)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_album_requests_last_requested
+    ON album_requests (last_requested_at DESC);
+
   CREATE TABLE IF NOT EXISTS inbox_items (
     id TEXT PRIMARY KEY,
     user_id INTEGER NOT NULL,

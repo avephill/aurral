@@ -1,7 +1,7 @@
 import express from "express";
 import { UUID_REGEX } from "../../lib/uuid.js";
 import { noCache } from "../middleware/cache.js";
-import { requireAuth, requirePermission } from "../middleware/requirePermission.js";
+import { requireAdmin, requireAuth, requirePermission } from "../middleware/requirePermission.js";
 import {
   getLidarrStatusSnapshot,
   invalidateAllDownloadStatusesCache,
@@ -147,6 +147,17 @@ router.get("/", requireAuth, noCache, async (req, res) => {
       return res.json(filterDismissedRequests(cached.response));
     }
     res.status(500).json({ error: "Failed to fetch requests" });
+  }
+});
+
+// Everyone's album requests, with who asked and how much of each album is on
+// disk: the list an admin works from when deciding what to buy or rip.
+router.get("/report", requireAuth, requireAdmin, noCache, async (req, res) => {
+  try {
+    const { getAlbumRequestReport } = await import("../services/albumRequestService.js");
+    res.json(getAlbumRequestReport({ limit: req.query.limit }));
+  } catch (error) {
+    res.status(500).json({ error: "Failed to build the request report", message: error.message });
   }
 });
 

@@ -371,6 +371,11 @@ export const refreshLibraryArtist = (mbid) =>
 export const getRequests = ({ refresh = false, signal } = {}) =>
   getData("/requests", { params: refresh ? { refresh: 1 } : {}, signal });
 
+// Admin only: everyone's album requests, with who asked and how much of each
+// album is on disk.
+export const getAlbumRequestReport = ({ signal } = {}) =>
+  getData("/requests/report", { signal });
+
 export const getRecentlyAdded = ({ signal } = {}) => getData("/library/recent", { signal });
 
 export const getRecentReleases = ({ signal } = {}) => getData("/library/recent-releases", { signal });

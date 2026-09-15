@@ -1,0 +1,171 @@
+/* Settings > Requests: everyone's album requests and whether each is on disk. */
+
+.settings-requests {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.settings-requests__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.settings-requests__header h2 {
+  margin: 0 0 0.25rem;
+  color: var(--aurral-text);
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+
+.settings-requests__header p {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.settings-requests__icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.settings-requests__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.settings-requests__filters {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.settings-requests__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 0;
+  border-radius: calc(var(--aurral-radius-sm) - 2px);
+  background: transparent;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.settings-requests__filter.is-active {
+  background: var(--aurral-surface-selected);
+  color: var(--aurral-text);
+}
+
+.settings-requests__count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.settings-requests__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.settings-requests__state {
+  padding: 2rem 0;
+  color: var(--aurral-text-muted);
+  text-align: center;
+}
+
+.settings-requests__table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.settings-requests__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.settings-requests__table th {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--aurral-border);
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.settings-requests__table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--aurral-border);
+  color: var(--aurral-text);
+  vertical-align: middle;
+}
+
+.settings-requests__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.settings-requests__album {
+  font-weight: 550;
+}
+
+.settings-requests__artist,
+.settings-requests__muted {
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.settings-requests__artist a {
+  color: inherit;
+}
+
+.settings-requests__role {
+  margin-left: 0.4rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+}
+
+.settings-requests__badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settings-requests__badge.is-complete {
+  background: color-mix(in srgb, var(--aurral-success, #2f9e5b) 16%, transparent);
+  color: var(--aurral-success, #2f9e5b);
+}
+
+.settings-requests__badge.is-partial {
+  background: color-mix(in srgb, var(--aurral-warning, #c98a14) 18%, transparent);
+  color: var(--aurral-text);
+}
+
+.settings-requests__badge.is-missing,
+.settings-requests__badge.is-not_indexed {
+  background: color-mix(in srgb, var(--aurral-danger, #c24b3a) 14%, transparent);
+  color: var(--aurral-text);
+}
+
+@media (max-width: 560px) {
+  .settings-requests__header {
+    flex-direction: column;
+  }
+}
