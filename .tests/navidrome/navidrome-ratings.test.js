@@ -11,7 +11,7 @@ import {
 process.env.AURRAL_NAVIDROME_USER_AUTH = "reverse-proxy";
 process.env.AURRAL_NAVIDROME_USER_HEADER = "X-Authentik-Username";
 
-const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars, songIdStore] =
+const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, resolver, stars, songIdStore, userRatings, libraryQuery] =
   await setupIsolatedBackend(
     "navidrome-ratings",
     "backend/config/db-sqlite.js",
@@ -21,6 +21,8 @@ const [isolatedState, { db }, { dbOps, userOps }, libraryStore, annotations, res
     "backend/services/navidromeTrackResolver.js",
     "backend/services/subsonicLibraryService.js",
     "backend/services/navidromeSongIdStore.js",
+    "backend/services/navidromeUserRatings.js",
+    "backend/services/libraryQueryService.js",
   );
 
 const RELATIVE = "Jethro Tull/Stand Up/01 A New Day Yesterday.flac";
@@ -100,20 +102,18 @@ function createFakeNavidrome() {
                 })),
             },
           }));
-        case "/rest/getAlbumList2":
-          state.albumListType = url.searchParams.get("type");
+        case "/rest/search3":
+          // An empty query lists every song, one page at a time.
           return reply(subsonicOk({
-            albumList2: {
-              album: [
-                { id: "al-1", name: "Stand Up", userRating: 5 },
-                { id: "al-elsewhere", name: "Not On This Server", userRating: 4 },
-                { id: "al-unrated", name: "Unrated", userRating: 0 },
-              ],
-            },
-          }));
-        case "/rest/getAlbum":
-          return reply(subsonicOk({
-            album: { id, song: [{ id: id === "al-1" ? "nd-1" : "nd-unknown" }] },
+            searchResult3: url.searchParams.get("songOffset") === "0"
+              ? {
+                  song: [
+                    { id: "nd-1", title: "A New Day Yesterday", userRating: 5 },
+                    { id: "nd-unknown", title: "Not On This Server", userRating: 4 },
+                    { id: "nd-unrated", title: "Unrated", userRating: 0 },
+                  ],
+                }
+              : {},
           }));
         case "/rest/unstar":
           state.starred.delete(`${user}:${id}`);
@@ -250,15 +250,57 @@ test("a star on a song this server does not hold is skipped quietly", async () =
   assert.equal(result.matched, 1, "only the song we hold matched");
 });
 
-test("top rated albums are the user's rated albums that this server holds, in Navidrome's order", async () => {
+test("top rated albums rank by the median of the user's own song ratings", async () => {
+  userRatings.resetUserTrackRatings();
   resolver.resetNavidromeTrackResolver();
-  const result = await annotations.getTopRatedAlbums(user, { limit: 5 });
+  const result = await annotations.getTopRatedAlbums(user, { limit: 5, minRated: 1 });
   assert.equal(result.connected, true);
-  assert.equal(fake.state.albumListType, "highest");
-  // The album with no file here and the unrated one are both left out.
-  assert.deepEqual(result.albums, [{ albumId: album.id, rating: 5 }]);
-  const listCall = fake.state.requests.find((request) => request.path === "/rest/getAlbumList2");
-  assert.equal(listCall.headers["x-authentik-username"], "dunshill");
+  assert.deepEqual(result.albums, [{ albumId: album.id, median: 5, mean: 5, rated: 1, trackCount: 1 }]);
+  const call = fake.state.requests.find((request) => request.path === "/rest/search3");
+  assert.equal(call.headers["x-authentik-username"], "dunshill");
+  assert.equal(call.params.get("query"), "");
+  // By default one rated song is not enough to rank an album.
+  assert.deepEqual((await annotations.getTopRatedAlbums(user)).albums, []);
+
+  // A rating saved in Psalter reaches the kept ratings without a reload.
+  await annotations.setTrackRating(user, { trackId: track.id, albumId: album.id }, 3);
+  const ratings = (await userRatings.getUserTrackRatings(user)).ratings;
+  assert.equal(ratings.get(track.id), 3);
+});
+
+test("albums need enough rated songs, and rank by median, then mean, then how many are rated", () => {
+  const rows = [
+    ...[1, 2, 3].map((trackId) => ({ albumId: 10, trackId, trackCount: 4 })),
+    ...[4, 5, 6, 7].map((trackId) => ({ albumId: 20, trackId, trackCount: 4 })),
+    ...[8, 9].map((trackId) => ({ albumId: 30, trackId, trackCount: 2 })),
+    ...[11, 12, 13].map((trackId) => ({ albumId: 40, trackId, trackCount: 12 })),
+  ];
+  const ratings = new Map([
+    [1, 5], [2, 5], [3, 3],
+    [4, 5], [5, 5], [6, 4], [7, 5],
+    [8, 5], [9, 5],
+    [11, 5], [12, 5], [13, 5],
+  ]);
+  const ranked = userRatings.rankAlbumsByMedianRating(rows, ratings);
+  // 30 has only two rated songs; 40 has three of twelve, under half.
+  assert.deepEqual(ranked.map((album) => album.albumId), [20, 10]);
+  assert.equal(ranked[0].median, 5);
+  assert.equal(ranked[0].mean, 4.75);
+  assert.equal(ranked[1].median, 5);
+  // Even counts take the middle two.
+  assert.equal(userRatings.rankAlbumsByMedianRating(
+    [1, 2, 3, 4].map((trackId) => ({ albumId: 1, trackId, trackCount: 4 })),
+    new Map([[1, 2], [2, 3], [3, 4], [4, 5]]),
+  )[0].median, 3.5);
+});
+
+test("a track page can be narrowed to given track ids or identity keys", () => {
+  const page = (options) => libraryQuery.getCanonicalLibraryPage({ kind: "tracks", pageSize: 10, ...options });
+  assert.equal(page({}).total, 1);
+  assert.equal(page({ trackIds: [track.id] }).total, 1);
+  assert.equal(page({ trackIds: [] }).total, 0, "nobody's rated tracks means no tracks, not all of them");
+  assert.equal(page({ trackIdentityKeys: ["a-new-day-yesterday"] }).total, 1);
+  assert.equal(page({ trackIdentityKeys: ["something-else"] }).total, 0);
 });
 
 test("with nothing remembered, stars are matched by reading the songs themselves", () => {

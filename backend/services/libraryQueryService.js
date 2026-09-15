@@ -1711,6 +1711,8 @@ function buildPageQuery({
   direction,
   artistId,
   albumId,
+  trackIds = null,
+  trackIdentityKeys = null,
 }) {
   const where = [];
   const parameters = [];
@@ -1780,6 +1782,16 @@ function buildPageQuery({
     if (albumId) {
       where.push("album.id = ?");
       parameters.push(Number(albumId));
+    }
+    // One JSON parameter rather than one placeholder per id: a person's rated
+    // tracks run to tens of thousands.
+    if (Array.isArray(trackIds)) {
+      where.push("track.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))");
+      parameters.push(JSON.stringify(trackIds.map(Number).filter(Number.isSafeInteger)));
+    }
+    if (Array.isArray(trackIdentityKeys)) {
+      where.push("track.identity_key IN (SELECT value FROM json_each(?))");
+      parameters.push(JSON.stringify(trackIdentityKeys.map(String)));
     }
   }
 
@@ -2129,6 +2141,10 @@ export function getCanonicalLibraryPage({
   direction = "asc",
   artistId = null,
   albumId = null,
+  // Track pages only: narrow to these track ids or identity keys (a person's
+  // rated or favourite tracks). An empty list matches nothing; null, everything.
+  trackIds = null,
+  trackIdentityKeys = null,
 } = {}) {
   const normalizedKind = text(kind).toLocaleLowerCase();
   if (!PAGE_KINDS.has(normalizedKind)) {
@@ -2197,6 +2213,8 @@ export function getCanonicalLibraryPage({
     direction: normalizedDirection,
     artistId,
     albumId,
+    trackIds,
+    trackIdentityKeys,
   });
   const total = db.prepare(
     `SELECT COUNT(DISTINCT ${queryDefinition.idExpression}) AS total
@@ -2302,6 +2320,26 @@ export function invalidateCanonicalLibraryCache({ persistedGenres = true } = {})
 }
 
 export { normalizeSource };
+
+/**
+ * Every album each of the given tracks appears on, with that album's track
+ * count: { albumId, trackId, trackCount }. Used to rank albums by the ratings
+ * of their songs.
+ */
+export function getAlbumTrackRows(trackIds = []) {
+  const ids = [...new Set((Array.isArray(trackIds) ? trackIds : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isSafeInteger(value) && value > 0))];
+  if (!ids.length) return [];
+  return db.prepare(
+    `SELECT album_track.album_id AS albumId,
+            album_track.track_id AS trackId,
+            (SELECT COUNT(*) FROM library_album_tracks AS every_track
+             WHERE every_track.album_id = album_track.album_id) AS trackCount
+     FROM library_album_tracks AS album_track
+     WHERE album_track.track_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))`,
+  ).all(JSON.stringify(ids));
+}
 
 /**
  * Media files by exact path, for matching Navidrome playlist entries back to

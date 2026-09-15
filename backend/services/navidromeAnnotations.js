@@ -7,10 +7,16 @@ import {
   resolveNavidromeSongId,
 } from "./navidromeTrackResolver.js";
 import {
+  getAlbumTrackRows,
   getCanonicalMediaFilesByPaths,
   getCanonicalTrack,
   getCanonicalTrackIdentityKeysByIds,
 } from "./libraryQueryService.js";
+import {
+  getUserTrackRatings,
+  noteTrackRating,
+  rankAlbumsByMedianRating,
+} from "./navidromeUserRatings.js";
 import { getStarredIdentityKeys, starMany } from "./subsonicLibraryService.js";
 import { logger } from "./logger.js";
 
@@ -121,7 +127,9 @@ export async function setTrackRating(user, ref, rating) {
   // view a Navidrome client is filtered to.
   for (const id of songIds) await client.setRating(id, value);
   const song = await client.getSong(songId).catch(() => null);
-  return { trackId: normalized.trackId, songId, rating: song ? clampRating(song.userRating) : value, starred: Boolean(song?.starred) };
+  const saved = song ? clampRating(song.userRating) : value;
+  noteTrackRating(user, normalized.trackId, saved);
+  return { trackId: normalized.trackId, songId, rating: saved, starred: Boolean(song?.starred) };
 }
 
 /**
@@ -142,53 +150,21 @@ export async function setTrackStarred(user, ref, starred) {
   return { trackId: normalized.trackId, songId, starred: Boolean(starred) };
 }
 
-const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
-
 /**
- * The user's highest-rated albums, as canonical album ids in Navidrome's order.
+ * The user's top rated albums, ranked by the median of their own song ratings.
  *
- * The ratings are Navidrome's album ratings for this user, read as them. Each
- * album is matched to a file through its first song, the same way stars are,
- * so an album this server does not index is dropped rather than shown empty.
+ * Album ratings are deliberately not used. People rate songs; an album rating
+ * is a separate control few ever touch, and one stray album star used to put
+ * an album with no rated songs at the top. Options pass through to
+ * rankAlbumsByMedianRating.
  */
-export async function getTopRatedAlbums(user, { limit = 12 } = {}) {
-  if (!isNavidromeUserAuthEnabled()) return { enabled: false, connected: false, albums: [] };
-  const client = createNavidromeUserClient(user);
-  if (!client) return { enabled: true, connected: false, albums: [] };
+export async function getTopRatedAlbums(user, { limit = 12, minRated, minShare } = {}) {
   const size = Math.max(1, Math.min(50, Math.round(Number(limit) || 12)));
-
-  let rated = [];
-  try {
-    // Read twice what is wanted: some rated albums have no file here.
-    const data = await client.request("getAlbumList2", { type: "highest", size: size * 2 });
-    rated = asArray(data?.albumList2?.album).filter((album) => clampRating(album?.userRating) > 0);
-  } catch (error) {
-    if (isNavidromeAuthError(error)) return { enabled: true, connected: false, albums: [] };
-    throw error;
-  }
-
-  const firstSongIds = await mapLimit(rated, LOOKUP_CONCURRENCY, async (album) => {
-    try {
-      const data = await client.request("getAlbum", { id: album.id });
-      return String(asArray(data?.album?.song)[0]?.id || "") || null;
-    } catch (error) {
-      logger.warn("library", `[Navidrome] Could not read rated album ${album.id}: ${error.message}`);
-      return null;
-    }
-  });
-  const paths = await mediaPathsForNavidromeSongIds(firstSongIds.filter(Boolean));
-  const files = new Map(getCanonicalMediaFilesByPaths([...paths.values()]).map((file) => [file.path, file]));
-
-  const albums = [];
-  const seen = new Set();
-  rated.forEach((album, index) => {
-    const file = files.get(paths.get(firstSongIds[index]));
-    const albumId = Number(file?.albumId);
-    if (!Number.isSafeInteger(albumId) || albumId <= 0 || seen.has(albumId)) return;
-    seen.add(albumId);
-    albums.push({ albumId, rating: clampRating(album.userRating) });
-  });
-  return { enabled: true, connected: true, albums: albums.slice(0, size) };
+  const { enabled, connected, ratings } = await getUserTrackRatings(user);
+  if (!enabled || !connected) return { enabled, connected, albums: [] };
+  const rows = getAlbumTrackRows([...ratings.keys()]);
+  const albums = rankAlbumsByMedianRating(rows, ratings, { minRated, minShare }).slice(0, size);
+  return { enabled, connected, albums };
 }
 
 /**

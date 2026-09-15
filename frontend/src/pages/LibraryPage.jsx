@@ -546,6 +546,10 @@ function LibraryPage() {
   const isDetail = Boolean(routeAlbumId || routeArtistId);
   const tab = section === "home" || section === "album-artists" ? "artists" : section;
   const selectedGenre = searchParams.get("genre") || "";
+  // Track-only filters, kept in the URL like the genre.
+  const ratingParam = Math.round(Number(searchParams.get("rating")) || 0);
+  const selectedRating = section === "tracks" && ratingParam >= 1 && ratingParam <= 5 ? ratingParam : 0;
+  const favoritesOnly = section === "tracks" && searchParams.get("favorites") === "1";
   const forcePreview = import.meta.env.DEV && searchParams.get("preview") === "1";
   const previewQuery = forcePreview ? "?preview=1" : "";
   // An old /library/album-artists link lands on the artist list, so it should
@@ -576,6 +580,8 @@ function LibraryPage() {
       pageIndex,
       query: normalizedQuery,
       genre: selectedGenre,
+      rating: selectedRating,
+      favorites: favoritesOnly,
       sort: sortMode,
       direction: sortDirection,
     }),
@@ -585,8 +591,10 @@ function LibraryPage() {
       pageIndex,
       routeAlbumId,
       routeArtistId,
+      favoritesOnly,
       section,
       selectedGenre,
+      selectedRating,
       sortDirection,
       sortMode,
       tab,
@@ -653,6 +661,8 @@ function LibraryPage() {
                 sort: sortMode,
                 direction: sortDirection,
                 availableOnly: tab === "tracks",
+                minRating: selectedRating || undefined,
+                favorites: favoritesOnly,
               }, { signal });
       const pageResults = section === "favorites"
         ? [nextData?.library || EMPTY_LIBRARY]
@@ -1730,6 +1740,21 @@ function LibraryPage() {
     setSearchParams(next);
   };
 
+  const updateSearchFilter = (key, value) => {
+    setPageIndex(1);
+    const next = new URLSearchParams(searchParams);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setSearchParams(next);
+  };
+
+  const clearFilters = () => {
+    setPageIndex(1);
+    const next = new URLSearchParams(searchParams);
+    ["genre", "rating", "favorites"].forEach((key) => next.delete(key));
+    setSearchParams(next);
+  };
+
   const renderTrackList = (tracks, label) => (
     <div className="native-library-track-list">
       <div
@@ -2792,7 +2817,7 @@ function LibraryPage() {
   // Home has nothing to search, sort or filter; its one control, Refresh, sits
   // in the title row instead, so home skips the toolbar row entirely.
   const showToolbar = !isHome;
-  const hasActiveFilters = Boolean(selectedGenre);
+  const hasActiveFilters = Boolean(selectedGenre || selectedRating || favoritesOnly);
 
   return (
     <main className="library-page native-library-page">
@@ -2983,11 +3008,45 @@ function LibraryPage() {
                     ))}
                   </select>
                 </label>
-                {selectedGenre && (
+                {section === "tracks" && (
+                  <>
+                    <label>
+                      <span>Rating</span>
+                      <select
+                        value={String(selectedRating)}
+                        onChange={(event) =>
+                          updateSearchFilter("rating", event.target.value === "0" ? "" : event.target.value)
+                        }
+                        aria-label="Filter by rating"
+                      >
+                        <option value="0">Any rating</option>
+                        <option value="5">5 stars</option>
+                        <option value="4">4 stars and up</option>
+                        <option value="3">3 stars and up</option>
+                        <option value="2">2 stars and up</option>
+                        <option value="1">Rated</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>Show</span>
+                      <select
+                        value={favoritesOnly ? "favorites" : ""}
+                        onChange={(event) =>
+                          updateSearchFilter("favorites", event.target.value ? "1" : "")
+                        }
+                        aria-label="Filter by favorite"
+                      >
+                        <option value="">All tracks</option>
+                        <option value="favorites">Favorites only</option>
+                      </select>
+                    </label>
+                  </>
+                )}
+                {hasActiveFilters && (
                   <button
                     type="button"
                     className="native-library-filter-reset"
-                    onClick={() => updateGenreFilter("")}
+                    onClick={clearFilters}
                   >
                     <X aria-hidden="true" />
                     Clear

@@ -15,6 +15,7 @@ import {
   importStarsFromNavidrome,
   mirrorFavoritesToNavidrome,
 } from "../../../services/navidromeAnnotations.js";
+import { getUserTrackRatings } from "../../../services/navidromeUserRatings.js";
 import { isNavidromeUserAuthEnabled } from "../../../config/featureFlags.js";
 import {
   getLibraryScanStatus,
@@ -119,7 +120,7 @@ export function registerCanonical(router) {
     return res.json(status);
   });
 
-  router.get("/canonical", noCache, (req, res) => {
+  router.get("/canonical", noCache, async (req, res) => {
     try {
       const favoriteKeys = req.user ? getStarredIdentityKeys(req.user) : null;
       const kind = typeof req.query.kind === "string" ? req.query.kind.trim() : "";
@@ -136,6 +137,25 @@ export function registerCanonical(router) {
           error: "kind and pageSize (1-100) are required",
         });
       }
+      // Rating and favourite filters narrow a track page to the signed-in
+      // person's own tracks. Ratings live in Navidrome; favourites here.
+      let trackIds;
+      let trackIdentityKeys;
+      const minRating = kind === "tracks" ? Math.round(Number(req.query.minRating) || 0) : 0;
+      if (minRating >= 1 && minRating <= 5) {
+        const result = req.user ? await getUserTrackRatings(req.user) : { connected: false };
+        if (!result.connected) {
+          return res.status(503).json({ error: "Ratings are not available from Navidrome" });
+        }
+        trackIds = [...result.ratings]
+          .filter(([, rating]) => rating >= minRating)
+          .map(([trackId]) => trackId);
+      }
+      if (kind === "tracks" && req.query.favorites === "true") {
+        trackIdentityKeys = [...(favoriteKeys || [])]
+          .filter((key) => key.startsWith("song:"))
+          .map((key) => key.slice("song:".length));
+      }
       return res.json(toPublicLibraryPage(getCanonicalLibraryPage({
         source: req.query.source,
         availableOnly: req.query.availableOnly === "true",
@@ -148,6 +168,8 @@ export function registerCanonical(router) {
         direction: req.query.direction,
         artistId: req.query.artistId,
         albumId: req.query.albumId,
+        trackIds,
+        trackIdentityKeys,
       }), favoriteKeys));
     } catch (error) {
       if (

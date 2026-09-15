@@ -35,11 +35,18 @@ const canonicalLibraryPageParams = (options = {}) => Object.fromEntries(
     albumId: options.albumId,
     source: options.source || "all",
     availableOnly: options.availableOnly === true ? "true" : "false",
+    minRating: options.minRating || undefined,
+    favorites: options.favorites === true ? "true" : undefined,
   }).filter(([, value]) => value !== undefined && value !== null && value !== ""),
 );
 
 export const fetchCanonicalLibraryPage = (options = {}, { signal } = {}) =>
-  getData("/library/canonical", { params: canonicalLibraryPageParams(options), signal });
+  getData("/library/canonical", {
+    params: canonicalLibraryPageParams(options),
+    signal,
+    // A person's first rating filter reads all their ratings from Navidrome.
+    ...(options.minRating ? { timeout: SLOW_LIBRARY_REQUEST_TIMEOUT_MS } : {}),
+  });
 
 export const getCanonicalLibraryPage = (options = {}, { signal } = {}) => {
   const params = canonicalLibraryPageParams(options);
