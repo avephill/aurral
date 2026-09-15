@@ -1,4 +1,8 @@
+import fs from "node:fs";
+import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { db } from "../config/db-sqlite.js";
+import { resolveAurralDataDir } from "../config/data-dir.js";
 import { getNavidromeRootMapping } from "../config/featureFlags.js";
 import { getCanonicalMediaFilesByPaths } from "./libraryQueryService.js";
 import { joinRoot, navidromeRelativePath, normalizePath } from "./navidromePathMapping.js";
@@ -175,6 +179,36 @@ export function importSongRecordBundle(bundle) {
   logger.info("library", `[SongRecords] Imported ${idByKey.size} song(s) for ${owner}; ${seeded} linked`);
   const relinked = relinkSongRecords({ owner });
   return { owner, records: idByKey.size, linked: seeded + relinked.linked, review: relinked.review };
+}
+
+/**
+ * Import any bundle left in the data folder's imports directory, then rename
+ * it so it is not imported again. The migration is a one-off, so dropping the
+ * file beside the database is simpler than uploading it.
+ */
+export function importSongRecordBundlesFromDisk({ dir = path.join(resolveAurralDataDir(), "imports") } = {}) {
+  let names = [];
+  try {
+    names = fs.readdirSync(dir).filter((name) => /\.json(\.gz)?$/.test(name));
+  } catch {
+    return [];
+  }
+  const results = [];
+  for (const name of names.sort()) {
+    const file = path.join(dir, name);
+    try {
+      const bytes = fs.readFileSync(file);
+      const text = (bytes[0] === 0x1f && bytes[1] === 0x8b ? gunzipSync(bytes) : bytes).toString("utf8");
+      const result = importSongRecordBundle(JSON.parse(text));
+      fs.renameSync(file, `${file}.imported-${new Date().toISOString().slice(0, 10)}`);
+      logger.info("library", `[SongRecords] Imported ${name}: ${JSON.stringify(result)}`);
+      results.push({ name, ...result });
+    } catch (error) {
+      logger.warn("library", `[SongRecords] Could not import ${name}: ${error.message}`);
+      results.push({ name, error: error.message });
+    }
+  }
+  return results;
 }
 
 /** Every available canonical track, in the shape the matcher reads. */

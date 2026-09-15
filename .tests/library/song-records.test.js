@@ -122,6 +122,23 @@ test("import seeds links from the migration, relinks renamed songs, reports the 
   assert.equal(db.prepare("SELECT status FROM song_record_links WHERE record_id = ?").get(recordId).status, "rejected");
 });
 
+test("a bundle left in the imports folder is imported once and set aside", async () => {
+  const { mkdtempSync, writeFileSync, readdirSync } = await import("node:fs");
+  const { gzipSync } = await import("node:zlib");
+  const { join } = await import("node:path");
+  const { tmpdir } = await import("node:os");
+  const dir = mkdtempSync(join(tmpdir(), "song-record-imports-"));
+  writeFileSync(join(dir, "library.json.gz"), gzipSync(JSON.stringify({
+    format: "psalter-itunes-library",
+    owner: "dunshill",
+    records: [song("meta:someone|record|a song|200", { title: "A Song", artist: "Someone", album: "Record" })],
+  })));
+  const [result] = records.importSongRecordBundlesFromDisk({ dir });
+  assert.equal(result.records, 1);
+  assert.deepEqual(records.importSongRecordBundlesFromDisk({ dir }), []);
+  assert.match(readdirSync(dir)[0], /^library\.json\.gz\.imported-/);
+});
+
 test("rules read his tags, his live ratings, and fall back to the file", () => {
   const songs = new Map([
     [1, { trackId: 1, songId: "a", title: "Adeste", artist: "Cockburn", album: "Christmas", genre: "Folk", year: 1993, rating: 4, playCount: 0, loved: false, created: "2026-01-01", discNumber: 1, trackNumber: 1 }],

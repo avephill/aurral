@@ -492,7 +492,8 @@ function ImportTab({ onImported }) {
     <section className="itunes-library__panel">
       <p className="itunes-library__lede">
         Build the bundle from an iTunes library export with <code>scripts/itunes-migrate/export_psalter_library.py</code>,
-        then upload it here. Importing again updates the songs in place and keeps every decision made on this page.
+        then upload it here, or put it in the data folder&apos;s <code>imports</code> directory and Psalter
+        imports it on its next start. Importing again updates the songs in place and keeps every decision made on this page.
       </p>
       <div className="itunes-library__controls">
         <input type="file" accept=".gz,.json,application/gzip,application/json" onChange={(event) => setFile(event.target.files?.[0] || null)} />

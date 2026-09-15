@@ -447,6 +447,13 @@ httpServer.listen(PORT, async () => {
       .then(([home, { userOps }]) => home.warmLibraryHomes(userOps.getAllUsers()))
       .catch((error) => logger.warn("library", `[Home] Warm-up failed: ${error.message}`));
   }, 60_000).unref?.();
+  // An iTunes library bundle dropped in the data folder's imports directory
+  // is imported once, after the library index is up.
+  setTimeout(() => {
+    import("./services/songRecordService.js")
+      .then(({ importSongRecordBundlesFromDisk }) => importSongRecordBundlesFromDisk())
+      .catch((error) => logger.warn("library", `[SongRecords] Import from disk failed: ${error.message}`));
+  }, 30_000).unref?.();
   // Act on Lidarr webhook events a restart left waiting, and retry any that
   // failed once they are due.
   import("./services/lidarrWebhookService.js")
