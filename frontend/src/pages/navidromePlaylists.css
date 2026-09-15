@@ -2,11 +2,13 @@
    the right. Shares tokens with the rest of the app; the iTunes theme restyles
    the same hooks in itunesTheme.css. */
 
+/* Wide on purpose: a playlist is a table with title, artist, album, rating and
+   time columns, and a narrow cap left most of a desktop window empty. */
 .nd-playlists {
   display: grid;
   gap: 1rem;
   width: 100%;
-  max-width: 72rem;
+  max-width: 120rem;
   margin-inline: auto;
   padding-bottom: 4rem;
 }
@@ -43,8 +45,8 @@
 
 .nd-playlists__body {
   display: grid;
-  grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: minmax(15rem, 20rem) minmax(0, 1fr);
+  gap: 1.5rem;
   align-items: start;
 }
 

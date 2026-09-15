@@ -200,6 +200,18 @@ export default function NavidromePlaylistsPage() {
     [searchParams, setSearchParams],
   );
 
+  // On a wide screen the tracks sit beside the list, so an empty panel is
+  // wasted space: open the first playlist. On a phone the list comes first and
+  // stays the starting point. Replaces the history entry, so Back still leaves
+  // the page instead of landing on the empty version of it.
+  useEffect(() => {
+    if (selectedId || !owned.length) return;
+    if (!window.matchMedia?.("(min-width: 768px)").matches) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("id", String(owned[0].id));
+    setSearchParams(next, { replace: true });
+  }, [owned, searchParams, selectedId, setSearchParams]);
+
   const refreshAll = useCallback(async () => {
     await invalidateNavidromePlaylists();
     await queryClient.invalidateQueries({ queryKey: queryKeys.playlistStatus });
