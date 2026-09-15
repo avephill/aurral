@@ -220,6 +220,18 @@
   list-style: none;
 }
 
+/* On a wide screen the song table scrolls inside its own box, so the
+   playlist's title, Play and search stay in view however long it runs, the
+   way the source list beside it already does. Phones keep scrolling the page,
+   where a box inside a box is hard to drag. */
+@media (min-width: 768px) {
+  .nd-playlists__tracks {
+    max-height: max(20rem, calc(100dvh - 22rem));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 .nd-playlists__track {
   display: grid;
   /* Every cell is pinned to a named line below, because a row on a smart
