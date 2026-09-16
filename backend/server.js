@@ -454,6 +454,13 @@ httpServer.listen(PORT, async () => {
       .then(({ importSongRecordBundlesFromDisk }) => importSongRecordBundlesFromDisk())
       .catch((error) => logger.warn("library", `[SongRecords] Import from disk failed: ${error.message}`));
   }, 30_000).unref?.();
+  // And a rating restore asked for the same way, once the import above has
+  // had time to link the songs it brought in.
+  setTimeout(() => {
+    import("./services/songRatingRestore.js")
+      .then(({ runPendingRatingRestores }) => runPendingRatingRestores())
+      .catch((error) => logger.warn("library", `[SongRecords] Rating restore failed: ${error.message}`));
+  }, 120_000).unref?.();
   // Act on Lidarr webhook events a restart left waiting, and retry any that
   // failed once they are due.
   import("./services/lidarrWebhookService.js")

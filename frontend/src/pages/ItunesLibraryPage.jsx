@@ -7,9 +7,11 @@ import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import {
+  applyRatingRestore,
   decideSongLink,
   dismissSongRecords,
   getMissingSongs,
+  getRatingRestorePlan,
   getSongLinkReview,
   getSongRecordOwners,
   getTagPlaylistReport,
@@ -27,6 +29,7 @@ import "./itunesLibrary.css";
 const TABS = [
   { id: "missing", label: "Missing music" },
   { id: "review", label: "Check matches" },
+  { id: "ratings", label: "Ratings" },
   { id: "smart", label: "Smart playlists" },
   { id: "import", label: "Import" },
 ];
@@ -305,6 +308,105 @@ function ReviewTab({ owner }) {
   );
 }
 
+function RatingsTab({ owner }) {
+  const queryClient = useQueryClient();
+  const { showError, showSuccess } = useToast();
+  const [includeUnsure, setIncludeUnsure] = useState(false);
+  const queryKey = ["song-records", "ratings", owner];
+  const plan = useQuery({
+    queryKey,
+    queryFn: ({ signal }) => getRatingRestorePlan({ owner, signal }),
+    enabled: Boolean(owner),
+  });
+  const apply = useMutation({
+    mutationFn: () => applyRatingRestore({ owner, includeUnsure }),
+    onSuccess: (result) => {
+      showSuccess(`Wrote ${result.written} rating(s)${result.failures?.length ? `, ${result.failures.length} failed` : ""}`);
+      if (result.failures?.length) showError(result.failures[0].error);
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => showError(errorText(error, "Could not write the ratings")),
+  });
+
+  const data = plan.data;
+  const missing = data?.missing || [];
+  const writable = includeUnsure ? missing : missing.filter((entry) => !entry.unsure);
+  const confirmApply = () => {
+    const message = `Write ${writable.length} iTunes rating(s) to ${owner}'s Navidrome account?\n\nOnly songs with no rating there are touched. Ratings ${owner} has set are left as they are.`;
+    if (window.confirm(message)) apply.mutate();
+  };
+
+  return (
+    <section className="itunes-library__panel">
+      <p className="itunes-library__lede">
+        Ratings {owner} gave songs in iTunes that never reached Navidrome, usually because the migration
+        could not match the song at the time. Writing them fills blanks only: a rating he has set in
+        Navidrome is his and is never overwritten, even where iTunes disagrees.
+      </p>
+      {data ? (
+        <p className="itunes-library__totals">
+          {data.considered} rated songs on the server · {missing.length} with no rating in Navidrome ·{" "}
+          {data.different.length} rated differently (left alone)
+          {data.unsureCount ? ` · ${data.unsureCount} through a match still to check` : ""}
+        </p>
+      ) : null}
+      <div className="itunes-library__controls">
+        <label className="itunes-library__toggle">
+          <input type="checkbox" checked={includeUnsure} onChange={(event) => setIncludeUnsure(event.target.checked)} />
+          Include songs whose match is still unchecked
+        </label>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          disabled={!writable.length || apply.isPending || plan.isFetching}
+          onClick={confirmApply}
+        >
+          {apply.isPending ? <DotLoader size="sm" label={null} /> : null}
+          Write {writable.length || ""} rating{writable.length === 1 ? "" : "s"}
+        </button>
+      </div>
+
+      {plan.isLoading ? (
+        <div className="itunes-library__state"><DotLoader size="sm" label="Reading his ratings from Navidrome" /></div>
+      ) : plan.isError ? (
+        <p className="itunes-library__state">{errorText(plan.error, "Could not load the plan")}</p>
+      ) : !missing.length && !data?.different?.length ? (
+        <p className="itunes-library__state">Every iTunes rating is in Navidrome.</p>
+      ) : (
+        <div className="itunes-library__table-wrap">
+          <table className="itunes-library__table">
+            <thead>
+              <tr>
+                <th scope="col">Song</th>
+                <th scope="col">iTunes</th>
+                <th scope="col">Navidrome</th>
+                <th scope="col">Match</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...missing, ...(data?.different || [])].slice(0, 500).map((entry) => (
+                <tr key={`${entry.trackId}-${entry.recordId}`}>
+                  <td>
+                    <span className="itunes-library__album">{entry.title}</span>
+                    <span className="itunes-library__artist">{entry.artist}{entry.album ? ` · ${entry.album}` : ""}</span>
+                  </td>
+                  <td className="itunes-library__stars">{stars(entry.itunesRating)}</td>
+                  <td className="itunes-library__stars">
+                    {entry.navidromeRating ? stars(entry.navidromeRating) : <span className="itunes-library__muted">none</span>}
+                  </td>
+                  <td className="itunes-library__muted">
+                    {entry.navidromeRating ? "kept as his" : entry.unsure ? "unchecked" : "ready"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const describeCondition = (condition) => {
   if (Array.isArray(condition?.conditions)) {
     return `(${condition.match === "any" ? "any of" : "all of"}: ${condition.conditions.map(describeCondition).join("; ")})`;
@@ -571,6 +673,8 @@ export default function ItunesLibraryPage() {
         <MissingTab owner={owner} />
       ) : showTab === "review" ? (
         <ReviewTab owner={owner} />
+      ) : showTab === "ratings" ? (
+        <RatingsTab owner={owner} />
       ) : showTab === "smart" ? (
         <SmartTab owner={owner} />
       ) : (

@@ -28,7 +28,13 @@ export const decideSongLink = (recordId, decision) =>
 export const dismissSongRecords = (ids, dismissed = true) =>
   postData("/song-records/records/dismiss", { ids, dismissed });
 
-export const getTagPlaylistReport = ({ owner, fresh = false, signal } = {}) =>
+export const getRatingRestorePlan = ({ owner, signal } = {}) =>
+  getData("/song-records/ratings/plan", { signal, timeout: SLOW_TIMEOUT_MS, params: { owner } });
+
+export const applyRatingRestore = ({ owner, includeUnsure = false } = {}) =>
+  postData("/song-records/ratings/apply", { owner, includeUnsure }, { timeout: SLOW_TIMEOUT_MS });
+
+export const getTagPlaylistReport =({ owner, fresh = false, signal } = {}) =>
   getData("/song-records/tag-playlists", {
     signal,
     timeout: SLOW_TIMEOUT_MS,

@@ -11,6 +11,7 @@ import {
   listSongRecordOwners,
   relinkSongRecords,
 } from "../services/songRecordService.js";
+import { applyRatingRestore, planRatingRestore } from "../services/songRatingRestore.js";
 import {
   getTagPlaylistReport,
   setTagPlaylistEnabled,
@@ -88,6 +89,32 @@ router.post("/records/:id/link", (req, res) => {
 router.post("/records/dismiss", (req, res) => {
   const changed = dismissSongRecords(req.body?.ids, req.body?.dismissed !== false);
   res.json({ changed });
+});
+
+// Ratings from someone's iTunes library that never reached Navidrome. The
+// plan writes nothing; applying fills blanks only.
+router.get("/ratings/plan", noCache, async (req, res) => {
+  const owner = ownerOf(req);
+  if (!owner) return res.status(400).json({ error: "owner is required" });
+  try {
+    res.json(await planRatingRestore({ owner }));
+  } catch (error) {
+    fail(res, error, "Could not work out the missing ratings");
+  }
+});
+
+router.post("/ratings/apply", async (req, res) => {
+  const owner = ownerOf(req);
+  if (!owner) return res.status(400).json({ error: "owner is required" });
+  try {
+    res.json(await applyRatingRestore({
+      owner,
+      limit: req.body?.limit,
+      includeUnsure: req.body?.includeUnsure === true,
+    }));
+  } catch (error) {
+    fail(res, error, "Could not write the ratings");
+  }
 });
 
 router.get("/tag-playlists", noCache, async (req, res) => {
