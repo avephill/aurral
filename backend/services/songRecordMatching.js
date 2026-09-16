@@ -62,6 +62,33 @@ export function normArtist(value) {
     .replace(/ /g, "");
 }
 
+// MusicBrainz credits the group, iTunes credits the person: "Nat King Cole"
+// against "The Nat King Cole Trio", "Bill Evans" against "The Bill Evans Trio".
+// Dropping the ensemble word leaves the name both sides agree on. The remainder
+// has to be a real name, so "The Band" and a group actually called "Trio" keep
+// theirs.
+// "and his" and "and her" come along with the ensemble word: normArtist has
+// already turned "&" into "and" and closed up the spaces.
+const ENSEMBLE_TAIL = /(?:and)?(?:his|her|their)?(?:trio|quartet|quintet|sextet|septet|octet|orchestra|ensemble|band|group|combo|allstars)$/;
+const MIN_CORE_ARTIST = 5;
+
+export function artistCore(value) {
+  const name = normArtist(value);
+  const core = name.replace(ENSEMBLE_TAIL, "");
+  return core.length >= MIN_CORE_ARTIST && core !== name ? core : name;
+}
+
+/** The forms of a credit worth filing a song under, longest first. */
+export function artistKeys(...names) {
+  const keys = [];
+  for (const name of names) {
+    for (const key of [normArtist(name), artistCore(name)]) {
+      if (key && !keys.includes(key)) keys.push(key);
+    }
+  }
+  return keys;
+}
+
 export function normAlbum(value) {
   return norm(String(value || "").replace(ALBUM_JUNK, ""));
 }
@@ -149,7 +176,7 @@ export function buildCandidateIndex(tracks = []) {
   };
   for (const row of rows) {
     index.byTrackId.set(row.trackId, row);
-    for (const artist of new Set([row.nArtist, row.nAlbumArtist].filter(Boolean))) {
+    for (const artist of new Set(artistKeys(row.artistName, row.albumArtist))) {
       push(index.byArtistTitle, `${artist}\n${row.nTitle}`, row);
       push(index.byArtistLoose, `${artist}\n${row.lTitle}`, row);
       push(index.byArtistBare, `${artist}\n${row.bTitle}`, row);
@@ -168,6 +195,7 @@ function recordKey(record) {
     lTitle: normLoose(record.title),
     bTitle: normBare(record.title),
     nArtist: normArtist(record.artist),
+    coreArtist: artistCore(record.artist),
     variants: artistVariants(record.artist),
     nAlbumArtist: normArtist(record.albumArtist),
     nAlbum: normAlbum(record.album),
@@ -202,6 +230,8 @@ function matchOne(key, index, claimed) {
     ["artist+loose title", lookup(index.byArtistLoose, key.nArtist, key.lTitle), DURATION_TOLERANCE],
     ["artist+bare title", lookup(index.byArtistBare, key.nArtist, key.bTitle), DURATION_TOLERANCE],
     ["album artist+bare title", lookup(index.byArtistBare, key.nAlbumArtist, key.bTitle), DURATION_TOLERANCE],
+    ["group name+title", key.coreArtist === key.nArtist ? [] : lookup(index.byArtistTitle, key.coreArtist, key.nTitle), DURATION_TOLERANCE],
+    ["group name+bare title", key.coreArtist === key.nArtist ? [] : lookup(index.byArtistBare, key.coreArtist, key.bTitle), DURATION_TOLERANCE],
     ["artist+title, other length", lookup(index.byArtistTitle, key.nArtist, key.nTitle), 15],
   ];
   for (const [method, candidates, tolerance] of tiers) {
@@ -211,7 +241,7 @@ function matchOne(key, index, claimed) {
   }
 
   if (key.nArtist && key.lTitle) {
-    const scored = lookup(index.byArtist, key.nArtist)
+    const scored = [...new Set([...lookup(index.byArtist, key.nArtist), ...lookup(index.byArtist, key.coreArtist)])]
       .filter((row) => !claimed.has(row.trackId) && Math.abs(row.duration - key.duration) <= DURATION_TOLERANCE)
       .map((row) => [similarity(key.lTitle, row.lTitle), row])
       .filter(([score]) => score >= 0.82)
@@ -228,7 +258,10 @@ function matchOne(key, index, claimed) {
   if (key.nAlbum) {
     // Same artist and album, the same length to the second, and a title that
     // at least resembles: "Ocean" against "The Ocean".
-    const pool = lookup(index.byArtistAlbum, key.nArtist, key.nAlbum).filter((row) => !claimed.has(row.trackId));
+    const pool = [...new Set([
+      ...lookup(index.byArtistAlbum, key.nArtist, key.nAlbum),
+      ...lookup(index.byArtistAlbum, key.coreArtist, key.nAlbum),
+    ])].filter((row) => !claimed.has(row.trackId));
     const sameLength = pool
       .filter((row) => Math.abs(row.duration - key.duration) <= 1)
       .map((row) => [similarity(key.bTitle, row.bTitle), row])

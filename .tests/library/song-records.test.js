@@ -171,3 +171,25 @@ test("rules read his tags, his live ratings, and fall back to the file", () => {
   );
   assert.deepEqual(skipped, ["bpm gt"]);
 });
+
+// iTunes credits the person, MusicBrainz the group: "Nat King Cole" against
+// "The Nat King Cole Trio". 71 of his songs sat in the missing list for that
+// reason alone while 893 tracks by the group were on the server.
+test("a credit that differs only by an ensemble word still matches", () => {
+  assert.equal(matching.artistCore("The Nat King Cole Trio"), "natkingcole");
+  assert.equal(matching.artistCore("Bill Evans Trio"), "billevans");
+  assert.equal(matching.artistCore("Duke Ellington & His Orchestra"), "dukeellington");
+  // A name that is only the ensemble word keeps it, or nothing would be left.
+  assert.equal(matching.artistCore("The Band"), "band");
+  assert.equal(matching.artistCore("Trio"), "trio");
+  assert.deepEqual(matching.artistKeys("The Nat King Cole Trio"), ["natkingcoletrio", "natkingcole"]);
+
+  const index = matching.buildCandidateIndex([
+    { trackId: 1, title: "Sweet Lorraine", artistName: "The Nat King Cole Trio", albumTitle: "The Jazz Collector Edition, Vol. 1", albumId: 7, durationMs: 180_000 },
+  ]);
+  const links = matching.matchRecords(
+    [{ id: 11, title: "Sweet Lorraine", artist: "Nat King Cole", album: "The Trio Recordings", durationMs: 181_000 }],
+    index,
+  );
+  assert.equal(links.get(11)?.trackId, 1);
+});
