@@ -37,6 +37,11 @@ const MAX_LOOKUP = 200;
 
 const clampRating = (value) => Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
 
+// Subsonic error 70: Navidrome has no such song for this user. For a file
+// symlinked into several libraries that means the copy belongs to a library
+// they cannot see, not that the write was wrong.
+const isNavidromeNotFound = (error) => Number(error?.code) === 70;
+
 async function mapLimit(items, limit, worker) {
   const results = new Array(items.length);
   let next = 0;
@@ -65,10 +70,30 @@ async function songIdForRef(ref) {
 }
 
 // All copies of the track across libraries, main library first.
-async function songIdsForRef(ref) {
+async function songIdsForRef(ref, { adminClient = undefined } = {}) {
   const canonical = describeCanonicalTrack(ref);
   if (!canonical) return [];
-  return resolveNavidromeSongCopies(canonical);
+  return resolveNavidromeSongCopies(canonical, adminClient ? { client: adminClient } : {});
+}
+
+/**
+ * Write one annotation to every copy of a file the person can reach. A copy in
+ * someone else's personal library is refused, and that must not stop the
+ * copies they do have. Returns how many took it and which were refused.
+ */
+async function writeToEveryCopy(songIds, write) {
+  const refused = [];
+  let written = 0;
+  for (const id of songIds) {
+    try {
+      await write(id);
+      written += 1;
+    } catch (error) {
+      if (!isNavidromeNotFound(error)) throw error;
+      refused.push(id);
+    }
+  }
+  return { written, refused };
 }
 
 function annotationFromSong(song) {
@@ -145,18 +170,33 @@ export async function reportPlayToNavidrome(user, ref, {
 /**
  * Set (or with 0, clear) the user's rating on one track.
  */
-export async function setTrackRating(user, ref, rating) {
+export async function setTrackRating(user, ref, rating, {
+  client = createNavidromeUserClient(user),
+  adminClient = undefined,
+} = {}) {
   const normalized = normalizeRef(ref);
   if (!normalized) throw Object.assign(new Error("trackId is required"), { status: 400 });
-  const client = createNavidromeUserClient(user);
   if (!client) throw Object.assign(new Error("Navidrome not configured"), { status: 503 });
-  const songIds = await songIdsForRef(normalized);
+  const songIds = await songIdsForRef(normalized, { adminClient });
   const songId = songIds[0];
   if (!songId) throw Object.assign(new Error("Navidrome has not indexed this track"), { status: 404 });
   const value = clampRating(rating);
-  // Every copy of the file, so the rating reads the same whichever library
-  // view a Navidrome client is filtered to.
-  for (const id of songIds) await client.setRating(id, value);
+  // Every copy of the file the person can reach, so the rating reads the same
+  // whichever library view a Navidrome client is filtered to. A copy in
+  // someone else's personal library is refused ("data not found"), and that
+  // must not stop the copies they do have: a rating written to the shared
+  // library but not to their own is the split that made ratings disappear
+  // from their view before.
+  const { written, refused } = await writeToEveryCopy(songIds, (id) => client.setRating(id, value));
+  if (!written) {
+    throw Object.assign(new Error("Navidrome did not accept this track"), { status: 404 });
+  }
+  if (refused.length) {
+    logger.debug(
+      "library",
+      `[Navidrome] ${refused.length} copy(ies) of track ${normalized.trackId} are outside ${client.user}'s libraries`,
+    );
+  }
   const song = await client.getSong(songId).catch(() => null);
   const saved = song ? clampRating(song.userRating) : value;
   noteTrackRating(user, normalized.trackId, saved);
@@ -181,9 +221,13 @@ export async function setTrackStarred(user, ref, starred) {
   const songIds = await songIdsForRef(normalized);
   const songId = songIds[0];
   if (!songId) throw Object.assign(new Error("Navidrome has not indexed this track"), { status: 404 });
-  for (const id of songIds) {
-    if (starred) await client.star(id);
-    else await client.unstar(id);
+  // As with ratings: a copy in a library this person cannot see is refused,
+  // and the copies they can see must still be starred.
+  const { written: starsWritten } = await writeToEveryCopy(songIds, (id) => (
+    starred ? client.star(id) : client.unstar(id)
+  ));
+  if (!starsWritten) {
+    throw Object.assign(new Error("Navidrome did not accept this track"), { status: 404 });
   }
   return { trackId: normalized.trackId, songId, starred: Boolean(starred) };
 }

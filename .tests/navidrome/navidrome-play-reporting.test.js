@@ -112,3 +112,36 @@ test("a track Navidrome does not know is left alone, not an error", async () => 
   assert.match(result.reason, /not a library track|has not indexed/);
   assert.deepEqual(client.calls, []);
 });
+
+// A file symlinked into several personal libraries is a separate song in each,
+// and Navidrome refuses an id belonging to a library this person cannot see.
+// That must not stop the copies they do have: a rating written to the shared
+// library but not to their own disappears from their view.
+test("a copy in someone else's library does not stop the rating", async () => {
+  const accepted = [];
+  const client = {
+    user: "dunshill",
+    async setRating(id, value) {
+      // "song-avery" lives only in Avery's personal library.
+      if (id === "song-avery") throw Object.assign(new Error("data not found"), { code: 70 });
+      accepted.push({ id, value });
+    },
+    async getSong(id) {
+      return { id, userRating: 4, starred: false };
+    },
+  };
+  const result = await annotations.setTrackRating({ username: "dunshill" }, { trackId }, 4, {
+    client,
+    adminClient: {
+      async findSongsByPath() {
+        return [
+          { id: "song-main", path: RELATIVE, libraryId: 1 },
+          { id: "song-avery", path: RELATIVE, libraryId: 4 },
+          { id: "song-his", path: RELATIVE, libraryId: 5 },
+        ];
+      },
+    },
+  });
+  assert.equal(result.rating, 4);
+  assert.deepEqual(accepted.map((call) => call.id).sort(), ["song-his", "song-main"]);
+});
