@@ -42,18 +42,38 @@ test.before(() => {
 
 test.after(() => cleanupIsolatedState(isolatedState));
 
-// dunshill can reach library 5 and the shared library 1; "outside" only exists
-// in Avery's own library 4, so it is not his to play.
+// dunshill can reach the shared library 1 and his own 5. The playlist holds
+// three files: one he has a copy of, one that lives only in Avery's personal
+// library, and one Psalter never indexed but Navidrome knows - which must
+// still carry over.
+const REL = {
+  his: "Neko Case/Blacklisted/shared.flac",
+  averyOnly: "Neko Case/Blacklisted/outside.flac",
+  unindexed: "Schola Hungarica/Christmas/unindexed.flac",
+};
+
 function fakeDeps() {
   const playlists = new Map();
   const calls = [];
+  const copies = {
+    [REL.his]: [
+      { id: "song-shared-main", path: REL.his, libraryId: 1 },
+      { id: "song-shared-his", path: REL.his, libraryId: 5 },
+    ],
+    [REL.averyOnly]: [{ id: "song-outside-avery", path: REL.averyOnly, libraryId: 4 }],
+    [REL.unindexed]: [{ id: "song-unindexed-main", path: REL.unindexed, libraryId: 1 }],
+  };
   const admin = {
     isConfigured: () => true,
     async getPlaylistRecord(id) {
       return id === "pl-1" ? { id, name: "Road trip", ownerName: "avery" } : null;
     },
     async getPlaylistTracks() {
-      return [{ mediaFileId: "song-shared-main" }, { mediaFileId: "song-outside-avery" }];
+      return [
+        { mediaFileId: "song-shared-main", path: REL.his },
+        { mediaFileId: "song-outside-avery", path: REL.averyOnly },
+        { mediaFileId: "song-unindexed-main", path: REL.unindexed },
+      ];
     },
     async getUsers() {
       return [{ id: "nd-dunshill", userName: "dunshill" }];
@@ -66,6 +86,8 @@ function fakeDeps() {
     playlists,
     calls,
     adminClient: () => admin,
+    songsByPath: async (path) => copies[path] || [],
+    personalLibraryId: async () => 5,
     userClient: (username) => ({
       user: username,
       async getSubsonicPlaylist(id) {
@@ -89,16 +111,6 @@ function fakeDeps() {
         return {};
       },
     }),
-    personalLibraryId: async () => 5,
-    mediaPaths: async () => new Map([
-      ["song-shared-main", PATHS.shared],
-      ["song-outside-avery", PATHS.outside],
-    ]),
-    resolveSong: async (track) => (
-      track.path === PATHS.shared
-        ? { id: "song-shared-his", libraryId: 5 }
-        : { id: "song-outside-avery", libraryId: 4 }
-    ),
   };
 }
 
@@ -107,20 +119,22 @@ test("a shared playlist is written into the recipient's own account", async () =
   const result = await social.sharePlaylist({
     owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps,
   });
-  assert.deepEqual(result.shared, [{ recipient: "dunshill", songs: 1, missing: 1, status: "written" }]);
+  assert.deepEqual(result.shared, [{ recipient: "dunshill", songs: 2, missing: 1, status: "written" }]);
 
   // His copy holds only the song he can reach, and says who it came from.
   const [created] = deps.calls;
   assert.equal(created.verb, "create");
   assert.equal(created.username, "dunshill");
   assert.equal(created.name, "Road trip (from avery)");
-  assert.deepEqual(created.songIds, ["song-shared-his"]);
+  // His own copy of the first, the shared library's copy of the one Psalter
+  // does not index, and nothing from Avery's private library.
+  assert.deepEqual(created.songIds, ["song-shared-his", "song-unindexed-main"]);
 
   const received = social.listSharesForRecipient("dunshill");
   assert.equal(received.length, 1);
   assert.equal(received[0].owner, "avery");
   assert.equal(received[0].missing, 1);
-  assert.equal(received[0].songCount, 1);
+  assert.equal(received[0].songCount, 2);
   // Nobody else sees it.
   assert.deepEqual(social.listSharesForRecipient("kitty"), []);
 });

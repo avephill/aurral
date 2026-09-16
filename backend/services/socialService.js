@@ -1,13 +1,7 @@
 import { db } from "../config/db-sqlite.js";
-import { getCanonicalMediaFilesByPaths } from "./libraryQueryService.js";
 import { createNavidromeUserClient } from "./navidromeUserClient.js";
-import {
-  describeCanonicalTrack,
-  getAdminNavidromeClient,
-  getPersonalLibraryIdForUser,
-  mediaPathsForNavidromeSongIds,
-  resolveNavidromeSong,
-} from "./navidromeTrackResolver.js";
+import { normalizePath } from "./navidromePathMapping.js";
+import { getAdminNavidromeClient, getPersonalLibraryIdForUser } from "./navidromeTrackResolver.js";
 import { logger } from "./logger.js";
 
 /**
@@ -75,8 +69,7 @@ const defaultDeps = {
   adminClient: () => getAdminNavidromeClient(),
   userClient: (username) => createNavidromeUserClient({ username }),
   personalLibraryId: (username) => getPersonalLibraryIdForUser(username),
-  mediaPaths: (songIds) => mediaPathsForNavidromeSongIds(songIds, { maxLookups: Number.POSITIVE_INFINITY }),
-  resolveSong: (track, options) => resolveNavidromeSong(track, options),
+  songsByPath: (path) => getAdminNavidromeClient().findSongsByPath(path),
 };
 
 const libraryCache = new Map();
@@ -143,30 +136,50 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
   return { playlistId: id, name, shared: results };
 }
 
-/** Write one share's copy, or leave it alone when it already matches. */
+/**
+ * Write one share's copy, or leave it alone when it already matches.
+ *
+ * The recipient's copy of each file is found through Navidrome by path rather
+ * than through Psalter's own index: the index holds what Lidarr manages and
+ * what a scan has seen, and a playlist can hold music it has never indexed -
+ * 45 songs of one real Christmas playlist - which would otherwise vanish from
+ * the copy without anyone noticing.
+ */
 export async function syncShare(share, deps = defaultDeps) {
   const at = now();
   try {
     const admin = deps.adminClient();
     const rows = await admin.getPlaylistTracks(share.source_playlist_id);
-    const songIds = rows.map((row) => String(row?.mediaFileId ?? row?.mediaFile?.id ?? "")).filter(Boolean);
-    const paths = await deps.mediaPaths(songIds);
-    const files = new Map(
-      getCanonicalMediaFilesByPaths([...new Set(paths.values())]).map((file) => [file.path, file]),
-    );
+    const entries = rows
+      .map((row) => ({
+        songId: String(row?.mediaFileId ?? row?.mediaFile?.id ?? ""),
+        path: normalizePath(row?.path ?? row?.mediaFile?.path ?? ""),
+      }))
+      .filter((entry) => entry.path);
 
     const preferLibraryId = await deps.personalLibraryId(share.recipient).catch(() => null);
     const allowed = await librariesFor(share.recipient, deps);
+
+    // One lookup per distinct file, not per entry: a playlist often repeats one.
+    const theirCopy = new Map();
+    for (const entry of entries) {
+      if (theirCopy.has(entry.path)) continue;
+      const copies = await deps.songsByPath(entry.path).catch(() => []);
+      const exact = (Array.isArray(copies) ? copies : [])
+        .filter((song) => song?.id && normalizePath(song?.path) === entry.path);
+      const pick = exact.find((song) => Number(song.libraryId) === Number(preferLibraryId))
+        || exact.find((song) => allowed.size && allowed.has(Number(song.libraryId)))
+        // Their libraries are unknown, so leave the copy the owner had rather
+        // than guess at one they may not be able to play.
+        || (allowed.size ? null : exact.find((song) => String(song.id) === entry.songId));
+      theirCopy.set(entry.path, pick?.id ? String(pick.id) : null);
+    }
+
     const mirrorSongIds = [];
     let missing = 0;
-    for (const songId of songIds) {
-      const trackId = files.get(paths.get(songId))?.trackId;
-      const canonical = trackId ? describeCanonicalTrack({ trackId }) : null;
-      const song = canonical ? await deps.resolveSong(canonical, { preferLibraryId }) : null;
-      // A copy outside their libraries is not theirs to play, so it is left out.
-      const reachable = song?.id
-        && (!allowed.size || song.libraryId == null || allowed.has(Number(song.libraryId)));
-      if (reachable) mirrorSongIds.push(song.id);
+    for (const entry of entries) {
+      const songId = theirCopy.get(entry.path);
+      if (songId) mirrorSongIds.push(songId);
       else missing += 1;
     }
 
