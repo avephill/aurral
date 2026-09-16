@@ -49,6 +49,10 @@ committed defaults, because they describe this one installation.
 
   Both flags are needed: `.npmrc` sets `engine-strict`, and the repo pins Node
   22 while the machine runs a newer one.
-- Frontend tests boot Vite. Run them with `--test-force-exit`, or a permission
-  or resolve error inside Vite hangs the run instead of reporting anything.
+- Frontend tests boot Vite, and a permission or resolve error inside it hangs
+  the run instead of reporting anything. `npm test` passes `--test-force-exit`
+  for that reason - keep it there, and keep it on any test command you write by
+  hand. A hung run looks exactly like a slow one, so if a suite seems to be
+  taking unusually long, check whether its log is still growing before waiting
+  on it.
 - Verify CSS with lightningcss from `node_modules` rather than a full build.
