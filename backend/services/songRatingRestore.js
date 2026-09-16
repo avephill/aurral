@@ -20,6 +20,8 @@ import { logger } from "./logger.js";
 
 const CONCURRENCY = 4;
 const MAX_APPLY = 2000;
+const PAGE_SIZE = 500;
+const MAX_PAGES = 400;
 
 const clampRating = (value) => Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
 
@@ -64,83 +66,103 @@ export async function runPendingRatingRestores({ dir = path.join(resolveAurralDa
  * Even out a rating that reached some copies of a file and not others.
  *
  * A file symlinked into a personal library is a separate song in each library,
- * with its own annotation. Writes that stopped at the first refusal left
- * ratings on the shared library's copy that never reached the person's own, so
- * their library view shows the song as unrated. Reading per song cannot see
- * this: one rated copy makes the song look rated. This compares the copies.
+ * with its own annotation, and a rating is written per copy. Writes that
+ * stopped at the first refusal - and the original migration, which only knew
+ * the shared library's ids - left ratings that never reached the person's own
+ * copy, so their library view shows the song as unrated.
  *
- * The highest rating among the copies is the one kept, and it is only written
- * to copies that have none, so nothing a person set is changed.
+ * Reading per song cannot see this: one rated copy makes the song look rated.
+ * So every song the person can see is listed with its rating, the copies of one
+ * file are grouped by path, and the highest rating found is written to the
+ * copies that have none. Nothing a person set is changed, and a copy in a
+ * library they cannot see never appears in their own listing.
  */
 export async function repairSplitRatings({
   owner,
-  trackIds = null,
   limit = MAX_APPLY,
   client = undefined,
-  adminClient = undefined,
+  resolvePaths = undefined,
   dryRun = false,
 } = {}) {
-  const [{ createNavidromeUserClient }, { describeCanonicalTrack, resolveNavidromeSongCopies }] = await Promise.all([
-    import("./navidromeUserClient.js"),
-    import("./navidromeTrackResolver.js"),
-  ]);
-  const user = { username: owner };
-  const userClient = client || createNavidromeUserClient(user);
+  const { createNavidromeUserClient } = await import("./navidromeUserClient.js");
+  const userClient = client || createNavidromeUserClient({ username: owner });
   if (!userClient) throw Object.assign(new Error("Navidrome not configured"), { status: 503 });
+  const readPaths = resolvePaths
+    || (await import("./navidromeTrackResolver.js")).mediaPathsForNavidromeSongIds;
 
-  const candidates = trackIds || db.prepare(`
-    SELECT DISTINCT link.track_id AS trackId
-    FROM song_record_links AS link
-    JOIN song_records AS record ON record.id = link.record_id
-    WHERE record.owner = ? AND link.status != 'rejected' AND record.rating > 0
-  `).all(owner).map((row) => row.trackId);
+  // Every song this person can reach, across all their libraries, with their
+  // own rating on each copy.
+  const songs = [];
+  for (let page = 0; page < MAX_PAGES; page += 1) {
+    const data = await userClient.request("search3", {
+      query: '""',
+      songCount: PAGE_SIZE,
+      songOffset: page * PAGE_SIZE,
+      artistCount: 0,
+      albumCount: 0,
+    });
+    const batch = data?.searchResult3?.song;
+    const list = Array.isArray(batch) ? batch : batch ? [batch] : [];
+    for (const song of list) {
+      if (song?.id) songs.push({ songId: String(song.id), rating: clampRating(song.userRating) });
+    }
+    if (list.length < PAGE_SIZE) break;
+  }
 
-  const wanted = candidates.slice(0, Math.max(0, Math.min(MAX_APPLY, Number(limit) || MAX_APPLY)));
+  const paths = await readPaths(songs.map((song) => song.songId), { maxLookups: Number.POSITIVE_INFINITY });
+  const byPath = new Map();
+  for (const song of songs) {
+    const path = paths.get(song.songId);
+    if (!path) continue;
+    const group = byPath.get(path);
+    if (group) group.push(song);
+    else byPath.set(path, [song]);
+  }
+
   const uneven = [];
+  for (const [path, copies] of byPath) {
+    if (copies.length < 2) continue;
+    const best = Math.max(0, ...copies.map((copy) => copy.rating));
+    const blanks = copies.filter((copy) => !copy.rating);
+    if (!best || !blanks.length) continue;
+    uneven.push({ path, rating: best, blanks });
+  }
+
+  const wanted = uneven.slice(0, Math.max(0, Math.min(MAX_APPLY, Number(limit) || MAX_APPLY)));
   const failures = [];
   let written = 0;
-  let next = 0;
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, wanted.length) }, async () => {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= wanted.length) return;
-      const trackId = wanted[index];
-      try {
-        const canonical = describeCanonicalTrack({ trackId });
-        if (!canonical) continue;
-        const copies = await resolveNavidromeSongCopies(canonical, adminClient ? { client: adminClient } : {});
-        if (copies.length < 2) continue;
-        // Each copy's rating as this person; a copy in a library they cannot
-        // see answers "data not found" and is not theirs to fix.
-        const rated = [];
-        for (const songId of copies) {
+  if (!dryRun) {
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, wanted.length) }, async () => {
+      for (;;) {
+        const index = next;
+        next += 1;
+        if (index >= wanted.length) return;
+        const entry = wanted[index];
+        for (const blank of entry.blanks) {
           try {
-            const song = await userClient.getSong(songId);
-            rated.push({ songId, rating: clampRating(song?.userRating) });
+            await userClient.setRating(blank.songId, entry.rating);
+            written += 1;
           } catch (error) {
-            if (Number(error?.code) !== 70) throw error;
+            failures.push({ songId: blank.songId, error: error.message });
           }
         }
-        const best = Math.max(0, ...rated.map((entry) => entry.rating));
-        const blanks = rated.filter((entry) => !entry.rating);
-        if (!best || !blanks.length) continue;
-        uneven.push({ trackId, rating: best, copies: rated.length, blanks: blanks.length });
-        if (dryRun) continue;
-        for (const blank of blanks) {
-          await userClient.setRating(blank.songId, best);
-          written += 1;
-        }
-      } catch (error) {
-        failures.push({ trackId, error: error.message });
       }
-    }
-  }));
+    }));
+  }
   logger.info(
     "library",
-    `[SongRecords] Split ratings for ${owner}: ${uneven.length} song(s) uneven, ${written} copy(ies) ${dryRun ? "to write" : "written"}${failures.length ? `, ${failures.length} failed` : ""}`,
+    `[SongRecords] Split ratings for ${owner}: ${songs.length} song(s) read, ${uneven.length} uneven, ${written} copy(ies) ${dryRun ? "to write" : "written"}${failures.length ? `, ${failures.length} failed` : ""}`,
   );
-  return { owner, checked: wanted.length, uneven: uneven.length, written, dryRun, failures: failures.slice(0, 20) };
+  return {
+    owner,
+    songsRead: songs.length,
+    uneven: uneven.length,
+    written,
+    remaining: Math.max(0, uneven.length - wanted.length),
+    dryRun,
+    failures: failures.slice(0, 20),
+  };
 }
 
 /** Records with a rating and a link, beside the track they point at. */

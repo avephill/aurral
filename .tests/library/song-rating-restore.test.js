@@ -114,52 +114,50 @@ test("a rating Navidrome already holds is never overwritten", async () => {
 
 // A rating that reached the shared library's copy but not his own leaves the
 // song looking unrated in his library view. Reading per song cannot see it;
-// comparing the copies can.
+// listing every copy he can see and grouping them by file can.
 test("an uneven rating is evened out across the copies he can see", async () => {
-  const perCopy = { "song-main": 4, "song-his": 0 };
+  // Two copies of one file, and a second file with a single copy.
+  const perCopy = { "song-main": 4, "song-his": 0, lonely: 3 };
   const writes = [];
   const client = {
     user: "dunshill",
-    async getSong(id) {
-      if (!(id in perCopy)) throw Object.assign(new Error("data not found"), { code: 70 });
-      return { id, userRating: perCopy[id] };
+    async request(endpoint, params) {
+      assert.equal(endpoint, "search3");
+      if (params.songOffset > 0) return { searchResult3: { song: [] } };
+      return {
+        searchResult3: {
+          song: Object.entries(perCopy).map(([id, userRating]) => ({ id, userRating })),
+        },
+      };
     },
     async setRating(id, rating) {
       writes.push({ id, rating });
       perCopy[id] = rating;
     },
   };
-  const RELATIVE = "Neko Case/Blacklisted/unrated.flac";
-  const adminClient = {
-    async findSongsByPath(path) {
-      if (path !== RELATIVE) return [];
-      return [
-        { id: "song-main", path: RELATIVE, libraryId: 1 },
-        { id: "song-avery", path: RELATIVE, libraryId: 4 },
-        { id: "song-his", path: RELATIVE, libraryId: 5 },
-      ];
-    },
-  };
+  // Avery's copy of the same file never appears: his listing only has his own.
+  const resolvePaths = async () => new Map([
+    ["song-main", "/data/Music/Library/a.flac"],
+    ["song-his", "/data/Music/Library/a.flac"],
+    ["lonely", "/data/Music/Library/b.flac"],
+  ]);
 
-  const preview = await restore.repairSplitRatings({
-    owner: "dunshill", trackIds: [trackIds.unrated], client, adminClient, dryRun: true,
-  });
+  const preview = await restore.repairSplitRatings({ owner: "dunshill", client, resolvePaths, dryRun: true });
   assert.deepEqual(preview.failures, []);
+  assert.equal(preview.songsRead, 3);
   assert.equal(preview.uneven, 1);
   assert.equal(preview.written, 0);
   assert.deepEqual(writes, []);
 
-  const result = await restore.repairSplitRatings({
-    owner: "dunshill", trackIds: [trackIds.unrated], client, adminClient,
-  });
+  const result = await restore.repairSplitRatings({ owner: "dunshill", client, resolvePaths });
   assert.deepEqual(result.failures, []);
   assert.equal(result.written, 1);
-  // His copy gets the rating the shared copy already had; Avery's copy is not his to fix.
+  // His copy gets the rating the shared copy already had; the single-copy file
+  // and its rating are left alone.
   assert.deepEqual(writes, [{ id: "song-his", rating: 4 }]);
 
   // Running again finds nothing left to do.
-  const again = await restore.repairSplitRatings({
-    owner: "dunshill", trackIds: [trackIds.unrated], client, adminClient,
-  });
+  const again = await restore.repairSplitRatings({ owner: "dunshill", client, resolvePaths });
   assert.equal(again.uneven, 0);
+  assert.equal(again.written, 0);
 });

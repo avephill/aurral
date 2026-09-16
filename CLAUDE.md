@@ -38,9 +38,17 @@ committed defaults, because they describe this one installation.
 
 ## Local build and test gotchas
 
-- `react-router-dom` is missing from the local `node_modules`, so any test that
-  builds the whole app fails here and passes in Docker. Check whether a failure
-  predates your change before chasing it.
+- `react-router-dom` may be missing from the local `node_modules`, and then
+  every test that builds the whole app fails here while passing in Docker -
+  five of them, including the service worker test, which is easy to mistake for
+  five unrelated known failures. Install it and the suite is green:
+
+  ```
+  npm install --no-save --engine-strict=false react-router-dom --workspace frontend
+  ```
+
+  Both flags are needed: `.npmrc` sets `engine-strict`, and the repo pins Node
+  22 while the machine runs a newer one.
 - Frontend tests boot Vite. Run them with `--test-force-exit`, or a permission
   or resolve error inside Vite hangs the run instead of reporting anything.
 - Verify CSS with lightningcss from `node_modules` rather than a full build.
