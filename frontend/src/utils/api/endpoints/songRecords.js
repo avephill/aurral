@@ -34,7 +34,10 @@ export const getRatingRestorePlan = ({ owner, signal } = {}) =>
 export const applyRatingRestore = ({ owner, includeUnsure = false } = {}) =>
   postData("/song-records/ratings/apply", { owner, includeUnsure }, { timeout: SLOW_TIMEOUT_MS });
 
-export const getTagPlaylistReport =({ owner, fresh = false, signal } = {}) =>
+export const repairSplitRatings = ({ owner, dryRun = false } = {}) =>
+  postData("/song-records/ratings/repair", { owner, dryRun }, { timeout: SLOW_TIMEOUT_MS });
+
+export const getTagPlaylistReport = ({ owner, fresh = false, signal } = {}) =>
   getData("/song-records/tag-playlists", {
     signal,
     timeout: SLOW_TIMEOUT_MS,
