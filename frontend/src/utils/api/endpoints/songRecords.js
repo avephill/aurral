@@ -16,8 +16,11 @@ export const importSongRecordBundle = (file) =>
 export const relinkSongRecords = (owner) =>
   postData("/song-records/relink", { owner }, { timeout: SLOW_TIMEOUT_MS });
 
-export const getMissingSongs = ({ owner, dismissed = false, signal } = {}) =>
-  getData("/song-records/missing", { signal, params: { owner, ...(dismissed ? { dismissed: 1 } : {}) } });
+export const getMissingSongs = ({ owner, dismissed = false, duplicates = false, signal } = {}) =>
+  getData("/song-records/missing", {
+    signal,
+    params: { owner, ...(dismissed ? { dismissed: 1 } : {}), ...(duplicates ? { duplicates: 1 } : {}) },
+  });
 
 export const getSongLinkReview = ({ owner, signal } = {}) =>
   getData("/song-records/review", { signal, params: { owner } });

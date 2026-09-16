@@ -52,12 +52,13 @@ function MissingTab({ owner }) {
   const { showError, showSuccess } = useToast();
   const [ratedOnly, setRatedOnly] = useState(true);
   const [showHidden, setShowHidden] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const [filter, setFilter] = useState("");
   const [open, setOpen] = useState(() => new Set());
-  const queryKey = ["song-records", "missing", owner, showHidden];
+  const queryKey = ["song-records", "missing", owner, showHidden, showDuplicates];
   const report = useQuery({
     queryKey,
-    queryFn: ({ signal }) => getMissingSongs({ owner, dismissed: showHidden, signal }),
+    queryFn: ({ signal }) => getMissingSongs({ owner, dismissed: showHidden, duplicates: showDuplicates, signal }),
     enabled: Boolean(owner),
   });
 
@@ -105,6 +106,7 @@ function MissingTab({ owner }) {
         <p className="itunes-library__totals">
           {totals.albums} albums · {totals.songs} songs · {totals.rated} rated · {totals.loved} loved ·{" "}
           {totals.inPlaylists} in his playlists
+          {totals.duplicates ? ` · ${totals.duplicates} duplicate copies ${showDuplicates ? "shown" : "hidden"}` : ""}
         </p>
       ) : null}
       <div className="itunes-library__controls">
@@ -122,6 +124,13 @@ function MissingTab({ owner }) {
         <label className="itunes-library__toggle">
           <input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} />
           Show hidden
+        </label>
+        <label
+          className="itunes-library__toggle"
+          title="His library kept a second, untitled copy of some rips. Where the titled song has found its file, the copy is not missing music."
+        >
+          <input type="checkbox" checked={showDuplicates} onChange={(event) => setShowDuplicates(event.target.checked)} />
+          Show duplicate copies
         </label>
         <button
           type="button"

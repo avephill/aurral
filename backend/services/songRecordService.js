@@ -382,7 +382,7 @@ const songView = (row, playlists) => ({
  * the most loved and most played. A record whose file was linked once but has
  * since gone from disk counts as missing too.
  */
-export function getMissingSongsReport({ owner, includeDismissed = false } = {}) {
+export function getMissingSongsReport({ owner, includeDismissed = false, includeDuplicates = false } = {}) {
   const rows = db.prepare(`
     SELECT ${recordColumns}
     FROM song_records AS record
@@ -393,9 +393,35 @@ export function getMissingSongsReport({ owner, includeDismissed = false } = {}) 
       ))
   `).all(owner);
   const playlists = playlistNamesByRecord(owner);
+
+  // A record that duplicates one already linked - same album, same length, the
+  // untitled "Track 04" beside the titled song - is a second copy in his old
+  // library, not music the server lacks.
+  const twins = new Set();
+  for (const row of db.prepare(`
+    SELECT record.album AS album, record.duration_ms AS durationMs
+    FROM song_records AS record
+    JOIN song_record_links AS link ON link.record_id = record.id AND link.status != 'rejected'
+    WHERE record.owner = ? AND record.duration_ms > 0
+      AND EXISTS (SELECT 1 FROM library_media_files AS media
+                  WHERE media.track_id = link.track_id AND media.available = 1)
+  `).all(owner)) {
+    const seconds = Math.round(row.durationMs / 1000);
+    // A second either way, because the two copies are rips of the same disc
+    // rather than the same file.
+    for (const offset of [-1, 0, 1]) twins.add(`${normAlbum(row.album)}|${seconds + offset}`);
+  }
+  const isDuplicate = (row) => row.durationMs > 0
+    && twins.has(`${normAlbum(row.album)}|${Math.round(row.durationMs / 1000)}`);
+
   const albums = new Map();
+  let duplicates = 0;
   for (const row of rows) {
     if (row.dismissedAt && !includeDismissed) continue;
+    if (isDuplicate(row)) {
+      duplicates += 1;
+      if (!includeDuplicates) continue;
+    }
     const artist = row.albumArtist || row.artist || "Unknown artist";
     const key = `${normArtist(artist)}\n${normAlbum(row.album)}`;
     let album = albums.get(key);
@@ -427,6 +453,7 @@ export function getMissingSongsReport({ owner, includeDismissed = false } = {}) 
     totals: {
       albums: items.length,
       songs: songs.length,
+      duplicates,
       rated: songs.filter((song) => song.rating > 0).length,
       loved: songs.filter((song) => song.loved).length,
       inPlaylists: songs.filter((song) => song.playlists.length).length,

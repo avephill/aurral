@@ -193,3 +193,34 @@ test("a credit that differs only by an ensemble word still matches", () => {
   );
   assert.equal(links.get(11)?.trackId, 1);
 });
+
+// His iTunes library kept a titled and an untitled copy of some rips. Once the
+// titled one has its file, the copy is not music the server lacks - it made a
+// fully present album look missing.
+test("a duplicate of a linked song is not reported as missing", () => {
+  const [onDisk] = addAlbum({ artist: "Thom Yorke", album: "Tomorrow's Modern Boxes", tracks: [["A Brain in a Bottle", 281]] });
+  records.importSongRecordBundle({
+    format: "psalter-itunes-library",
+    owner: "dunshill",
+    records: [
+      song("path:Thom Yorke/Boxes/01 Brain.m4a", {
+        title: "A Brain In A Bottle", artist: "Thom Yorke", album: "Tomorrow's Modern Boxes", durationMs: 281_000, rating: 3,
+      }),
+      // The untitled rip of the same disc, a second adrift.
+      song("path:Thom Yorke/Boxes/Track 01.m4a", {
+        title: "Track 01", artist: "Thom Yorke", album: "Tomorrow's Modern Boxes", durationMs: 282_000, rating: 3,
+      }),
+    ],
+  });
+  assert.equal(
+    db.prepare("SELECT track_id AS trackId FROM song_record_links WHERE record_id = (SELECT id FROM song_records WHERE title = 'A Brain In A Bottle')").get().trackId,
+    onDisk.id,
+  );
+
+  const hidden = records.getMissingSongsReport({ owner: "dunshill" });
+  assert.equal(hidden.totals.duplicates, 1);
+  assert.ok(!hidden.items.some((album) => album.album === "Tomorrow's Modern Boxes"));
+
+  const shown = records.getMissingSongsReport({ owner: "dunshill", includeDuplicates: true });
+  assert.ok(shown.items.some((album) => album.songs.some((entry) => entry.title === "Track 01")));
+});

@@ -67,7 +67,11 @@ router.post("/relink", (req, res) => {
 router.get("/missing", noCache, (req, res) => {
   const owner = ownerOf(req);
   if (!owner) return res.status(400).json({ error: "owner is required" });
-  res.json(getMissingSongsReport({ owner, includeDismissed: req.query.dismissed === "1" }));
+  res.json(getMissingSongsReport({
+    owner,
+    includeDismissed: req.query.dismissed === "1",
+    includeDuplicates: req.query.duplicates === "1",
+  }));
 });
 
 router.get("/review", noCache, (req, res) => {
