@@ -617,3 +617,17 @@
   color: var(--aurral-text-subtle);
   font-weight: 400;
 }
+
+/* Choosing who gets their own copy of a playlist. */
+.nd-playlists__share-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.nd-playlists__share-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+}

@@ -8,6 +8,7 @@ import {
   FolderOpen,
   GripVertical,
   ListMusic,
+  Share2,
   Sparkles,
   Pause,
   Pencil,
@@ -48,6 +49,7 @@ import {
   setNavidromePlaylistFolder,
   setNavidromePlaylistRules,
 } from "../utils/api/endpoints/playlists.js";
+import { getSocialOverview, sharePlaylistWith } from "../utils/api/endpoints/social.js";
 import "./navidromePlaylists.css";
 
 /**
@@ -112,6 +114,9 @@ export default function NavidromePlaylistsPage() {
   const selectedId = searchParams.get("id") || "";
   const [createOpen, setCreateOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareWith, setShareWith] = useState([]);
+  const [people, setPeople] = useState([]);
   const [renameValue, setRenameValue] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [busy, setBusy] = useState("");
@@ -340,6 +345,38 @@ export default function NavidromePlaylistsPage() {
     },
     [clearSelection, detail, refreshAll, selectedId, showError, tracks],
   );
+
+  // Navidrome cannot share a playlist with one person, so Psalter writes them
+  // their own copy. The people list comes from the same place the Social page
+  // uses.
+  const openShare = async () => {
+    setShareWith([]);
+    setShareOpen(true);
+    if (people.length) return;
+    try {
+      const overview = await getSocialOverview();
+      setPeople(overview.people || []);
+    } catch (error) {
+      showError(errorMessage(error, "Could not load who you can share with"));
+    }
+  };
+
+  const handleShare = async () => {
+    if (!selectedId || !shareWith.length) return;
+    setBusy("share");
+    try {
+      const result = await sharePlaylistWith(selectedId, shareWith);
+      const missing = (result.shared || []).reduce((sum, entry) => sum + (entry.missing || 0), 0);
+      showSuccess(missing
+        ? `Shared with ${shareWith.join(", ")}. ${missing} song(s) left out, not in their library.`
+        : `Shared with ${shareWith.join(", ")}.`);
+      setShareOpen(false);
+    } catch (error) {
+      showError(errorMessage(error, "Could not share the playlist"));
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const handleDuplicate = async () => {
     if (!selectedId) return;
@@ -799,6 +836,16 @@ export default function NavidromePlaylistsPage() {
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
+                        onClick={openShare}
+                        disabled={busy === "share"}
+                        title="Give someone their own copy, private to them, kept in step with yours."
+                      >
+                        <Share2 className="artist-icon-sm" aria-hidden="true" />
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
                         onClick={() => {
                           setMoveValue(selected.folder || "");
                           setMoveOpen(true);
@@ -1091,6 +1138,44 @@ export default function NavidromePlaylistsPage() {
             autoFocus
           />
         </label>
+      </ModalShell>
+
+      <ModalShell
+        open={shareOpen}
+        title="Share this playlist"
+        description="Navidrome can only make a playlist private or visible to everyone, so Psalter gives each person their own copy instead. It stays in step with yours, and songs their library does not hold are left out."
+        onClose={() => setShareOpen(false)}
+        disableClose={busy === "share"}
+        footer={
+          <>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShareOpen(false)} disabled={busy === "share"}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleShare} disabled={busy === "share" || !shareWith.length}>
+              {busy === "share" ? <DotLoader size="xs" label={null} /> : null}
+              Share
+            </button>
+          </>
+        }
+      >
+        {people.length === 0 ? (
+          <p>Nobody else has an account here yet.</p>
+        ) : (
+          <div className="nd-playlists__share-people">
+            {people.map((person) => (
+              <label key={person} className="nd-playlists__share-person">
+                <input
+                  type="checkbox"
+                  checked={shareWith.includes(person)}
+                  onChange={(event) => setShareWith(event.target.checked
+                    ? [...shareWith, person]
+                    : shareWith.filter((name) => name !== person))}
+                />
+                {person}
+              </label>
+            ))}
+          </div>
+        )}
       </ModalShell>
 
       <ModalShell

@@ -15,7 +15,9 @@ import {
   Ticket,
   Users,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
+import { getSocialOverview } from "../utils/api/endpoints/social.js";
 import { useFlowWorkerActivity } from "../pages/flows/useFlowWorkerActivity";
 import { DEFAULT_SETTINGS_TAB, SETTINGS_NAV_TABS } from "../pages/Settings/settingsTabsConfig";
 import { DEFAULT_SHOWS_FILTER, SHOWS_FILTERS } from "../navigation/showsNavConfig";
@@ -64,6 +66,16 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const { hasFailure: hasStorageFailure } = useStorageHealth({
     enabled: canAccessSettings,
   });
+  // Something waiting on the Social page: a recommendation nobody has read, or
+  // a playlist newly shared with them.
+  const social = useQuery({
+    queryKey: ["social", "overview"],
+    queryFn: ({ signal }) => getSocialOverview({ signal }),
+    enabled: Boolean(user),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+  const hasSocialAlert = (social.data?.recommendations?.unread || 0) > 0;
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true,
   );
@@ -450,7 +462,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
             {settingsMode ? renderSettingsNav() : navItems.map((item) => {
               const Icon = item.icon;
               const active = isNavItemActive(item);
-              const showActivityDot = item.section === "activity" && hasReviewAlert;
+              const showActivityDot = (item.section === "activity" && hasReviewAlert)
+                || (item.path === "/social" && hasSocialAlert);
               const activeSubnavId =
                 item.section === "library"
                   ? activeLibraryView
