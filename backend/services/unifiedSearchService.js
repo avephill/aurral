@@ -802,6 +802,33 @@ async function searchLocalLibrary(query, limit, user) {
   }
 }
 
+/**
+ * Mark each library hit as the person's own or the shared server's. Every
+ * personal library here is a subset of the one on disk, so a listener's search
+ * should lead with their own music and still let them reach the rest.
+ */
+async function markUserLibrary(library, user) {
+  const { getUserLibraryScope, isInScope } = await import("./userLibraryScope.js");
+  const scope = await getUserLibraryScope(user).catch(() => null);
+  if (!scope) return library;
+  const mark = (items, describe) => (items || []).map((item) => ({
+    ...item,
+    inUserLibrary: isInScope(scope, describe(item)),
+  }));
+  return {
+    ...library,
+    artists: mark(library.artists, (item) => ({ artistName: item.name })),
+    albums: mark(library.albums, (item) => ({
+      artistName: item.artistName || item.artist || item.albumArtist,
+      albumTitle: item.title || item.name,
+    })),
+    tracks: mark(library.tracks, (item) => ({
+      artistName: item.artistName || item.artist,
+      albumTitle: item.albumName || item.album,
+    })),
+  };
+}
+
 export async function searchUnified(query, { mode = "suggest", limit, user = null } = {}) {
   const trimmed = String(query || "").trim();
   const normalizedMode = normalizeMode(mode);
@@ -839,7 +866,7 @@ export async function searchUnified(query, { mode = "suggest", limit, user = nul
       query: trimmed,
       mode: normalizedMode,
       top: null,
-      library: { artists: libraryArtists, albums, tracks: libraryTracks },
+      library: await markUserLibrary({ artists: libraryArtists, albums, tracks: libraryTracks }, user),
       catalog: { artists: [], albums: [], tracks: [] },
       localSearchConfigured: catalogSearchConfigured,
       filters: ["all", "artists", "albums", "singles"],
@@ -862,10 +889,11 @@ export async function searchUnified(query, { mode = "suggest", limit, user = nul
     query: trimmed,
     mode: normalizedMode,
     top: top?.type ? top : null,
-    library: {
+    library: await markUserLibrary({
       artists: library.artists,
+      albums: library.albums || [],
       tracks: library.tracks,
-    },
+    }, user),
     catalog,
     localSearchConfigured: catalogSearchConfigured,
     filters: ["all", "artists", "albums", "singles"],

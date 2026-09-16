@@ -1744,6 +1744,10 @@ function buildPageQuery({
       where.push("EXISTS (SELECT 1 FROM library_albums AS filter_album WHERE filter_album.id = ? AND filter_album.artist_id = artist.id)");
       parameters.push(Number(albumId));
     }
+    if (Array.isArray(artistIds)) {
+      where.push("artist.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))");
+      parameters.push(JSON.stringify(artistIds.map(Number).filter(Number.isSafeInteger)));
+    }
   } else if (kind === "albums") {
     entityKind = "album";
     from = "FROM library_albums AS album JOIN library_artists AS artist ON artist.id = album.artist_id";
@@ -1789,6 +1793,14 @@ function buildPageQuery({
     if (albumId) {
       where.push("album.id = ?");
       parameters.push(Number(albumId));
+    }
+    if (Array.isArray(artistIds)) {
+      where.push(`track.id IN (
+        SELECT scope_track.track_id FROM library_album_tracks AS scope_track
+        JOIN library_albums AS scope_album ON scope_album.id = scope_track.album_id
+        WHERE scope_album.artist_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))
+      )`);
+      parameters.push(JSON.stringify(artistIds.map(Number).filter(Number.isSafeInteger)));
     }
     // One JSON parameter rather than one placeholder per id: a person's rated
     // tracks run to tens of thousands.
@@ -2181,8 +2193,8 @@ export function getCanonicalLibraryPage({
   // Track pages only: leave these track ids out (a person's rated tracks, for
   // the unrated filter).
   excludeTrackIds = null,
-  // Album pages only: narrow to these canonical artist ids (a person's
-  // library). An empty list matches nothing; null, everything.
+  // Narrow artists, albums and tracks to these canonical artist ids (a
+  // person's own library). An empty list matches nothing; null, everything.
   artistIds = null,
   // Track pages sorted by rating: the person's ratings, { trackId: 1-5 }.
   trackRatings = null,

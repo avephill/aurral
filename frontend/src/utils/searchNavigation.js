@@ -469,8 +469,16 @@ export function buildUnifiedSuggestionSections(data) {
   const libraryAlbums = dedupeItems(data.library?.albums || [], seen, seenArtistNames);
   const libraryTracks = dedupeItems(data.library?.tracks || [], seen, seenArtistNames);
   const libraryItems = [...libraryArtists, ...libraryAlbums, ...libraryTracks];
-  if (libraryItems.length > 0) {
-    sections.push({ key: "library", label: "Your Library", items: libraryItems });
+  // Their own library first, then the rest of what is on the server. The
+  // server marks each hit; with no personal library everything comes back as
+  // theirs and the second section simply stays empty.
+  const mine = libraryItems.filter((item) => item.inUserLibrary !== false);
+  const onServer = libraryItems.filter((item) => item.inUserLibrary === false);
+  if (mine.length > 0) {
+    sections.push({ key: "library", label: "Your Library", items: mine });
+  }
+  if (onServer.length > 0) {
+    sections.push({ key: "server-library", label: "Server Library", items: onServer });
   }
 
   if (data.top) {

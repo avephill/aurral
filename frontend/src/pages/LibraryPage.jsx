@@ -8,10 +8,12 @@ import {
   ArrowUpZA,
   Download,
   ExternalLink,
+  Globe,
   Grid3X3,
   Heart,
   Info,
   List,
+  Library,
   ListFilter,
   Pause,
   Play,
@@ -88,6 +90,25 @@ import { queryClient, queryKeys } from "../queryClient.js";
 // Views that still open though the sidebar no longer lists them, so old
 // links keep working: album artists became artists, and favorites is a view
 // reached by link now that hearted songs live in a playlist.
+// Browsing defaults to the person's own library: every personal library here
+// is a symlinked subset of the shared one, and Navidrome already scopes what
+// they can play. "Whole server" is a click away for anyone who wants it.
+const SCOPE_KEY = "psalter.libraryScope";
+const readScopePreference = (userId) => {
+  try {
+    return window.localStorage.getItem(`${SCOPE_KEY}:${userId}`) === "server" ? "server" : "mine";
+  } catch {
+    return "mine";
+  }
+};
+const writeScopePreference = (userId, scope) => {
+  try {
+    window.localStorage.setItem(`${SCOPE_KEY}:${userId}`, scope);
+  } catch {
+    // A browser that refuses storage still gets the default each visit.
+  }
+};
+
 const LIBRARY_VIEW_IDS = new Set([
   ...LIBRARY_VIEWS.map((view) => view.id),
   "album-artists",
@@ -501,6 +522,11 @@ function LibraryPage() {
   } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { bootstrap, hasPermission, user } = useAuth();
+  const [libraryScope, setLibraryScope] = useState(() => readScopePreference(user?.id ?? "anon"));
+  const chooseScope = (next) => {
+    setLibraryScope(next);
+    writeScopePreference(user?.id ?? "anon", next);
+  };
   const ratingsEnabled = bootstrap?.navidromeRatingsEnabled === true;
   const { showError, showSuccess } = useToast();
   const {
@@ -681,9 +707,11 @@ function LibraryPage() {
       favorites: favoritesOnly,
       sort: sortMode,
       direction: sortDirection,
+      scope: libraryScope,
     }),
     [
       forcePreview,
+      libraryScope,
       normalizedQuery,
       pageIndex,
       routeAlbumId,
@@ -758,6 +786,7 @@ function LibraryPage() {
                 // 37,931 albums are indexed and 4,381 have a file, so without
                 // this the shelves fill with records nobody can listen to.
                 availableOnly: tab === "tracks" || tab === "albums" || tab === "artists",
+                scope: libraryScope === "mine" ? "mine" : undefined,
                 minRating: selectedRating || undefined,
                 favorites: favoritesOnly,
                 unrated: unratedOnly,
@@ -3135,6 +3164,17 @@ function LibraryPage() {
               >
                 {refreshing ? <DotLoader size="sm" label={null} /> : <RefreshCw aria-hidden="true" />}
               </TooltipButton>
+              {!isHome && section !== "genres" && (
+                <TooltipButton
+                  className={`native-library-icon-button${libraryScope === "server" ? " is-active" : ""}`}
+                  onClick={() => chooseScope(libraryScope === "mine" ? "server" : "mine")}
+                  label={libraryScope === "mine" ? "Showing your library" : "Showing the whole server"}
+                  aria-label="Show your library or the whole server"
+                  aria-pressed={libraryScope === "server"}
+                >
+                  {libraryScope === "mine" ? <Library aria-hidden="true" /> : <Globe aria-hidden="true" />}
+                </TooltipButton>
+              )}
               <span className="native-library-toolbar-spacer" aria-hidden="true" />
               {(tab === "artists" || tab === "albums") && !isHome && (
                 <div className="native-library-view-toggle" aria-label="Library view">

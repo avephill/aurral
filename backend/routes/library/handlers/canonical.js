@@ -187,16 +187,20 @@ export function registerCanonical(router) {
           .filter((key) => key.startsWith("song:"))
           .map((key) => key.slice("song:".length));
       }
-      // "mine" narrows albums to the signed-in person's library, the same
-      // artists Discover uses. With personal libraries off there is no
-      // narrower library, so nothing is filtered.
+      // "mine" narrows the library to what the person's own Navidrome library
+      // holds. Navidrome is the authority: every personal library here is a
+      // symlinked subset of the shared one, and Psalter's index knows only
+      // what is on disk. Someone with no library of their own sees everything,
+      // which is what they can play anyway.
       let artistIds;
-      if (kind === "albums" && req.query.scope === "mine" && req.user) {
-        const { scopeCanonicalArtistsToUser } = await import(
-          "../../../services/userLibraryService.js"
-        );
-        const scoped = await scopeCanonicalArtistsToUser(req.user);
-        if (Array.isArray(scoped)) artistIds = scoped.map((artist) => artist.id);
+      let albumIds;
+      if (req.query.scope === "mine" && req.user && ["albums", "artists", "tracks"].includes(kind)) {
+        const { getCanonicalScope } = await import("../../../services/userLibraryScope.js");
+        const scope = await getCanonicalScope(req.user).catch(() => null);
+        if (scope) {
+          artistIds = [...scope.artistIds];
+          if (kind === "albums") albumIds = [...scope.albumIds];
+        }
       }
       // Sorting tracks by rating needs the person's own ratings.
       let trackRatings;
