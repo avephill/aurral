@@ -753,7 +753,11 @@ function LibraryPage() {
                 genre: selectedGenre,
                 sort: sortMode,
                 direction: sortDirection,
-                availableOnly: tab === "tracks",
+                // Browsing the library means music you can play. Albums
+                // Lidarr knows of but has not got belong on Wanted, not here:
+                // 37,931 albums are indexed and 4,381 have a file, so without
+                // this the shelves fill with records nobody can listen to.
+                availableOnly: tab === "tracks" || tab === "albums" || tab === "artists",
                 minRating: selectedRating || undefined,
                 favorites: favoritesOnly,
                 unrated: unratedOnly,
