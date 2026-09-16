@@ -212,6 +212,18 @@ export class NavidromeClient {
     return { ...playlist, entry: Array.isArray(entries) ? entries : [entries] };
   }
 
+  /**
+   * Tell Navidrome a song was played. `time` is when, in milliseconds. With
+   * submission false it is a now-playing note instead, which counts nothing.
+   */
+  async scrobble(id, { time = Date.now(), submission = true } = {}) {
+    return this.request("scrobble", {
+      id,
+      time: Math.trunc(Number(time) || Date.now()),
+      submission: submission ? "true" : "false",
+    });
+  }
+
   async setRating(id, rating) {
     return this.request("setRating", { id, rating: Math.max(0, Math.min(5, Number(rating) || 0)) });
   }

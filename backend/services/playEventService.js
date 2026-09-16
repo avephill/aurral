@@ -2,6 +2,9 @@ import { db } from "../config/db-sqlite.js";
 import { getHonkerDb, getPlayEventOutbox } from "./honkerDb.js";
 import { scrobbleConnectionStore } from "./scrobbleConnectionStore.js";
 import { getKoitoListenBrainzBaseUrl } from "./koitoClient.js";
+import { logger } from "./logger.js";
+
+const getUsernameStmt = db.prepare("SELECT username FROM users WHERE id = ?");
 
 const getEventStmt = db.prepare("SELECT * FROM play_events WHERE id = ?");
 const getHistoryStmt = db.prepare(
@@ -103,7 +106,33 @@ export const recordPlayEvent = (userId, input = {}) => {
     throw error;
   }
   const event = toPublicEvent(getEventStmt.get(eventId));
+  reportPlayToNavidrome(userId, event);
   return event;
+};
+
+/**
+ * Pass the play on to Navidrome as that person, so its play counts, recently
+ * played and listening history include what they play here. Navidrome owns
+ * those numbers, and nothing else writes them for Aurral's own player.
+ *
+ * Never blocks recording the play: a Navidrome that is down or does not know
+ * the track is logged and forgotten.
+ */
+const reportPlayToNavidrome = (userId, event) => {
+  if (!event?.trackId) return;
+  const username = getUsernameStmt.get(userId)?.username;
+  if (!username) return;
+  import("./navidromeAnnotations.js")
+    .then(({ reportPlayToNavidrome: report }) =>
+      report({ username }, { trackId: event.trackId }, { playedAt: event.playedAt }))
+    .then((result) => {
+      if (!result?.reported && result?.reason) {
+        logger.debug?.("library", `[Navidrome] Play not reported for ${username}: ${result.reason}`);
+      }
+    })
+    .catch((error) => {
+      logger.warn("library", `[Navidrome] Could not report a play for ${username}: ${error.message}`);
+    });
 };
 
 export const deliverPlayEvent = async ({ eventId, userId, provider, connectionRevision }) => {

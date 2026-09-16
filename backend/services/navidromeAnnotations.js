@@ -2,7 +2,9 @@ import { isNavidromeUserAuthEnabled } from "../config/featureFlags.js";
 import { createNavidromeUserClient, isNavidromeAuthError } from "./navidromeUserClient.js";
 import {
   describeCanonicalTrack,
+  getPersonalLibraryIdForUser,
   mediaPathsForNavidromeSongIds,
+  resolveNavidromeSong,
   resolveNavidromeSongCopies,
   resolveNavidromeSongId,
 } from "./navidromeTrackResolver.js";
@@ -109,6 +111,35 @@ export async function lookupTrackAnnotations(user, refs = []) {
     }
   });
   return { enabled: true, connected: !authFailed, tracks };
+}
+
+/**
+ * Tell Navidrome the person played a track, so its own play counts, recently
+ * played and listening history are right whichever client they use next.
+ *
+ * Only one copy is scrobbled, theirs by preference: a file symlinked into a
+ * personal library is a separate song in each library, and counting a play
+ * against every copy would report one listen several times. Ratings go on
+ * every copy because they must read the same everywhere; a play happened once.
+ */
+export async function reportPlayToNavidrome(user, ref, {
+  playedAt = Date.now(),
+  client = createNavidromeUserClient(user),
+  adminClient = undefined,
+  preferLibraryId = undefined,
+} = {}) {
+  if (!isNavidromeUserAuthEnabled() || !client) return { reported: false, reason: "not connected" };
+  const normalized = normalizeRef(ref);
+  const canonical = normalized && describeCanonicalTrack(normalized);
+  if (!canonical) return { reported: false, reason: "not a library track" };
+  const resolverOptions = adminClient ? { client: adminClient } : {};
+  const library = preferLibraryId !== undefined
+    ? preferLibraryId
+    : await getPersonalLibraryIdForUser(user?.username, resolverOptions).catch(() => null);
+  const song = await resolveNavidromeSong(canonical, { ...resolverOptions, preferLibraryId: library });
+  if (!song?.id) return { reported: false, reason: "Navidrome has not indexed this track" };
+  await client.scrobble(song.id, { time: playedAt });
+  return { reported: true, songId: song.id, libraryId: song.libraryId };
 }
 
 /**
