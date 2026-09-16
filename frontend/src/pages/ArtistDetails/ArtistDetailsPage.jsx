@@ -558,6 +558,10 @@ function ArtistDetailsPage() {
       />
       ) : null}
 
+      {/* Picking which record to fetch is for an artist the server does not
+          have. Once the artist is in the library it sits above their own
+          albums offering a record they did not ask for. */}
+      {!existsInLibrary && !loadingLibrary ? (
       <ArtistDetailsDownloadTargets
         releaseGroups={artist?.["release-groups"] || []}
         getAlbumStatus={library.getAlbumStatus}
@@ -581,6 +585,7 @@ function ArtistDetailsPage() {
         getDefaultPlaylistName={getDefaultTrackPlaylistName}
         onLoadPlaylists={loadSharedPlaylists}
       />
+      ) : null}
 
       {existsInLibrary && libraryAlbums && libraryAlbums.length > 0 && (
         <ArtistDetailsLibraryAlbums

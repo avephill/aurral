@@ -9,6 +9,7 @@ import { ArtistTrackListToolbar } from "./ArtistTrackListToolbar";
 import { useAlbumTrackListToolbar } from "../../../hooks/useAlbumTrackListToolbar";
 import { useAudioQueue } from "../../../contexts/audioQueueContext";
 import { normalizePreviewTrack } from "../../../utils/audioQueue";
+import { buildAuthenticatedApiUrl } from "../../../utils/api/core.js";
 
 export function ArtistDetailsReleaseTrackList({
   release,
@@ -53,8 +54,8 @@ export function ArtistDetailsReleaseTrackList({
     return ownedByPosition.get(`${number}|${title}`) || null;
   };
   const normalizeTrack = useCallback(
-    (track, index) =>
-      normalizePreviewTrack(
+    (track, index) => {
+      const base = normalizePreviewTrack(
         {
           id: track?.id ?? track?.mbid ?? `${trackKey}-${index}`,
           title: track?.title || track?.trackName,
@@ -66,8 +67,24 @@ export function ArtistDetailsReleaseTrackList({
           artistMbid,
           albumMbid: release?.id || trackKey,
         },
-      ),
-    [artistMbid, artistName, release?.id, release?.title, trackKey],
+      );
+      // Owned: play the file, the whole song, and count the listen. A preview
+      // is a shop window for music that is not here.
+      const owned = canonicalRefFor(track, index);
+      if (!owned?.trackId || !owned?.albumId) return base;
+      return {
+        ...base,
+        src: buildAuthenticatedApiUrl(
+          `/library/canonical-stream/${encodeURIComponent(owned.albumId)}/${encodeURIComponent(owned.trackId)}`,
+        ),
+        canonicalTrackId: owned.trackId,
+        canonicalAlbumId: owned.albumId,
+        durationMs: Number(track?.durationMs || track?.length || 0) || base.durationMs || null,
+        recordHistory: true,
+      };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [artistMbid, artistName, ownedTracks, release?.id, release?.title, trackKey],
   );
 
   const { currentTrack, isPlaying, isLoading, playTrack, togglePlayPause, source } =
@@ -104,8 +121,8 @@ export function ArtistDetailsReleaseTrackList({
   const getQueueTracks = useCallback(
     () =>
       (tracks || [])
-        .filter((entry) => entry?.preview_url)
-        .map((entry, entryIndex) => normalizeTrack(entry, entryIndex)),
+        .map((entry, entryIndex) => normalizeTrack(entry, entryIndex))
+        .filter((entry) => entry?.src),
     [tracks, normalizeTrack],
   );
 
@@ -122,10 +139,8 @@ export function ArtistDetailsReleaseTrackList({
 
   const handleTrackPreviewPlay = (track, index, event) => {
     event.stopPropagation();
-    if (!track?.preview_url) return;
-    const queue = (tracks || [])
-      .filter((entry) => entry?.preview_url)
-      .map((entry, entryIndex) => normalizeTrack(entry, entryIndex));
+    if (!track?.preview_url && !canonicalRefFor(track, index)) return;
+    const queue = getQueueTracks();
     handlePlay(track, { source: playbackSource, queue }, index);
   };
 
@@ -190,7 +205,7 @@ export function ArtistDetailsReleaseTrackList({
                   <span className="artist-track-number">
                     {track.trackNumber || track.position || index + 1}
                   </span>
-                  {track.preview_url ? (
+                  {track.preview_url || canonicalRefFor(track, index) ? (
                     <TrackPlayButton
                       track={track}
                       isPlaying={isPlaying}

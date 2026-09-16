@@ -1,20 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDiscoverNavigation } from "../../../hooks/useDiscoverNavigation";
 import { ArrowRight, Music, Star } from "lucide-react";
 import { DotLoader } from "../../../components/DotLoader";
 import SearchLibraryCheck from "../../../components/SearchLibraryCheck";
 import AddActionButton from "../../../components/AddActionButton";
 import { navigateToReleaseGroup } from "../../../utils/searchNavigation";
-import { getPopularReleaseGroups, getReleaseGroupCoverUrl, getReleaseMetric, getReleaseYear } from "../utils";
+import { getReleaseGroupCoverUrl, getReleaseMetric, getReleaseYear } from "../utils";
 import { getAlbumAddButtonLabel } from "../../../utils/albumAddAction";
-import { useResponsiveReleaseLimit } from "../hooks/useResponsiveReleaseLimit";
 
 const viewModes = [
-  { value: "popular", label: "Popular Releases" },
   { value: "albums", label: "Albums" },
   { value: "singles", label: "Singles & EPs" },
   { value: "compilations", label: "Compilations" },
 ];
+
+// A discography reads as a list. Side-scrolling cards hid most of a long one
+// and made the years impossible to follow.
+const LIST_LIMIT = 40;
 
 const isCompilation = (releaseGroup) =>
   releaseGroup?.["primary-type"] === "Compilation" ||
@@ -29,9 +31,6 @@ const sortLatest = (items) =>
   );
 
 const getVisibleReleases = (releaseGroups, viewMode, limit) => {
-  if (viewMode === "popular") {
-    return getPopularReleaseGroups(releaseGroups, limit);
-  }
   if (viewMode === "albums") {
     return sortLatest(
       releaseGroups.filter(
@@ -65,12 +64,12 @@ export function ArtistDetailsReleaseGroups({
   onViewAll,
 }) {
   const navigate = useDiscoverNavigation();
-  const [viewMode, setViewMode] = useState("popular");
-  const [releaseGridRef, previewLimit] = useResponsiveReleaseLimit();
+  const [viewMode, setViewMode] = useState("albums");
+  const releaseGridRef = useRef(null);
   const releaseGroups = useMemo(() => artist["release-groups"] || [], [artist]);
   const visibleReleaseGroups = useMemo(
-    () => getVisibleReleases(releaseGroups, viewMode, previewLimit),
-    [previewLimit, releaseGroups, viewMode],
+    () => getVisibleReleases(releaseGroups, viewMode, LIST_LIMIT),
+    [releaseGroups, viewMode],
   );
 
   useEffect(() => {
@@ -119,7 +118,7 @@ export function ArtistDetailsReleaseGroups({
         </button>
       </div>
 
-      <div ref={releaseGridRef} className="artist-release-grid">
+      <div ref={releaseGridRef} className="artist-release-list">
         {visibleReleaseGroups.map((releaseGroup) => {
           const status = getAlbumStatus(releaseGroup.id);
           const metric = getReleaseMetric(releaseGroup);
@@ -128,53 +127,54 @@ export function ArtistDetailsReleaseGroups({
             albumCovers,
             coverOptions(releaseGroup),
           );
+          const owned = status?.status === "available" || status?.status === "added";
           return (
             <article
               key={releaseGroup.id}
-              className="artist-release-card"
+              className="artist-release-row"
               onClick={() => openRelease(releaseGroup)}
             >
-              <div className="artist-release-card__cover">
+              <div className="artist-release-row__cover">
                 {coverUrl ? (
                   <img src={coverUrl} alt="" loading="lazy" decoding="async" />
                 ) : (
-                  <div className="artist-release-card__placeholder">
-                    <Music className="artist-icon-lg" />
+                  <div className="artist-release-row__placeholder">
+                    <Music className="artist-icon-sm" />
                   </div>
                 )}
-                <div className="artist-release-card__action">
-                  {status?.status === "available" || status?.status === "added" ? (
-                    <span className="artist-release-card__status" title="Complete">
-                      <SearchLibraryCheck size="overlay" />
-                      <span className="sr-only">Complete</span>
-                    </span>
-                  ) : canAddAlbum ? (
-                    <div onClick={(event) => event.stopPropagation()}>
-                      <AddActionButton
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleRequestAlbum(releaseGroup.id, releaseGroup.title);
-                        }}
-                        isLoading={requestingAlbum === releaseGroup.id}
-                        disabled={requestingAlbum === releaseGroup.id}
-                        label={getAlbumAddButtonLabel({ status: status?.status })}
-                      />
-                    </div>
-                  ) : null}
-                </div>
               </div>
-              <h3 className="artist-release-card__title artist-clamp-2">{releaseGroup.title}</h3>
-              <p className="artist-release-card__meta artist-truncate">
-                {[getReleaseYear(releaseGroup), releaseGroup["primary-type"]]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-              {metric.label && (
-                <p className="artist-release-card__metric">
+              <div className="artist-release-row__text">
+                <h3 className="artist-release-row__title artist-truncate">{releaseGroup.title}</h3>
+                <p className="artist-release-row__meta artist-truncate">
+                  {[getReleaseYear(releaseGroup), releaseGroup["primary-type"]]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              </div>
+              {metric.label ? (
+                <p className="artist-release-row__metric">
                   <Star className="artist-star-icon" />
                   {metric.label}
                 </p>
-              )}
+              ) : <span />}
+              <div className="artist-release-row__action" onClick={(event) => event.stopPropagation()}>
+                {owned ? (
+                  <span className="artist-release-row__status" title="In the library">
+                    <SearchLibraryCheck size="discover" />
+                    <span className="sr-only">In the library</span>
+                  </span>
+                ) : canAddAlbum ? (
+                  <AddActionButton
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRequestAlbum(releaseGroup.id, releaseGroup.title);
+                    }}
+                    isLoading={requestingAlbum === releaseGroup.id}
+                    disabled={requestingAlbum === releaseGroup.id}
+                    label={getAlbumAddButtonLabel({ status: status?.status })}
+                  />
+                ) : null}
+              </div>
             </article>
           );
         })}
