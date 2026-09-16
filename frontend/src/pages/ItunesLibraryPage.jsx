@@ -12,6 +12,7 @@ import {
   dismissSongRecords,
   getMissingSongs,
   getRatingRestorePlan,
+  repairSplitRatings,
   getSongLinkReview,
   getSongRecordOwners,
   getTagPlaylistReport,
@@ -318,6 +319,16 @@ function RatingsTab({ owner }) {
     queryFn: ({ signal }) => getRatingRestorePlan({ owner, signal }),
     enabled: Boolean(owner),
   });
+  const repair = useMutation({
+    mutationFn: () => repairSplitRatings({ owner }),
+    onSuccess: (result) => {
+      showSuccess(result.uneven
+        ? `Evened out ${result.uneven} song(s) across ${result.written} copy(ies)`
+        : "Every rating already reads the same in his own library");
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => showError(errorText(error, "Could not even out the ratings")),
+  });
   const apply = useMutation({
     mutationFn: () => applyRatingRestore({ owner, includeUnsure }),
     onSuccess: (result) => {
@@ -363,6 +374,16 @@ function RatingsTab({ owner }) {
         >
           {apply.isPending ? <DotLoader size="sm" label={null} /> : null}
           Write {writable.length || ""} rating{writable.length === 1 ? "" : "s"}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={repair.isPending}
+          onClick={() => repair.mutate()}
+          title="A rating that reached the shared library's copy but not his own reads as unrated in his library. This evens them out."
+        >
+          {repair.isPending ? <DotLoader size="sm" label={null} /> : null}
+          Even out copies
         </button>
       </div>
 

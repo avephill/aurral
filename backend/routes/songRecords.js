@@ -11,7 +11,7 @@ import {
   listSongRecordOwners,
   relinkSongRecords,
 } from "../services/songRecordService.js";
-import { applyRatingRestore, planRatingRestore } from "../services/songRatingRestore.js";
+import { applyRatingRestore, planRatingRestore, repairSplitRatings } from "../services/songRatingRestore.js";
 import {
   getTagPlaylistReport,
   setTagPlaylistEnabled,
@@ -114,6 +114,18 @@ router.post("/ratings/apply", async (req, res) => {
     }));
   } catch (error) {
     fail(res, error, "Could not write the ratings");
+  }
+});
+
+// Ratings that reached some copies of a file and not others, so the song reads
+// as unrated in the person's own library view.
+router.post("/ratings/repair", async (req, res) => {
+  const owner = ownerOf(req);
+  if (!owner) return res.status(400).json({ error: "owner is required" });
+  try {
+    res.json(await repairSplitRatings({ owner, dryRun: req.body?.dryRun === true }));
+  } catch (error) {
+    fail(res, error, "Could not even out the ratings");
   }
 });
 
