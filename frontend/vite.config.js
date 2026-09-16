@@ -25,7 +25,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: "autoUpdate",
+        // "prompt", not "autoUpdate": an update used to install itself and
+        // reload the page a second or two after it loaded, which stops the
+        // music and loses your place. ReloadPrompt offers the reload instead,
+        // and was unreachable while this said autoUpdate.
+        registerType: "prompt",
         includeAssets: ["arralogo.svg", "icons/*.png", "spotify-oauth-callback.js", "offline.html"],
         workbox: {
           navigateFallback: null,
