@@ -314,7 +314,9 @@ test("the library home is kept, fills in top rated once ratings load, and rebuil
   const first = await libraryHome.getLibraryHome(user);
   assert.equal(first.recentAlbums.total, 1);
   assert.equal(first.recentArtists.length, 1);
-  assert.deepEqual(first.stats, { artists: 1, albums: 1, tracks: 1 });
+  // Each tile counts what its own page shows. The fixture's track carries no
+  // genre, so that count is zero rather than absent.
+  assert.deepEqual(first.stats, { artists: 1, albums: 1, tracks: 1, genres: 0 });
   assert.equal(first.topRatedPending, true, "ratings were not loaded, so top rated waits instead of the page");
   assert.equal(first.refreshing, true);
 

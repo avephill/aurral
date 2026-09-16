@@ -1902,6 +1902,13 @@ function buildPageQuery({
   };
 }
 
+export function getScopedGenreStats({ sourceFilter = null, availableOnly = true, artistIds = null } = {}) {
+  if (!Array.isArray(artistIds)) return getCanonicalGenreStats({ sourceFilter, availableOnly });
+  // Not worth storing: a scope belongs to one person and changes with their
+  // library, and the count is wanted once per home build.
+  return computeLibraryGenreStats(db, { sourceFilter, availableOnly, artistIds });
+}
+
 function getCanonicalGenreStats({ sourceFilter, availableOnly }) {
   const cacheKey = `${sourceFilter || "all"}:${availableOnly === true ? "available" : "all"}`;
   const cached = genreStatsCache.get(cacheKey);

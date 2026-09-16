@@ -2,6 +2,7 @@ import {
   getAlbumTrackRows,
   getCanonicalLibraryForAlbumIds,
   getCanonicalLibraryPage,
+  getScopedGenreStats,
 } from "./libraryQueryService.js";
 import { libraryManager } from "./libraryManager.js";
 import {
@@ -50,6 +51,7 @@ function libraryStats(artistIds) {
     artists: total({ kind: "artists" }),
     albums: total({ kind: "albums" }),
     tracks: total({ kind: "tracks" }),
+    genres: getScopedGenreStats({ availableOnly: true, artistIds }).length,
   };
   statsByScope.set(key, data);
   return data;

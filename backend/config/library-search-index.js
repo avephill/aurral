@@ -44,7 +44,20 @@ const genreMediaExists = (kind, sourceFilter, availableOnly) => {
   };
 };
 
-export function computeLibraryGenreStats(db, { sourceFilter = null, availableOnly = false } = {}) {
+// `artistIds` narrows the count to one person's own library, the same scope
+// the library pages use. Null counts the whole server.
+export function computeLibraryGenreStats(db, { sourceFilter = null, availableOnly = false, artistIds = null } = {}) {
+  const scopeJson = Array.isArray(artistIds)
+    ? JSON.stringify(artistIds.map(Number).filter(Number.isSafeInteger))
+    : null;
+  const scopeClause = {
+    artists: "artist.id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))",
+    albums: "album.artist_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))",
+    tracks: `EXISTS (SELECT 1 FROM library_album_tracks AS scope_track
+      JOIN library_albums AS scope_album ON scope_album.id = scope_track.album_id
+      WHERE scope_track.track_id = track.id
+        AND scope_album.artist_id IN (SELECT CAST(value AS INTEGER) FROM json_each(?)))`,
+  };
   const entities = [
     ["artists", "library_artists AS artist", "artist.id", "artist.metadata_json"],
     [
@@ -59,6 +72,7 @@ export function computeLibraryGenreStats(db, { sourceFilter = null, availableOnl
   const rows = entities.map(([kind, from, id, metadata]) => {
     const media = genreMediaExists(kind, sourceFilter, availableOnly);
     parameters.push(...media.parameters);
+    if (scopeJson) parameters.push(scopeJson);
     const validMetadata = `CASE WHEN json_valid(${metadata}) THEN ${metadata} ELSE '{}' END`;
     return `SELECT '${kind}' AS entity_kind, ${id} AS entity_id,
       TRIM(CAST(genre_value.value AS TEXT)) AS name
@@ -75,7 +89,8 @@ export function computeLibraryGenreStats(db, { sourceFilter = null, availableOnl
       END) AS genre_value
       WHERE selected_genre.value IS NOT NULL
         AND TRIM(CAST(genre_value.value AS TEXT)) <> ''
-        AND ${media.sql}`;
+        AND ${media.sql}
+        ${scopeJson ? `AND ${scopeClause[kind]}` : ""}`;
   });
   return db.prepare(
     `WITH genre_entities AS (

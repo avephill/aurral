@@ -2461,7 +2461,14 @@ function LibraryPage() {
       { label: "Artists", value: stats?.artists, path: "/library/artists" },
       { label: "Albums", value: stats?.albums, path: "/library/albums" },
       { label: "Playable tracks", value: stats?.tracks, path: "/library/tracks" },
-      { label: "Genres", value: genreStats.length, path: "/library/genres", ready: true },
+      // Counted on the server like the others, for the person's own library;
+      // the client-side list is the fallback while home is still loading.
+      {
+        label: "Genres",
+        value: stats?.genres ?? genreStats.length,
+        path: "/library/genres",
+        ready: stats?.genres === undefined,
+      },
     ];
     return (
       <div className="native-library-stats">
