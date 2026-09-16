@@ -491,6 +491,55 @@ db.exec(`
     UNIQUE (owner, name)
   );
 
+  -- A playlist one person shares with another. Navidrome has no per-user
+  -- sharing - a playlist is private to its owner or public to everyone - so
+  -- the playlist is written a second time into the recipient's own account and
+  -- kept in step. They own their copy, so nobody else can see it.
+  CREATE TABLE IF NOT EXISTS playlist_shares (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    recipient TEXT NOT NULL,
+    source_playlist_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    mirror_playlist_id TEXT,
+    last_song_ids_json TEXT,
+    missing_count INTEGER NOT NULL DEFAULT 0,
+    last_synced_at INTEGER,
+    last_error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (source_playlist_id, recipient)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_playlist_shares_recipient
+    ON playlist_shares (recipient, updated_at DESC);
+
+  -- An album, song or playlist one person points another at, with a note.
+  -- A row with no recipient is meant for everyone.
+  CREATE TABLE IF NOT EXISTS recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender TEXT NOT NULL,
+    recipient TEXT,
+    kind TEXT NOT NULL,
+    target_id TEXT NOT NULL,
+    title TEXT,
+    subtitle TEXT,
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    read_at INTEGER,
+    dismissed_at INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_recommendations_for
+    ON recommendations (recipient, created_at DESC);
+
+  -- What each person lets the Social page show about their listening.
+  CREATE TABLE IF NOT EXISTS social_settings (
+    username TEXT PRIMARY KEY,
+    share_listening INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+  );
+
   -- A playlist's songs just before Psalter first replaced them, for undo.
   CREATE TABLE IF NOT EXISTS tag_playlist_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

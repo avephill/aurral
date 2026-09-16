@@ -40,6 +40,7 @@ import weeklyFlowRouter from "./routes/weeklyFlow/index.js";
 import navidromePlaylistsRouter from "./routes/navidromePlaylists.js";
 import navidromeRatingsRouter from "./routes/navidromeRatings.js";
 import songRecordsRouter from "./routes/songRecords.js";
+import socialRouter from "./routes/social.js";
 import { bootstrapHonkerSchedules } from "./services/honkerDb.js";
 import { initializeAppRuntime } from "./services/appRuntime.js";
 import {
@@ -238,6 +239,7 @@ app.use("/api/playlists", weeklyFlowRouter);
 app.use("/api/navidrome-playlists", navidromePlaylistsRouter);
 app.use("/api/navidrome-ratings", navidromeRatingsRouter);
 app.use("/api/song-records", songRecordsRouter);
+app.use("/api/social", socialRouter);
 app.use("/api/weekly-flow", (req, res) => {
   const parsed = new URL(req.originalUrl, "http://localhost");
   res.redirect(308, `/api/playlists${parsed.pathname}${parsed.search}`);
@@ -461,6 +463,9 @@ httpServer.listen(PORT, async () => {
       .then(({ runPendingRatingRestores }) => runPendingRatingRestores())
       .catch((error) => logger.warn("library", `[SongRecords] Rating restore failed: ${error.message}`));
   }, 120_000).unref?.();
+  import("./services/socialService.js")
+    .then(({ startSocialSync }) => startSocialSync())
+    .catch((error) => logger.warn("library", `[Social] Share sync did not start: ${error.message}`));
   // Act on Lidarr webhook events a restart left waiting, and retry any that
   // failed once they are due.
   import("./services/lidarrWebhookService.js")

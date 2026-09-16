@@ -13,6 +13,7 @@ import {
   Settings,
   Sparkles,
   Ticket,
+  Users,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useFlowWorkerActivity } from "../pages/flows/useFlowWorkerActivity";
@@ -260,6 +261,9 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
         adminOnly: true,
         permission: "accessFlow",
       },
+      // Everyone's page: playlists shared with you, recommendations, and what
+      // people have been playing.
+      { path: "/social", label: "Social", icon: Users },
       // What people have asked for and whether it has arrived. Admins act on
       // it, so only they see it; the same report is also under Settings.
       ...(user?.role === "admin"
