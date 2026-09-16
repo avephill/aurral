@@ -490,11 +490,52 @@ function GlobalSearch({ settingsMode = false }) {
     [loadSharedPlaylists, setPlaylistModalError, setSharedPlaylists, sharedPlaylists, showError, showSuccess],
   );
 
+  const addToMyLibrary = useCallback(async (item, mbid) => {
+    setPendingArtistIds((current) => ({ ...current, [mbid]: true }));
+    try {
+      const { addArtistToMyLibrary } = await import("../utils/api/endpoints/userLibrary.js");
+      await addArtistToMyLibrary(mbid);
+      updateSuggestionItem(item, { inUserLibrary: true });
+      showSuccess(`Added ${item.artistName || item.name || "that artist"} to your library`);
+    } catch (error) {
+      showError(error?.response?.data?.error || error?.message || "Could not add that to your library");
+    } finally {
+      setPendingArtistIds((current) => {
+        const next = { ...current };
+        delete next[mbid];
+        return next;
+      });
+    }
+  }, [showError, showSuccess, updateSuggestionItem]);
+
   const renderSuggestionAction = useCallback(
     (item) => {
       if (!item) return null;
-      if (isSuggestionInLibrary(item) && item.type !== "track") {
+      if (isSuggestionInLibrary(item) && item.inUserLibrary !== false && item.type !== "track") {
         return <SearchLibraryCheck />;
+      }
+
+      // On the server, but not in their own library. Personal libraries hold
+      // whole artists, so that is what the button adds - for an album it is
+      // the artist behind it.
+      if (item.inUserLibrary === false && bootstrap?.userLibrariesEnabled === true) {
+        const mbid = item.type === "artist"
+          ? (item.mbid || getArtistRecordId(item))
+          : (item.artistMbid || item.artist?.mbid);
+        if (mbid) {
+          return (
+            <AddActionButton
+              disabled={!!pendingArtistIds[mbid]}
+              isLoading={!!pendingArtistIds[mbid]}
+              label="Add to my library"
+              onClick={(event) => {
+                event.stopPropagation();
+                addToMyLibrary(item, mbid);
+              }}
+            />
+          );
+        }
+        return null;
       }
 
       if (item.type === "artist") {
@@ -554,6 +595,8 @@ function GlobalSearch({ settingsMode = false }) {
       return null;
     },
     [
+      addToMyLibrary,
+      bootstrap?.userLibrariesEnabled,
       canAddAlbum,
       canAddArtist,
       handleAlbumAction,

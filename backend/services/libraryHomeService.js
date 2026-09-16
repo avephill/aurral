@@ -30,17 +30,28 @@ const SHELF_SIZE = 24;
 
 const homes = new Map();
 let generation = 0;
-let stats = null;
+const statsByScope = new Map();
 
-function libraryStats() {
-  if (stats?.generation === generation) return stats.data;
-  const total = (options) => getCanonicalLibraryPage({ page: 1, pageSize: 1, ...options }).total;
+// Each tile counts what its own page shows: the person's own library, and
+// music that is actually on disk. Counting everything indexed put 37,823
+// albums on Avery's dad's home page when 2,889 are his.
+function libraryStats(artistIds) {
+  const key = `${generation}:${artistIds ? artistIds.join(",") : "all"}`;
+  const cached = statsByScope.get(key);
+  if (cached) return cached;
+  const total = (options) => getCanonicalLibraryPage({
+    page: 1,
+    pageSize: 1,
+    availableOnly: true,
+    artistIds,
+    ...options,
+  }).total;
   const data = {
     artists: total({ kind: "artists" }),
     albums: total({ kind: "albums" }),
-    tracks: total({ kind: "tracks", availableOnly: true }),
+    tracks: total({ kind: "tracks" }),
   };
-  stats = { data, generation };
+  statsByScope.set(key, data);
   return data;
 }
 
@@ -60,11 +71,16 @@ function topRatedFor(user) {
 }
 
 async function buildHome(user) {
-  const { scopeCanonicalArtistsToUser } = await import("./userLibraryService.js");
-  // The person's artists, or null when personal libraries are off and the
-  // whole library is everyone's.
-  const scoped = await scopeCanonicalArtistsToUser(user);
-  const artists = Array.isArray(scoped) ? scoped : await libraryManager.getAllArtists();
+  // What their own Navidrome library holds, or null when they have none of
+  // their own and the whole library is theirs. The same scope the library
+  // pages and search use, so home cannot disagree with them.
+  const { getCanonicalScope } = await import("./userLibraryScope.js");
+  const scope = await getCanonicalScope(user).catch(() => null);
+  const scopedIds = scope ? [...scope.artistIds] : null;
+  const allArtists = await libraryManager.getAllArtists();
+  const artists = scope
+    ? allArtists.filter((artist) => scope.artistIds.has(Number(artist.id)))
+    : allArtists;
   const addedAt = (artist) => new Date(artist.addedAt || artist.added || 0).getTime() || 0;
   return {
     recentAlbums: getCanonicalLibraryPage({
@@ -72,10 +88,11 @@ async function buildHome(user) {
       page: 1,
       pageSize: SHELF_SIZE,
       sort: "newest",
-      artistIds: Array.isArray(scoped) ? scoped.map((artist) => artist.id) : null,
+      availableOnly: true,
+      artistIds: scopedIds,
     }),
     recentArtists: [...artists].sort((left, right) => addedAt(right) - addedAt(left)).slice(0, SHELF_SIZE),
-    stats: libraryStats(),
+    stats: libraryStats(scopedIds),
     ...topRatedFor(user),
   };
 }
@@ -165,6 +182,6 @@ export async function settleLibraryHome() {
 
 export function resetLibraryHome() {
   homes.clear();
-  stats = null;
+  statsByScope.clear();
   generation = 0;
 }
