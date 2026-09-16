@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useAudioPlayerContext } from "react-use-audio-player";
-import { getFormatLoadAttempts, getHowlerFormat, normalizeQueueTrack } from "../utils/audioQueue";
+import { getFormatLoadAttempts, getHowlerFormat, normalizeQueueTrack, shouldRecordListen } from "../utils/audioQueue";
 import { AudioQueueContext } from "./audioQueueContext";
 import { recordPlayEvent } from "../utils/api/endpoints/auth";
 
@@ -150,6 +150,8 @@ const initialQueueState = {
   queueRevision: 0,
 };
 
+const PLAY_CHECK_INTERVAL_MS = 5000;
+
 export function AudioQueueProvider({ children }) {
   const player = useAudioPlayerContext();
   const playerRef = useRef(player);
@@ -164,6 +166,28 @@ export function AudioQueueProvider({ children }) {
   stateRef.current = state;
 
   const loadedSignatureRef = useRef(null);
+
+  // A listen is recorded once per load: the threshold effect below fires
+  // part-way through, and a track that ends without reaching it still counts.
+  const playbackTokenRef = useRef(0);
+  const recordedTokenRef = useRef(null);
+  const recordPlayOnce = useCallback((track) => {
+    if (!track?.recordHistory) return;
+    if (recordedTokenRef.current === playbackTokenRef.current) return;
+    recordedTokenRef.current = playbackTokenRef.current;
+    recordPlayEvent({
+      trackId: track.id,
+      title: track.title,
+      artist: track.artist,
+      album: track.album,
+      artistMbid: track.artistMbid,
+      albumMbid: track.albumMbid,
+      trackMbid: track.trackMbid,
+      durationMs: track.durationMs,
+      playedAt: Date.now(),
+      source: "native-player",
+    }).catch(() => {});
+  }, []);
 
   const loadTrackAtIndexRef = useRef(() => {});
 
@@ -184,6 +208,7 @@ export function AudioQueueProvider({ children }) {
     const signature = `${s.queueRevision}:${queueIndex}:${track.src}:${formatKey}`;
     if (loadedSignatureRef.current === signature) return;
     loadedSignatureRef.current = signature;
+    playbackTokenRef.current += 1;
 
     playerRef.current.stop();
     playerRef.current.load(track.src, {
@@ -206,20 +231,7 @@ export function AudioQueueProvider({ children }) {
       onend: () => {
         const cur = stateRef.current;
         if (cur.currentIndex < 0) return;
-        if (track.recordHistory) {
-          recordPlayEvent({
-            trackId: track.id,
-            title: track.title,
-            artist: track.artist,
-            album: track.album,
-            artistMbid: track.artistMbid,
-            albumMbid: track.albumMbid,
-            trackMbid: track.trackMbid,
-            durationMs: track.durationMs,
-            playedAt: Date.now(),
-            source: "native-player",
-          }).catch(() => {});
-        }
+        recordPlayOnce(track);
 
         if (cur.repeatMode === "one") {
           loadedSignatureRef.current = null;
@@ -245,7 +257,7 @@ export function AudioQueueProvider({ children }) {
         playerRef.current.stop();
       },
     });
-  }, []);
+  }, [recordPlayOnce]);
 
   loadTrackAtIndexRef.current = loadTrackAtIndex;
   useEffect(() => {
@@ -510,6 +522,21 @@ export function AudioQueueProvider({ children }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [playNext, playPrevious, togglePlayPause]);
+
+  // Half the track, or four minutes of a long one: the convention Navidrome and
+  // Last.fm use. A song skipped near its end still counts; one sampled for a
+  // few seconds does not.
+  useEffect(() => {
+    if (!player.isPlaying || !currentTrack?.recordHistory) return undefined;
+    const check = () => {
+      const heardSeconds = Number(playerRef.current.getPosition?.() ?? 0);
+      const totalSeconds = Number(playerRef.current.duration) || (Number(currentTrack.durationMs) || 0) / 1000;
+      if (shouldRecordListen({ heardSeconds, totalSeconds })) recordPlayOnce(currentTrack);
+    };
+    check();
+    const timer = setInterval(check, PLAY_CHECK_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [currentTrack, player.isPlaying, recordPlayOnce]);
 
   const value = useMemo(
     () => ({

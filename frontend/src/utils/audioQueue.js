@@ -130,3 +130,17 @@ export function isDownloadedLibraryAlbum(album, downloadStatuses = {}) {
     !!downloadStatuses[album?.id]
   );
 }
+
+// When a listen counts as a play: half the track, or four minutes of a long
+// one, which is the convention Navidrome and Last.fm follow. A track shorter
+// than half a minute only counts when it finishes, because half of it proves
+// nothing. Recording only at the end missed every song a person skips out of.
+export const PLAY_THRESHOLD_SECONDS = 240;
+export const MIN_TRACK_SECONDS_TO_RECORD = 30;
+
+export function shouldRecordListen({ heardSeconds, totalSeconds } = {}) {
+  const heard = Number(heardSeconds) || 0;
+  const total = Number(totalSeconds) || 0;
+  if (!total || total < MIN_TRACK_SECONDS_TO_RECORD) return false;
+  return heard >= Math.min(total / 2, PLAY_THRESHOLD_SECONDS);
+}
