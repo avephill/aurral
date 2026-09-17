@@ -14064,11 +14064,19 @@ button.native-library-genre-row:focus-visible {
   gap: 0.5rem;
 }
 
-.reload-prompt__text {
+.reload-prompt__title {
   margin: 0;
   color: var(--aurral-text);
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.reload-prompt__text {
+  margin: 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.45;
 }
 
 .reload-prompt__actions {
