@@ -17,6 +17,7 @@ import {
   ListFilter,
   Pause,
   Play,
+  Plus,
   Radio,
   RefreshCw,
   Search,
@@ -79,6 +80,7 @@ import { DeleteAlbumModal } from "./ArtistDetails/components/DeleteAlbumModal";
 import { DeleteArtistModal } from "./ArtistDetails/components/DeleteArtistModal";
 import { DeleteTrackModal } from "./ArtistDetails/components/DeleteTrackModal";
 import LibraryInfoModal from "./LibraryInfoModal";
+import { useUserLibrary } from "../hooks/useUserLibrary";
 import RecommendModal from "../components/RecommendModal";
 import {
   buildSharedPlaylistTrackPayload,
@@ -1494,6 +1496,17 @@ function LibraryPage() {
   );
   const libraryAlbum = routeAlbumId ? albumsById.get(String(routeAlbumId)) || null : null;
   const libraryArtist = routeArtistId ? artistsById.get(String(routeArtistId)) || null : null;
+  // Opening an album or artist by its id shows what the server holds, which is
+  // not the same as what this person's library holds. Membership is per artist,
+  // so that is what gets added.
+  const detailArtist = libraryAlbum ? getArtistForAlbum(libraryAlbum) : libraryArtist;
+  const detailArtistMbid = detailArtist?.mbid || "";
+  const personalLibrary = useUserLibrary(detailArtistMbid, {
+    onAdded: () =>
+      showSuccess(
+        `Added ${detailArtist?.name || "this artist"} to your library. Their records on the server are yours now.`,
+      ),
+  });
   const hasMissingAlbumTracks = Boolean(
     libraryAlbum && getAlbumTracks(libraryAlbum).some((track) => !firstAvailableFile(track)),
   );
@@ -2683,6 +2696,23 @@ function LibraryPage() {
                 label={libraryAlbum.title || "album"}
                 onClick={() => toggleFavorite("album", libraryAlbum)}
               />
+              {personalLibrary.enabled && detailArtistMbid ? (
+                personalLibrary.inMyLibrary ? (
+                  <span className="native-library-detail__in-library">
+                    <Library aria-hidden="true" /> In your library
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm native-library-detail__recommend"
+                    onClick={() => personalLibrary.add()}
+                    disabled={personalLibrary.pending}
+                    title={`Adds ${detailArtist?.name || "this artist"} and their records on the server to your library`}
+                  >
+                    <Plus aria-hidden="true" className="artist-icon-sm" /> Add to my library
+                  </button>
+                )
+              ) : null}
               <button
                 type="button"
                 className="btn btn-secondary btn-sm native-library-detail__recommend"
@@ -2830,6 +2860,23 @@ function LibraryPage() {
                 label={libraryArtist.name || "artist"}
                 onClick={() => toggleFavorite("artist", libraryArtist)}
               />
+              {personalLibrary.enabled && detailArtistMbid ? (
+                personalLibrary.inMyLibrary ? (
+                  <span className="native-library-detail__in-library">
+                    <Library aria-hidden="true" /> In your library
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm native-library-detail__recommend"
+                    onClick={() => personalLibrary.add()}
+                    disabled={personalLibrary.pending}
+                    title={`Adds ${libraryArtist.name || "this artist"} and their records on the server to your library`}
+                  >
+                    <Plus aria-hidden="true" className="artist-icon-sm" /> Add to my library
+                  </button>
+                )
+              ) : null}
               <LibraryItemMenu
                 label={libraryArtist.name || "Artist"}
                 items={[

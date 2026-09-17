@@ -16953,3 +16953,16 @@ button.native-library-genre-row:focus-visible {
   color: var(--aurral-text-muted);
   font-size: 0.75rem;
 }
+
+.native-library-detail__in-library {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.native-library-detail__in-library svg {
+  width: 0.9375rem;
+  height: 0.9375rem;
+}

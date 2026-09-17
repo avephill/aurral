@@ -18,7 +18,7 @@ const CATALOG_QUERY_KEY = ["user-library", "catalog"];
 const errorMessage = (error, fallback) =>
   error?.response?.data?.error || error?.message || fallback;
 
-export function useUserLibrary(mbid) {
+export function useUserLibrary(mbid, { onAdded } = {}) {
   const queryClient = useQueryClient();
   const { showError } = useToast();
 
@@ -33,7 +33,10 @@ export function useUserLibrary(mbid) {
 
   const addMutation = useMutation({
     mutationFn: () => addArtistToMyLibrary(mbid),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      onAdded?.();
+    },
     onError: (error) => showError(errorMessage(error, "Failed to add to your library")),
   });
 
