@@ -3455,11 +3455,6 @@ textarea {
   object-fit: cover;
 }
 
-.artist-video iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-}
 
 .artist-release-card__placeholder,
 .artist-media-placeholder {
@@ -3677,9 +3672,6 @@ textarea {
   }
 }
 
-.artist-track-row--preview {
-  grid-template-columns: 32px 40px minmax(0, 1fr) auto;
-}
 
 .artist-track-cell {
   position: relative;
@@ -3730,34 +3722,6 @@ textarea {
   text-transform: uppercase;
 }
 
-
-.artist-preview-layout {
-  display: grid;
-  width: 100%;
-  max-width: 92rem;
-  align-items: start;
-  gap: 1.5rem;
-}
-
-.artist-preview-list {
-  display: grid;
-  gap: 0.25rem;
-}
-
-.artist-video-wrap {
-  display: flex;
-  min-width: 0;
-  justify-content: center;
-}
-
-.artist-video {
-  aspect-ratio: 16 / 9;
-  width: 100%;
-  max-width: 560px;
-  overflow: hidden;
-  background: var(--aurral-surface-raised);
-  border-radius: var(--aurral-radius);
-}
 
 .artist-library-rail {
   display: flex;
@@ -4773,11 +4737,6 @@ textarea {
     width: 152px;
   }
 
-  .artist-video {
-    width: auto;
-    height: 260px;
-    max-width: 100%;
-  }
 }
 
 @media (min-width: 768px) {
@@ -4846,10 +4805,6 @@ textarea {
 
 @media (min-width: 1280px) {
 
-
-  .artist-preview-layout--with-video {
-    grid-template-columns: minmax(520px, 0.9fr) minmax(420px, 1.1fr);
-  }
 }
 
 /* Discover Page Components */

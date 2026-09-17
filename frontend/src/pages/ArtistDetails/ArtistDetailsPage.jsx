@@ -8,21 +8,9 @@ import {
   getSimilarArtistsForArtist,
   updateArtistOverrides,
 } from "../../utils/api/endpoints/artists.js";
-import {
-  addArtistToLibrary,
-  downloadTrackToLibrary,
-} from "../../utils/api/endpoints/library.js";
-import {
-  addSharedPlaylistTracks,
-  createSharedPlaylist,
-} from "../../utils/api/endpoints/playlists.js";
-import {
-  buildSharedPlaylistTrackPayload,
-  getCoverImage,
-  reserveUniquePlaylistName,
-} from "./utils";
+import { addArtistToLibrary } from "../../utils/api/endpoints/library.js";
+import { getCoverImage } from "./utils";
 import { useArtistTasteFeedback } from "../../hooks/useArtistTasteFeedback";
-import { useSharedPlaylists } from "../../hooks/useSharedPlaylists";
 
 import { useParams, useLocation } from "react-router-dom";
 import { useDiscoverNavigation } from "../../hooks/useDiscoverNavigation";
@@ -43,7 +31,6 @@ import { ArtistDetailsActionBar } from "./components/ArtistDetailsActionBar";
 import { ArtistDetailsLibraryAlbums } from "./components/ArtistDetailsLibraryAlbums";
 import { ArtistDetailsReleaseGroups } from "./components/ArtistDetailsReleaseGroups";
 import { ArtistDetailsAppearsOn } from "./components/ArtistDetailsAppearsOn";
-import { ArtistDetailsPreviewTracks } from "./components/ArtistDetailsPreviewTracks";
 import { ArtistDetailsAbout } from "./components/ArtistDetailsAbout";
 import { ArtistDetailsSimilar } from "./components/ArtistDetailsSimilar";
 import { DeleteArtistModal } from "./components/DeleteArtistModal";
@@ -75,16 +62,6 @@ function ArtistDetailsPage() {
     musicbrainzId: "",
     deezerArtistId: "",
   });
-  const {
-    sharedPlaylists,
-    setSharedPlaylists,
-    playlistsLoading: playlistModalLoading,
-    playlistsError: playlistModalError,
-    setPlaylistsError: setPlaylistModalError,
-    loadSharedPlaylists,
-  } = useSharedPlaylists();
-  const [playlistMenuSavingKey, setPlaylistMenuSavingKey] = useState("");
-  const [libraryTrackSavingKeys, setLibraryTrackSavingKeys] = useState(() => new Set());
   const [visibleReleaseGroupCoverIds, setVisibleReleaseGroupCoverIds] = useState([]);
   const [visibleAppearsOnCoverIds, setVisibleAppearsOnCoverIds] = useState([]);
   const [visibleLibraryCoverIds, setVisibleLibraryCoverIds] = useState([]);
@@ -102,10 +79,8 @@ function ArtistDetailsPage() {
     mutationFn: addArtistToLibrary,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.libraryCanonicalPrefix }),
   });
-  const downloadTrackMutation = useMutation({ mutationFn: downloadTrackToLibrary });
   const { mutateAsync: saveArtistOverrides } = saveArtistOverridesMutation;
   const { mutateAsync: addSimilarArtist } = addSimilarArtistMutation;
-  const { mutateAsync: downloadTrack } = downloadTrackMutation;
   const idsLoading = artistOverridesQuery.isFetching;
   const idsSaving = saveArtistOverridesMutation.isPending;
 
@@ -244,13 +219,9 @@ function ArtistDetailsPage() {
 
   const preview = usePreviewPlayer(mbid, artistNameFromNav, artist);
   const {
-    previewTracks,
-    loadingPreview,
     buildingQueue,
     setLoadingPreview,
-    playingPreviewId,
     isArtistPlaybackActive,
-    handlePreviewPlay,
     handlePreviewPlayAll,
     setPreviewTracks,
   } = preview;
@@ -343,125 +314,6 @@ function ArtistDetailsPage() {
     }
   };
 
-  const getDefaultTrackPlaylistName = (track) =>
-    reserveUniquePlaylistName(
-      sharedPlaylists,
-      `${artist?.name || artistNameFromNav || track?.artistName || "Artist"} Picks`,
-    );
-
-  const buildReleaseTrackPayload = (track, releaseGroup) => {
-    const year = String(releaseGroup?.["first-release-date"] || "").slice(0, 4);
-    return buildSharedPlaylistTrackPayload({
-      artistName: artist?.name || artistNameFromNav || "",
-      trackName: track?.trackName || track?.title || "",
-      albumName: releaseGroup?.title || "",
-      artistMbid: mbid || "",
-      albumMbid: releaseGroup?.id || "",
-      trackMbid: track?.mbid || track?.id || "",
-      releaseYear: year,
-      durationMs: track?.length,
-      reason: null,
-    });
-  };
-
-  const buildPreviewTrackPayload = (track) =>
-    buildSharedPlaylistTrackPayload({
-      artistName: artist?.name || artistNameFromNav || "",
-      trackName: track?.title || track?.trackName || "",
-      albumName: track?.album || "",
-      artistMbid: mbid || "",
-      albumMbid: "",
-      trackMbid: track?.mbid || track?.id || "",
-      releaseYear: null,
-      durationMs: track?.duration_ms,
-      reason: "Artist preview",
-    });
-
-  const saveTrackToPlaylist = async (trackPayload, target, savingKey) => {
-    if (!trackPayload?.artistName || !trackPayload?.trackName) {
-      showError("Track details are incomplete");
-      return;
-    }
-    setPlaylistModalError("");
-    setPlaylistMenuSavingKey(String(savingKey || ""));
-    try {
-      if (target?.mode === "new") {
-        const name =
-          String(target?.name || "").trim() ||
-          reserveUniquePlaylistName(sharedPlaylists, `${trackPayload.artistName} Picks`);
-        const response = await createSharedPlaylist({
-          name,
-          tracks: [trackPayload],
-        });
-        showSuccess(`Track saved to ${response?.playlist?.name || name}`);
-      } else {
-        const targetPlaylist = sharedPlaylists.find(
-          (playlist) => playlist.id === target?.playlistId,
-        );
-        await addSharedPlaylistTracks(target.playlistId, {
-          tracks: [trackPayload],
-        });
-        showSuccess(`Track added to ${targetPlaylist?.name || "playlist"}`);
-      }
-      const nextPlaylists = await loadSharedPlaylists();
-      if (nextPlaylists) {
-        setSharedPlaylists(nextPlaylists);
-      }
-    } catch (err) {
-      const message =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        err.message ||
-        "Failed to save track to playlist";
-      setPlaylistModalError(message);
-      showError(message);
-    } finally {
-      setPlaylistMenuSavingKey("");
-    }
-  };
-
-  const handlePreviewTrackAdd = (track, target) => {
-    const payload = buildPreviewTrackPayload(track);
-    const savingKey = String(track?.id ?? track?.title ?? "");
-    return saveTrackToPlaylist(payload, target, savingKey);
-  };
-
-  const handleTrackAddToLibrary = async (track, releaseGroup = null, trackKey = null) => {
-    const payload = releaseGroup
-      ? buildReleaseTrackPayload(track, releaseGroup)
-      : buildPreviewTrackPayload(track);
-    if (!payload?.artistName || !payload?.trackName) {
-      showError("Track details are incomplete");
-      return false;
-    }
-    const savingKey = String(trackKey ?? track?.id ?? track?.mbid ?? track?.title ?? "");
-    if (!savingKey) return false;
-    setLibraryTrackSavingKeys((current) => new Set(current).add(savingKey));
-    try {
-      const result = await downloadTrack(payload);
-      showSuccess(
-        result?.alreadyOwned
-          ? `${payload.trackName} is already in your library`
-          : result?.queued
-            ? `Queued ${payload.trackName} for your library`
-            : `Added ${payload.trackName} to your library`,
-      );
-    } catch (err) {
-      showError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          err.message ||
-          "Failed to add track to library",
-      );
-    } finally {
-      setLibraryTrackSavingKeys((current) => {
-        const next = new Set(current);
-        next.delete(savingKey);
-        return next;
-      });
-    }
-  };
-
   if (loading) {
     return (
       <div className="artist-loading">
@@ -519,31 +371,6 @@ function ArtistDetailsPage() {
         tasteActionPending={tasteActionPending}
         userLibrary={userLibrary}
       />
-
-      {/* "Popular" is a shop window for an artist you do not have yet. For one
-          already in the library it only gets in the way of the albums, so it
-          stays hidden, and it waits for the library check rather than flash. */}
-      {!existsInLibrary && !loadingLibrary ? (
-      <ArtistDetailsPreviewTracks
-        mbid={mbid}
-        artistName={artist?.name || artistNameFromNav || ""}
-        loadingPreview={loadingPreview}
-        previewTracks={previewTracks}
-        playingPreviewId={playingPreviewId}
-        isArtistPlaybackActive={isArtistPlaybackActive}
-        handlePreviewPlay={handlePreviewPlay}
-        onAddTrackToPlaylist={handlePreviewTrackAdd}
-        onAddTrackToLibrary={handleTrackAddToLibrary}
-        libraryTrackSavingKeys={libraryTrackSavingKeys}
-        resolveMembershipTrack={buildPreviewTrackPayload}
-        playlists={sharedPlaylists}
-        playlistsLoading={playlistModalLoading}
-        playlistSavingKey={playlistMenuSavingKey}
-        playlistError={playlistModalError}
-        getDefaultPlaylistName={getDefaultTrackPlaylistName}
-        onLoadPlaylists={loadSharedPlaylists}
-      />
-      ) : null}
 
       {existsInLibrary && libraryAlbums && libraryAlbums.length > 0 && (
         <ArtistDetailsLibraryAlbums
