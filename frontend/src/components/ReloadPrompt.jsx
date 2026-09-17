@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
+import { useAuth } from "../contexts/AuthContext";
 import { checkHealth } from "../utils/api/endpoints/auth.js";
 import {
   readDismissedUpdate,
@@ -8,6 +9,7 @@ import {
 } from "../utils/appUpdate.js";
 
 function ReloadPrompt() {
+  const { bootstrap } = useAuth();
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -41,6 +43,16 @@ function ReloadPrompt() {
     setNeedRefresh(false);
   };
 
+  // Taking the update is also an answer about this build: if the new worker
+  // fails to take over, asking again about the same one helps nobody.
+  const reload = () => {
+    rememberDismissedUpdate(globalThis.localStorage, waitingVersion);
+    updateServiceWorker(true);
+  };
+
+  // Someone being shown around the app is in the middle of something.
+  if (bootstrap?.walkthroughPending === true) return null;
+
   if (!shouldOfferUpdate({ needRefresh, waitingVersion, dismissedVersion })) {
     return null;
   }
@@ -57,7 +69,7 @@ function ReloadPrompt() {
           <button
             type="button"
             className="btn btn-primary btn-sm btn--grow"
-            onClick={() => updateServiceWorker(true)}
+            onClick={reload}
           >
             Reload
           </button>

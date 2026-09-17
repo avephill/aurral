@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { completeWalkthrough } from "../utils/api/endpoints/auth.js";
+import { placeWalkthroughCard } from "../utils/walkthroughPlacement.js";
 import "./walkthrough.css";
 
 // A short look around on someone's first visit: where their music is, how to
@@ -11,7 +12,7 @@ import "./walkthrough.css";
 const STEPS = [
   {
     title: "Welcome to Psalter",
-    body: "Your music, your ratings and your playlists, in one place. Here is the quick tour - about a minute.",
+    body: "This is where you listen to your music, rate it, and add more of it. The tour takes about a minute.",
     path: "/library",
   },
   {
@@ -39,13 +40,13 @@ const STEPS = [
   },
   {
     title: "Adding music",
-    body: "Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for it, and when it arrives it goes into your library too.",
+    body: "Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for it, and when it arrives it goes into your library too. Once an artist is in your library, anything of theirs that reaches the server later joins it on its own.",
     path: "/discover",
     anchor: '[data-tour="discover"]',
   },
   {
     title: "Discover",
-    body: "Somewhere to find records worth asking for - new releases, things like what you already play.",
+    body: "Somewhere to find records worth asking for - new releases, things like what you already play, and what has just been added to the server.",
     path: "/discover",
     anchor: '[data-tour="discover"]',
   },
@@ -63,6 +64,8 @@ export default function Walkthrough() {
   const [step, setStep] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [spotlight, setSpotlight] = useState(null);
+  const [cardAt, setCardAt] = useState(null);
+  const cardRef = useRef(null);
 
   const pending = isAuthenticated && bootstrap?.walkthroughPending === true && !dismissed;
   const current = STEPS[step];
@@ -74,24 +77,45 @@ export default function Walkthrough() {
     navigate(current.path);
   }, [current?.path, navigate, pending]);
 
-  // Put a ring around whatever the step names, wherever it has ended up.
+  // Put a ring around whatever the step names, wherever it has ended up, and
+  // stand the card beside it rather than always in the same corner.
   useEffect(() => {
     if (!pending) return undefined;
     const place = () => {
       const target = current?.anchor ? document.querySelector(current.anchor) : null;
       if (!target) {
         setSpotlight(null);
+        setCardAt(null);
         return;
       }
       const rect = target.getBoundingClientRect();
-      setSpotlight({ top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+      const box = { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+      setSpotlight(box);
+      // On a phone the card is a bar across the bottom and there is nowhere
+      // else for it to go, so leave it where the stylesheet puts it.
+      if (window.innerWidth <= 640) {
+        setCardAt(null);
+        return;
+      }
+      const card = cardRef.current?.getBoundingClientRect();
+      setCardAt(
+        placeWalkthroughCard({
+          target: box,
+          card: { width: card?.width || 0, height: card?.height || 0 },
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+        }),
+      );
     };
     place();
+    // The page behind the tour is still arriving on the step that navigated,
+    // so measure again once it has settled.
     const timer = setTimeout(place, 250);
     window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
     return () => {
       clearTimeout(timer);
       window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
     };
   }, [current?.anchor, pending, step]);
 
@@ -131,7 +155,11 @@ export default function Walkthrough() {
           }}
         />
       ) : null}
-      <div className="walkthrough__card">
+      <div
+        className="walkthrough__card"
+        ref={cardRef}
+        style={cardAt ? { top: `${cardAt.top}px`, left: `${cardAt.left}px`, right: "auto", bottom: "auto" } : undefined}
+      >
         <p className="walkthrough__count">{step + 1} of {STEPS.length}</p>
         <h2 className="walkthrough__title" id="walkthrough-title">{current.title}</h2>
         <p className="walkthrough__body">{current.body}</p>
