@@ -10,13 +10,13 @@
 .walkthrough__veil {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .walkthrough__spotlight {
   position: fixed;
   border-radius: var(--aurral-radius-sm);
-  box-shadow: 0 0 0 3px var(--aurral-accent, #4f6bed), 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 3px var(--aurral-accent, #4f6bed), 0 0 0 9999px rgba(0, 0, 0, 0.18);
   pointer-events: none;
   transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease;
 }

@@ -42,3 +42,19 @@ test("an admin can hand it back", () => {
   dbOps.setUserWalkthrough(dad.id, null);
   assert.equal(dbOps.getUserWalkthrough(dad.id), null);
 });
+
+// Asking for a record is asking for it in your own library. Personal
+// libraries are subsets of the server's, so without this the album arrives
+// where the person who wanted it cannot see it.
+test("a requested album puts its artist in the requester's library", async () => {
+  const albums = await import("../../backend/routes/library/handlers/albums.js");
+  const source = await (await import("node:fs/promises"))
+    .readFile(new URL("../../backend/routes/library/handlers/albums.js", import.meta.url), "utf8");
+  assert.match(source, /addRequestedAlbumToPersonalLibrary\(req\.user, album\)/,
+    "the request handler hands the album to the personal library");
+  assert.match(source, /setUserLibraryMembership\(user, mbid, true\)/,
+    "and membership is written for that artist");
+  assert.match(source, /if \(!getUserLibrariesSettings\(\)\.enabled\) return;/,
+    "quiet when personal libraries are off");
+  assert.equal(typeof albums.registerAlbums, "function");
+});

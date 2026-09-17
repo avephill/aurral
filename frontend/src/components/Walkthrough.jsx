@@ -16,7 +16,13 @@ const STEPS = [
   },
   {
     title: "Your library",
-    body: "Everything you own, by artist, album or song. The stars you gave songs in iTunes came across with them.",
+    body: "Everything in your library, by artist, album or song. The stars you gave songs in iTunes came across with them.",
+    path: "/library",
+    anchor: '[data-tour="library"]',
+  },
+  {
+    title: "Yours, and the server's",
+    body: "The server holds more music than your library does - other people's records live there too. Yours is the part you have picked out, and it is what you see by default.",
     path: "/library",
     anchor: '[data-tour="library"]',
   },
@@ -32,8 +38,14 @@ const STEPS = [
     anchor: '[data-tour="library"]',
   },
   {
+    title: "Adding music",
+    body: "Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for it, and when it arrives it goes into your library too.",
+    path: "/discover",
+    anchor: '[data-tour="discover"]',
+  },
+  {
     title: "Discover",
-    body: "Music you do not have yet. Ask for an album here and it goes on a list for Avery, who can go and find it.",
+    body: "Somewhere to find records worth asking for - new releases, things like what you already play.",
     path: "/discover",
     anchor: '[data-tour="discover"]',
   },

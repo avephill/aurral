@@ -12,6 +12,23 @@ import {
   getCanonicalLibraryReadModelForArtistReferences,
 } from "../../../services/canonicalLibraryReadAdapter.js";
 
+/**
+ * Put the artist behind a requested album into that person's own library, so
+ * the record they asked for reaches them when it arrives. Quiet when personal
+ * libraries are off, or when the person already has the artist.
+ */
+async function addRequestedAlbumToPersonalLibrary(user, album) {
+  if (!user?.username) return;
+  const { getUserLibrariesSettings, setUserLibraryMembership } = await import(
+    "../../../services/userLibraryService.js"
+  );
+  if (!getUserLibrariesSettings().enabled) return;
+  const artist = await libraryManager.getArtistById(album?.artistId).catch(() => null);
+  const mbid = String(artist?.foreignArtistId || artist?.mbid || "").trim();
+  if (!mbid) return;
+  await setUserLibraryMembership(user, mbid, true);
+}
+
 export function registerAlbums(router) {
   router.get("/albums", cacheMiddleware(5), async (req, res) => {
     try {
@@ -119,6 +136,17 @@ export function registerAlbums(router) {
           artistMbid: album.mbid || album.foreignAlbumId,
           searching: searchOnAdd,
           user: req.user,
+        });
+        // Asking for a record is asking for it in your own library: the copy
+        // arrives on the server, and a personal library is a subset of that,
+        // so without this it would land where the person who wanted it cannot
+        // see it. Membership is held per artist, which is how the symlinks
+        // work, so their other records come too.
+        addRequestedAlbumToPersonalLibrary(req.user, album).catch((error) => {
+          logger.warn(
+            "library",
+            `[UserLibraries] Could not add ${album.artistName} to ${req.user?.username}'s library: ${error.message}`,
+          );
         });
         return res.status(201).json({ ...album, queued: false });
       } catch (error) {
