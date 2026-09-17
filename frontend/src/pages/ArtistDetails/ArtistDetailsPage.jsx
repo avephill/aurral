@@ -40,7 +40,6 @@ import { useArtistSearchFocus } from "./hooks/useArtistSearchFocus";
 import { ARTIST_DETAILS_APPEARS_ON_LIMIT, allReleaseTypes } from "./constants";
 import { ArtistDetailsHero } from "./components/ArtistDetailsHero";
 import { ArtistDetailsActionBar } from "./components/ArtistDetailsActionBar";
-import { ArtistDetailsDownloadTargets } from "./components/ArtistDetailsDownloadTargets";
 import { ArtistDetailsLibraryAlbums } from "./components/ArtistDetailsLibraryAlbums";
 import { ArtistDetailsReleaseGroups } from "./components/ArtistDetailsReleaseGroups";
 import { ArtistDetailsAppearsOn } from "./components/ArtistDetailsAppearsOn";
@@ -421,12 +420,6 @@ function ArtistDetailsPage() {
     }
   };
 
-  const handleReleaseTrackAdd = (track, releaseGroup, target) => {
-    const payload = buildReleaseTrackPayload(track, releaseGroup);
-    const savingKey = String(track?.id ?? track?.mbid ?? "");
-    return saveTrackToPlaylist(payload, target, savingKey);
-  };
-
   const handlePreviewTrackAdd = (track, target) => {
     const payload = buildPreviewTrackPayload(track);
     const savingKey = String(track?.id ?? track?.title ?? "");
@@ -500,12 +493,6 @@ function ArtistDetailsPage() {
   }
 
   const artistCoverImage = getCoverImage(coverImages);
-  const playbackSource = {
-    type: "artist",
-    id: mbid,
-    label: artistDisplayName,
-  };
-
   return (
     <div className="artist-details-page">
       <ArtistDetailsHero
@@ -549,35 +536,6 @@ function ArtistDetailsPage() {
         onAddTrackToLibrary={handleTrackAddToLibrary}
         libraryTrackSavingKeys={libraryTrackSavingKeys}
         resolveMembershipTrack={buildPreviewTrackPayload}
-        playlists={sharedPlaylists}
-        playlistsLoading={playlistModalLoading}
-        playlistSavingKey={playlistMenuSavingKey}
-        playlistError={playlistModalError}
-        getDefaultPlaylistName={getDefaultTrackPlaylistName}
-        onLoadPlaylists={loadSharedPlaylists}
-      />
-      ) : null}
-
-      {/* Picking which record to fetch is for an artist the server does not
-          have. Once the artist is in the library it sits above their own
-          albums offering a record they did not ask for. */}
-      {!existsInLibrary && !loadingLibrary ? (
-      <ArtistDetailsDownloadTargets
-        releaseGroups={artist?.["release-groups"] || []}
-        getAlbumStatus={library.getAlbumStatus}
-        artist={artist}
-        albumCovers={albumCovers}
-        fulfilledCoverIds={fulfilledCoverIds}
-        artistCoverImage={artistCoverImage}
-        canAddAlbum={canAddAlbum}
-        requestingAlbum={library.requestingAlbum}
-        handleRequestAlbum={library.handleRequestAlbum}
-        playbackSource={playbackSource}
-        artistName={artistDisplayName}
-        onAddTrackToPlaylist={handleReleaseTrackAdd}
-        onAddTrackToLibrary={handleTrackAddToLibrary}
-        libraryTrackSavingKeys={libraryTrackSavingKeys}
-        resolveMembershipTrack={buildReleaseTrackPayload}
         playlists={sharedPlaylists}
         playlistsLoading={playlistModalLoading}
         playlistSavingKey={playlistMenuSavingKey}

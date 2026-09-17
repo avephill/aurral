@@ -337,41 +337,6 @@ export const getReleaseMetric = (releaseGroup) => {
   };
 };
 
-export const sortReleaseGroupsByPopularity = (releaseGroups = []) =>
-  [...releaseGroups].sort((a, b) => getReleaseMetric(b).sortValue - getReleaseMetric(a).sortValue);
-
-export const getPopularReleaseGroups = (releaseGroups = [], limit = 6) =>
-  sortReleaseGroupsByPopularity(releaseGroups).slice(0, limit);
-
-export const isOwnedReleaseGroup = (getAlbumStatus, releaseGroupId) => {
-  const status = getAlbumStatus?.(releaseGroupId);
-  return status?.status === "available" || status?.status === "added";
-};
-
-export const buildAurralPick = ({ releaseGroups = [], getAlbumStatus } = {}) => {
-  const releaseGroup = sortReleaseGroupsByPopularity(releaseGroups).find(
-    (item) => item?.id && !isOwnedReleaseGroup(getAlbumStatus, item.id),
-  );
-  if (!releaseGroup) return null;
-  const metric = getReleaseMetric(releaseGroup);
-  return {
-    id: releaseGroup.id,
-    source: "release",
-    releaseGroupId: releaseGroup.id,
-    title: releaseGroup.title || "Untitled release",
-    year: getReleaseYear(releaseGroup),
-    type: releaseGroup["primary-type"] || "Release",
-    releaseGroup,
-    libraryAlbum: null,
-    downloadStatus: null,
-    status: "missing",
-    statusLabel: "Missing",
-    reason: "Popular missing release",
-    metric,
-    reasonLabel: "Popular missing release",
-  };
-};
-
 export const encodeLastfmPathSegment = (value) =>
   encodeURIComponent(String(value || "").trim())
     .replace(/%20/g, "+")
