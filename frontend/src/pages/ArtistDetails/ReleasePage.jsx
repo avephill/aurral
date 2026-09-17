@@ -19,12 +19,13 @@ import { useSharedPlaylists } from "../../hooks/useSharedPlaylists";
 import { useWebSocketChannel } from "../../hooks/useWebSocket";
 
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { CornerUpLeft, ExternalLink, Library, Music } from "lucide-react";
+import { CornerUpLeft, ExternalLink, Library, Music, Send } from "lucide-react";
 import AddActionButton from "../../components/AddActionButton";
 import { useAuth } from "../../contexts/AuthContext";
 import { useToast } from "../../contexts/ToastContext";
 import { useDocumentTitle } from "../../hooks/useDocumentTitle";
 import { ArtistDetailsReleaseTrackList } from "./components/ArtistDetailsReleaseTrackList";
+import RecommendModal from "../../components/RecommendModal";
 import { extractTwoToneGradientFromImage } from "../../utils/imageColors";
 import { withImageCacheBust } from "../../utils/normalizeMediaUrl.js";
 import { queryClient, queryKeys } from "../../queryClient.js";
@@ -252,6 +253,7 @@ function ReleasePage() {
   ]
     .filter(Boolean)
     .join(" · ");
+  const [recommending, setRecommending] = useState(null);
   const libraryPath = libraryInfo?.canonicalAlbumId
     ? `/library/album/${encodeURIComponent(libraryInfo.canonicalAlbumId)}`
     : `/library/albums?query=${encodeURIComponent(releaseTitle)}`;
@@ -601,6 +603,23 @@ function ReleasePage() {
                 <span>{libraryDisplay.label}</span>
               </span>
             ) : null}
+            {libraryInfo?.canonicalAlbumId ? (
+              <button
+                type="button"
+                className="btn btn-surface btn-sm release-page__external-link"
+                onClick={() =>
+                  setRecommending({
+                    kind: "album",
+                    id: libraryInfo.canonicalAlbumId,
+                    title: releaseTitle || "This album",
+                    subtitle: artistName || "",
+                  })
+                }
+              >
+                <Send className="artist-icon-sm" />
+                Recommend
+              </button>
+            ) : null}
             {canAddAlbum && !isComplete ? (
               <AddActionButton
                 onClick={handleAlbumAction}
@@ -639,6 +658,16 @@ function ReleasePage() {
           }}
           onAddTrackToPlaylist={handleReleaseTrackAdd}
           onAddTrackToLibrary={handleReleaseTrackAddToLibrary}
+          onRecommendTrack={(track, canonical) =>
+            canonical?.trackId
+              ? setRecommending({
+                  kind: "track",
+                  id: canonical.trackId,
+                  title: track?.title || track?.trackName || "This song",
+                  subtitle: artistName || "",
+                })
+              : null
+          }
           libraryTrackSavingKey={libraryTrackSavingKey}
           ownedTrackMbids={libraryInfo?.ownedTrackMbids}
           ownedTracks={libraryInfo?.ownedTracks}
@@ -652,6 +681,7 @@ function ReleasePage() {
           highlightTrackId={focusTrackMbid}
         />
       </div>
+      <RecommendModal target={recommending} onClose={() => setRecommending(null)} />
     </div>
   );
 }

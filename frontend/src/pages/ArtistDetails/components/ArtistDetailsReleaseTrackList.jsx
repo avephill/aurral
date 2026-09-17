@@ -21,6 +21,7 @@ export function ArtistDetailsReleaseTrackList({
   playbackSource = null,
   onAddTrackToPlaylist,
   onAddTrackToLibrary,
+  onRecommendTrack,
   libraryTrackSavingKey,
   ownedTrackMbids = [],
   ownedTracks = [],
@@ -235,6 +236,13 @@ export function ArtistDetailsReleaseTrackList({
                       onAddToLibrary={
                         onAddTrackToLibrary && !isOwned
                           ? () => onAddTrackToLibrary(track, release)
+                          : null
+                      }
+                      onRecommend={
+                        // Only a song the server actually holds can be
+                        // recommended: a recommendation points at a library row.
+                        onRecommendTrack && isOwned
+                          ? () => onRecommendTrack(track, canonicalRefFor(track, index))
                           : null
                       }
                       onSelect={(target) => onAddTrackToPlaylist(track, release, target)}

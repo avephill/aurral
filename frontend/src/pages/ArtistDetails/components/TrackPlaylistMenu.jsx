@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { ChevronRight, MoreHorizontal, Plus, Trash2 } from "lucide-react";
+import { ChevronRight, MoreHorizontal, Plus, Send, Trash2 } from "lucide-react";
 import AddActionButton from "../../../components/AddActionButton";
 import { DotLoader } from "../../../components/DotLoader";
 import SearchLibraryCheck from "../../../components/SearchLibraryCheck";
@@ -310,6 +310,7 @@ export const TrackPlaylistMenu = forwardRef(function TrackPlaylistMenu(
     triggerVariant = "expand",
     icon: TriggerIcon = Plus,
     onAddToLibrary,
+    onRecommend,
     librarySaving = false,
     onLoadPlaylists,
     onSelect,
@@ -465,6 +466,22 @@ export const TrackPlaylistMenu = forwardRef(function TrackPlaylistMenu(
                   isOpen={openSubmenu}
                   onToggle={() => setOpenSubmenu((current) => !current)}
                 />
+              ) : null}
+              {onRecommend ? (
+                <button
+                  type="button"
+                  className="artist-menu-item"
+                  onClick={() => {
+                    onRecommend(track);
+                    closeMenu();
+                  }}
+                  disabled={disabled}
+                >
+                  <span className="artist-menu-item__main">
+                    <Send className="artist-icon-sm" />
+                    Recommend to...
+                  </span>
+                </button>
               ) : null}
               {onAddToLibrary ? (
                 <button
