@@ -533,6 +533,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_recommendations_for
     ON recommendations (recipient, created_at DESC);
 
+  -- Read and hidden are per person, not per row: one recommendation with no
+  -- recipient is one row seen by everybody, so keeping the state on it meant
+  -- whoever opened the page first marked it read, and hid it, for the rest.
+  CREATE TABLE IF NOT EXISTS recommendation_states (
+    recommendation_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    read_at INTEGER,
+    dismissed_at INTEGER,
+    PRIMARY KEY (recommendation_id, username),
+    FOREIGN KEY (recommendation_id) REFERENCES recommendations (id) ON DELETE CASCADE
+  );
+
   -- What each person lets the Social page show about their listening.
   CREATE TABLE IF NOT EXISTS social_settings (
     username TEXT PRIMARY KEY,

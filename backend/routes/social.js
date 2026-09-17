@@ -15,6 +15,7 @@ import {
   setShareListening,
   sharePlaylist,
   syncShare,
+  withdrawRecommendation,
 } from "../services/socialService.js";
 import { db } from "../config/db-sqlite.js";
 
@@ -107,6 +108,14 @@ router.post("/recommendations", (req, res) => {
 
 router.post("/recommendations/read", (req, res) => {
   res.json({ marked: markRecommendationsRead(me(req)) });
+});
+
+router.delete("/recommendations/:id", (req, res) => {
+  try {
+    res.json(withdrawRecommendation({ id: req.params.id, requester: me(req) }));
+  } catch (error) {
+    fail(res, error, "Could not take that back");
+  }
 });
 
 router.post("/recommendations/:id/dismiss", (req, res) => {

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Disc3, RefreshCw, Send, X } from "lucide-react";
+import { Disc3, Plus, RefreshCw, Send, X } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import PeoplePicker from "../components/PeoplePicker";
 import { describeRecommendationFrom } from "../utils/audience.js";
+import { useUserLibrary } from "../hooks/useUserLibrary";
+import { addArtistToMyLibrary } from "../utils/api/endpoints/userLibrary.js";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -20,6 +22,7 @@ import {
   sharePlaylistWith,
   stopSharing,
   syncShare,
+  withdrawRecommendation,
 } from "../utils/api/endpoints/social.js";
 import "./social.css";
 
@@ -38,6 +41,56 @@ const KINDS = [
   { id: "album", label: "Album" },
   { id: "track", label: "Song" },
 ];
+
+function RecommendationCard({ entry, me, action, onAddArtist, addingArtist, inMyLibrary }) {
+  const art = entry.coverUrl ? (
+    <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" />
+  ) : (
+    <span className="social__pick-blank" aria-hidden="true"><Disc3 /></span>
+  );
+  const href = entry.albumId ? `/library/album/${encodeURIComponent(entry.albumId)}` : null;
+  const name = entry.title || `${entry.kind} ${entry.targetId}`;
+  return (
+    <li className="social__pick">
+      <div className="social__pick-art">
+        {href ? <Link to={href}>{art}</Link> : art}
+        {action ? (
+          <button
+            type="button"
+            className="social__pick-hide"
+            aria-label={action.label}
+            title={action.label}
+            onClick={action.onClick}
+          >
+            <X aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+      <div className="social__pick-kind">{entry.kind === "album" ? "Album" : "Song"}</div>
+      <div className="social__pick-title">{href ? <Link to={href}>{name}</Link> : name}</div>
+      {entry.subtitle ? <div className="social__muted">{entry.subtitle}</div> : null}
+      <div className="social__pick-from">
+        {describeRecommendationFrom(entry, me)} · {when(entry.createdAt)}
+      </div>
+      {entry.note ? <p className="social__note">“{entry.note}”</p> : null}
+      {onAddArtist && entry.artistMbid ? (
+        inMyLibrary ? (
+          <p className="social__pick-held">In your library</p>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-secondary btn-xs social__pick-add"
+            onClick={() => onAddArtist(entry)}
+            disabled={addingArtist}
+            title={`Adds ${entry.subtitle || "this artist"} and their records on the server to your library`}
+          >
+            <Plus aria-hidden="true" className="social__icon" /> Add to my library
+          </button>
+        )
+      ) : null}
+    </li>
+  );
+}
 
 function RecommendForm({ people, onSent }) {
   const { showError, showSuccess } = useToast();
@@ -203,7 +256,7 @@ export default function SocialPage() {
   useDocumentTitle("Social");
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const [showHighlights, setShowHighlights] = useState(false);
 
   const overview = useQuery({
@@ -232,6 +285,36 @@ export default function SocialPage() {
     onSuccess: refresh,
     onError: (error) => showError(errorText(error, "Could not hide that")),
   });
+  const withdraw = useMutation({
+    mutationFn: (id) => withdrawRecommendation(id),
+    onSuccess: () => {
+      showSuccess("Taken back");
+      refresh();
+    },
+    onError: (error) => showError(errorText(error, "Could not take that back")),
+  });
+
+  // Someone pointed at a record whose artist this person may not hold, so the
+  // card offers the same way in that the album page has.
+  const personalLibrary = useUserLibrary("");
+  const heldArtistMbids = useMemo(
+    () => new Set((personalLibrary.artists || []).map((artist) => artist.mbid)),
+    [personalLibrary.artists],
+  );
+  const [addingArtistMbid, setAddingArtistMbid] = useState("");
+  const addArtist = async (entry) => {
+    if (!entry?.artistMbid || addingArtistMbid) return;
+    setAddingArtistMbid(entry.artistMbid);
+    try {
+      await addArtistToMyLibrary(entry.artistMbid);
+      showSuccess(`Added ${entry.subtitle || "the artist"} to your library`);
+      queryClient.invalidateQueries({ queryKey: ["user-library"] });
+    } catch (error) {
+      showError(errorText(error, "Could not add that to your library"));
+    } finally {
+      setAddingArtistMbid("");
+    }
+  };
   const resync = useMutation({
     mutationFn: (id) => syncShare(id),
     onSuccess: refresh,
@@ -251,6 +334,7 @@ export default function SocialPage() {
   const data = overview.data;
   const people = useMemo(() => data?.people || [], [data]);
   const inbox = data?.recommendations?.inbox || [];
+  const mySent = data?.recommendations?.sent || [];
   const received = data?.shares?.received || [];
   const sent = data?.shares?.sent || [];
 
@@ -311,52 +395,38 @@ export default function SocialPage() {
         ) : (
           <ul className="social__shelf">
             {inbox.map((entry) => (
-              <li key={entry.id} className="social__pick">
-                <div className="social__pick-art">
-                  {entry.albumId ? (
-                    <Link to={`/library/album/${encodeURIComponent(entry.albumId)}`}>
-                      {entry.coverUrl ? (
-                        <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" />
-                      ) : (
-                        <span className="social__pick-blank" aria-hidden="true">
-                          <Disc3 />
-                        </span>
-                      )}
-                    </Link>
-                  ) : entry.coverUrl ? (
-                    <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" />
-                  ) : (
-                    <span className="social__pick-blank" aria-hidden="true">
-                      <Disc3 />
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    className="social__pick-hide"
-                    aria-label="Hide this recommendation"
-                    onClick={() => dismiss.mutate(entry.id)}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="social__pick-title">
-                  {entry.albumId ? (
-                    <Link to={`/library/album/${encodeURIComponent(entry.albumId)}`}>
-                      {entry.title || `${entry.kind} ${entry.targetId}`}
-                    </Link>
-                  ) : (
-                    entry.title || `${entry.kind} ${entry.targetId}`
-                  )}
-                </div>
-                {entry.subtitle ? <div className="social__muted">{entry.subtitle}</div> : null}
-                <div className="social__pick-from">
-                  {describeRecommendationFrom(entry, data?.me)} · {when(entry.createdAt)}
-                </div>
-                {entry.note ? <p className="social__note">“{entry.note}”</p> : null}
-              </li>
+              <RecommendationCard
+                key={entry.id}
+                entry={entry}
+                me={data?.me}
+                action={{ label: "Hide this from your page", onClick: () => dismiss.mutate(entry.id) }}
+                onAddArtist={personalLibrary.enabled ? addArtist : null}
+                addingArtist={addingArtistMbid === entry.artistMbid}
+                inMyLibrary={heldArtistMbids.has(entry.artistMbid)}
+              />
             ))}
           </ul>
         )}
+
+        {mySent.length ? (
+          <>
+            <h3>You recommended</h3>
+            <ul className="social__shelf">
+              {mySent.map((entry) => (
+                <RecommendationCard
+                  key={entry.id}
+                  entry={entry}
+                  me={data?.me}
+                  action={{
+                    label: "Take this back",
+                    onClick: () => withdraw.mutate(entry.id),
+                  }}
+                />
+              ))}
+            </ul>
+          </>
+        ) : null}
+
         <h3>Recommend something</h3>
         <RecommendForm people={people} onSent={refresh} />
       </section>

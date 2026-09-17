@@ -84,3 +84,19 @@ test("recommendations arrive with artwork and somewhere to go", () => {
   assert.match(socialPage, /social__shelf/);
   assert.match(socialPage, /\/library\/album\/\$\{encodeURIComponent\(entry\.albumId\)\}/);
 });
+
+test("both shelves are the same card, so a recommendation looks the same either way", () => {
+  assert.equal(socialPage.match(/<RecommendationCard/g)?.length, 2, "received and sent");
+  assert.match(socialPage, /You recommended/);
+  assert.match(socialPage, /label: "Take this back"/);
+  assert.match(socialPage, /label: "Hide this from your page"/);
+});
+
+test("a card says whether it is an album or a song", () => {
+  assert.match(socialPage, /entry\.kind === "album" \? "Album" : "Song"/);
+});
+
+test("a recommendation offers the library the album page offers", () => {
+  assert.match(socialPage, /addArtistToMyLibrary\(entry\.artistMbid\)/);
+  assert.match(socialPage, /heldArtistMbids\.has\(entry\.artistMbid\)/);
+});

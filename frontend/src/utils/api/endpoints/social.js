@@ -26,4 +26,7 @@ export const markRecommendationsRead = () => postData("/social/recommendations/r
 export const dismissRecommendation = (id) =>
   postData(`/social/recommendations/${encodeURIComponent(id)}/dismiss`, {});
 
+export const withdrawRecommendation = (id) =>
+  deleteData(`/social/recommendations/${encodeURIComponent(id)}`);
+
 export const setShareListening = (shareListening) => putData("/social/settings", { shareListening });

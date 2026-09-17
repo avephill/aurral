@@ -222,3 +222,73 @@ test("listening is shown unless a person turns it off", () => {
   assert.equal(social.getSocialSettings("dunshill").shareListening, false);
   assert.equal(social.setShareListening("dunshill", true).shareListening, true);
 });
+
+// A recommendation with no recipient is one row read by several people, so read
+// and hidden have to be recorded per person rather than on the row.
+
+test("one person reading a broadcast does not read it for everybody", () => {
+  social.createRecommendation({ sender: "avery", kind: "track", targetId: trackIds.shared, note: "for everyone" });
+
+  assert.equal(social.listRecommendationsFor("dunshill").unread >= 1, true);
+  assert.equal(social.listRecommendationsFor("kitty").unread >= 1, true);
+
+  social.markRecommendationsRead("dunshill");
+  assert.equal(social.listRecommendationsFor("dunshill").unread, 0, "read for the one who looked");
+  assert.equal(social.listRecommendationsFor("kitty").unread >= 1, true, "still waiting for the one who did not");
+});
+
+test("one person hiding a broadcast does not hide it for everybody", () => {
+  const before = social.listRecommendationsFor("kitty").inbox.length;
+  const entry = social.listRecommendationsFor("dunshill").inbox[0];
+  social.dismissRecommendation({ id: entry.id, requester: "dunshill" });
+
+  assert.equal(
+    social.listRecommendationsFor("dunshill").inbox.some((row) => row.id === entry.id),
+    false,
+    "gone from theirs",
+  );
+  assert.equal(social.listRecommendationsFor("kitty").inbox.length, before, "still on everyone else's");
+});
+
+test("saying it again replaces saying it once", () => {
+  social.createRecommendation({
+    sender: "avery", kind: "track", targetId: trackIds.outside, note: "first thought", recipients: ["kitty"],
+  });
+  social.createRecommendation({
+    sender: "avery", kind: "track", targetId: trackIds.outside, note: "second thought", recipients: ["kitty"],
+  });
+  // An earlier test sent the same track to everyone, and that broadcast is a
+  // separate thing from one addressed to her.
+  const hers = social.listRecommendationsFor("kitty").inbox
+    .filter((entry) => String(entry.targetId) === String(trackIds.outside) && !entry.toEveryone);
+  assert.equal(hers.length, 1, "one recommendation, not two");
+  assert.equal(hers[0].note, "second thought");
+});
+
+test("a sender can take one back, and only their own", () => {
+  const mine = social.listRecommendationsFor("avery").sent[0];
+  assert.throws(
+    () => social.withdrawRecommendation({ id: mine.id, requester: "kitty" }),
+    /not yours to take back/,
+  );
+  social.withdrawRecommendation({ id: mine.id, requester: "avery" });
+  assert.equal(
+    social.listRecommendationsFor("avery").sent.some((entry) => entry.id === mine.id),
+    false,
+  );
+  assert.equal(
+    social.listRecommendationsFor("kitty").inbox.some((entry) => entry.id === mine.id),
+    false,
+    "and it leaves their page too",
+  );
+});
+
+test("a recommendation carries the artist, so a page can offer to add them", () => {
+  const sent = social.createRecommendation({
+    sender: "avery", kind: "track", targetId: trackIds.shared, recipients: ["kitty"],
+  });
+  assert.equal(sent.sent, 1);
+  const entry = social.listRecommendationsFor("kitty").inbox.find((row) => row.kind === "track");
+  assert.ok(Object.prototype.hasOwnProperty.call(entry, "artistMbid"));
+  assert.ok(Object.prototype.hasOwnProperty.call(entry, "albumId"));
+});

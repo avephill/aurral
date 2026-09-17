@@ -121,6 +121,25 @@ test("one person cannot hide another's recommendation", async () => {
   assert.equal(allowed.status, 200);
 });
 
+test("only the sender can take a recommendation back", async () => {
+  actingAs = { id: 1, username: "avery" };
+  const sent = await call("POST", "/recommendations", { kind: "track", targetId: trackId, recipients: ["dunshill"] });
+  const id = sent.body.ids[0];
+
+  // The person it was for can hide it, but taking it back is the sender's.
+  actingAs = { id: 2, username: "dunshill" };
+  const refused = await call("DELETE", `/recommendations/${id}`);
+  assert.equal(refused.status, 403);
+
+  actingAs = { id: 1, username: "avery" };
+  const taken = await call("DELETE", `/recommendations/${id}`);
+  assert.equal(taken.status, 200);
+
+  actingAs = { id: 2, username: "dunshill" };
+  const theirs = await call("GET", "/overview");
+  assert.equal(theirs.body.recommendations.inbox.some((entry) => entry.id === id), false);
+});
+
 test("sharing a playlist fails cleanly when Navidrome is not configured", async () => {
   actingAs = { id: 1, username: "avery" };
   const { status, body } = await call("POST", "/playlists/pl-1/share", { recipients: ["dunshill"] });

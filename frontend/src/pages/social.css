@@ -316,3 +316,21 @@
   margin: 0.4rem 0 0;
   font-size: 0.8125rem;
 }
+
+.social__pick-kind {
+  color: var(--aurral-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.social__pick-add {
+  margin-top: 0.5rem;
+}
+
+.social__pick-held {
+  margin: 0.5rem 0 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+}

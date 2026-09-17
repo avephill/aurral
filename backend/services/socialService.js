@@ -300,10 +300,20 @@ export function createRecommendation({ sender, kind, targetId, note = "", recipi
     INSERT INTO recommendations (sender, recipient, kind, target_id, title, subtitle, note, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  // Saying it again replaces saying it once: a second thought about the same
+  // record should read as one recommendation with the newer note, not two.
+  const clearOlder = db.prepare(`
+    DELETE FROM recommendations
+    WHERE sender = ? AND kind = ? AND target_id = ?
+      AND recipient IS ?
+  `);
   const rows = people.length ? people : [null];
-  const ids = db.transaction(() => rows.map((recipient) => insert.run(
-    sender, recipient, type, target, described.title, described.subtitle, clean(note, MAX_NOTE) || null, at,
-  ).lastInsertRowid))();
+  const ids = db.transaction(() => rows.map((recipient) => {
+    clearOlder.run(sender, type, target, recipient);
+    return insert.run(
+      sender, recipient, type, target, described.title, described.subtitle, clean(note, MAX_NOTE) || null, at,
+    ).lastInsertRowid;
+  }))();
   return { sent: ids.length, toEveryone: !people.length, ids };
 }
 
@@ -321,23 +331,32 @@ const albumCoverUrl = (metadataJson) => {
 
 // A recommendation also wants somewhere to go when it is clicked, which for a
 // song is the album holding it.
+const EMPTY_CONTEXT = { coverUrl: null, albumId: null, artistMbid: null };
+
 const recommendationContext = (kind, targetId) => {
   const id = Number(targetId);
-  if (!Number.isFinite(id)) return { coverUrl: null, albumId: null };
+  if (!Number.isFinite(id)) return EMPTY_CONTEXT;
+  const view = (row) => (row
+    ? { coverUrl: albumCoverUrl(row.metadata_json), albumId: row.id, artistMbid: row.artist_mbid || null }
+    : EMPTY_CONTEXT);
   if (kind === "album") {
-    const row = db.prepare("SELECT id, metadata_json FROM library_albums WHERE id = ?").get(id);
-    return row ? { coverUrl: albumCoverUrl(row.metadata_json), albumId: row.id } : { coverUrl: null, albumId: null };
+    return view(db.prepare(`
+      SELECT album.id AS id, album.metadata_json AS metadata_json, artist.mbid AS artist_mbid
+      FROM library_albums AS album
+      LEFT JOIN library_artists AS artist ON artist.id = album.artist_id
+      WHERE album.id = ?
+    `).get(id));
   }
   if (kind === "track") {
-    const row = db.prepare(`
-      SELECT album.id AS id, album.metadata_json AS metadata_json
+    return view(db.prepare(`
+      SELECT album.id AS id, album.metadata_json AS metadata_json, artist.mbid AS artist_mbid
       FROM library_album_tracks AS link
       JOIN library_albums AS album ON album.id = link.album_id
+      LEFT JOIN library_artists AS artist ON artist.id = album.artist_id
       WHERE link.track_id = ? LIMIT 1
-    `).get(id);
-    return row ? { coverUrl: albumCoverUrl(row.metadata_json), albumId: row.id } : { coverUrl: null, albumId: null };
+    `).get(id));
   }
-  return { coverUrl: null, albumId: null };
+  return EMPTY_CONTEXT;
 };
 
 // Who a recommendation went to. One sent to named people is stored a row per
@@ -358,6 +377,7 @@ const recommendationView = (row) => {
     targetId: row.target_id,
     coverUrl: context.coverUrl,
     albumId: context.albumId,
+    artistMbid: context.artistMbid,
     title: row.title,
     subtitle: row.subtitle,
     note: row.note,
@@ -369,32 +389,67 @@ const recommendationView = (row) => {
 /** What is waiting for one person: theirs by name, plus anything for everyone. */
 export function listRecommendationsFor(username, { limit = 50 } = {}) {
   const inbox = db.prepare(`
-    SELECT * FROM recommendations
-    WHERE (recipient = ? OR (recipient IS NULL AND sender != ?)) AND dismissed_at IS NULL
-    ORDER BY created_at DESC LIMIT ?
-  `).all(username, username, limit).map(recommendationView);
+    SELECT rec.*, state.read_at AS seen_at
+    FROM recommendations AS rec
+    LEFT JOIN recommendation_states AS state
+      ON state.recommendation_id = rec.id AND state.username = ?
+    WHERE (rec.recipient = ? OR (rec.recipient IS NULL AND rec.sender != ?))
+      AND state.dismissed_at IS NULL
+    ORDER BY rec.created_at DESC LIMIT ?
+  `).all(username, username, username, limit)
+    .map((row) => ({ ...recommendationView(row), readAt: row.seen_at || null }));
   const sent = db.prepare(`
     SELECT * FROM recommendations WHERE sender = ? ORDER BY created_at DESC LIMIT ?
   `).all(username, limit).map(recommendationView);
   return { inbox, sent, unread: inbox.filter((entry) => !entry.readAt).length };
 }
 
+const rememberState = db.prepare(`
+  INSERT INTO recommendation_states (recommendation_id, username, read_at, dismissed_at)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT (recommendation_id, username) DO UPDATE SET
+    read_at = COALESCE(excluded.read_at, recommendation_states.read_at),
+    dismissed_at = COALESCE(excluded.dismissed_at, recommendation_states.dismissed_at)
+`);
+
 export function markRecommendationsRead(username) {
   const at = now();
-  return db.prepare(`
-    UPDATE recommendations SET read_at = ?
-    WHERE read_at IS NULL AND dismissed_at IS NULL AND (recipient = ? OR recipient IS NULL)
-  `).run(at, username).changes;
+  const waiting = db.prepare(`
+    SELECT rec.id FROM recommendations AS rec
+    LEFT JOIN recommendation_states AS state
+      ON state.recommendation_id = rec.id AND state.username = ?
+    WHERE (rec.recipient = ? OR (rec.recipient IS NULL AND rec.sender != ?))
+      AND state.dismissed_at IS NULL AND state.read_at IS NULL
+  `).all(username, username, username);
+  db.transaction(() => {
+    for (const row of waiting) rememberState.run(row.id, username, at, null);
+  })();
+  return waiting.length;
 }
 
+/** Whether this recommendation is one this person is shown at all. */
+const visibleTo = (row, username) =>
+  row.recipient === username || (row.recipient === null && row.sender !== username);
+
+/** Hide it from your own page. Nobody else's copy is touched. */
 export function dismissRecommendation({ id, requester } = {}) {
   const row = db.prepare("SELECT * FROM recommendations WHERE id = ?").get(Number(id));
   if (!row) throw new SocialError("No such recommendation", 404);
-  if (row.recipient !== requester && row.sender !== requester && row.recipient !== null) {
-    throw new SocialError("That recommendation is not yours", 403);
-  }
-  db.prepare("UPDATE recommendations SET dismissed_at = ? WHERE id = ?").run(now(), row.id);
+  if (!visibleTo(row, requester)) throw new SocialError("That recommendation is not yours", 403);
+  rememberState.run(row.id, requester, now(), now());
   return { dismissed: true };
+}
+
+/** Take back something you sent: it goes from everyone's page, including yours. */
+export function withdrawRecommendation({ id, requester } = {}) {
+  const row = db.prepare("SELECT * FROM recommendations WHERE id = ?").get(Number(id));
+  if (!row) throw new SocialError("No such recommendation", 404);
+  if (row.sender !== requester) throw new SocialError("That recommendation is not yours to take back", 403);
+  db.transaction(() => {
+    db.prepare("DELETE FROM recommendation_states WHERE recommendation_id = ?").run(row.id);
+    db.prepare("DELETE FROM recommendations WHERE id = ?").run(row.id);
+  })();
+  return { withdrawn: true };
 }
 
 // ---------------------------------------------------------------- listening
