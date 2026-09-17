@@ -354,6 +354,22 @@ export async function getTagPlaylistReport({ owner, fresh = false } = {}) {
 // ---------------------------------------------------------------- writing
 
 /**
+ * Whether Navidrome keeps this playlist by its own rules. Reading the record
+ * needs the admin connection, since the native API has no per-user login; a
+ * connection that cannot answer is treated as "no rules", which is what every
+ * playlist here was before smart ones existed.
+ */
+async function hasNavidromeRules(playlistId) {
+  try {
+    const { getAdminNavidromeClient } = await import("./navidromeTrackResolver.js");
+    const record = await getAdminNavidromeClient()?.getPlaylistRecord(playlistId);
+    return Boolean(record?.rules);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Write one switched-on playlist to Navidrome as an ordinary playlist. The
  * first write keeps what the playlist held before, for undo. An unchanged
  * result writes nothing.
@@ -377,6 +393,13 @@ export async function buildTagPlaylist(id, { fresh = false } = {}) {
       const existing = (await client.getSubsonicPlaylists())
         .filter((playlist) => playlist.owner === client.user && String(playlist.name).trim().toLowerCase() === row.name.trim().toLowerCase())
         .sort((a, b) => (b.songCount || 0) - (a.songCount || 0))[0];
+      // A playlist Navidrome keeps by its own rules is not one to write songs
+      // into: it recomputes them and the writing is lost without a word.
+      if (existing?.id && await hasNavidromeRules(existing.id)) {
+        throw new Error(
+          `"${row.name}" is a Navidrome smart playlist; rename one of them so this does not fight with its rules`,
+        );
+      }
       playlistId = existing?.id || null;
     }
 
@@ -436,17 +459,49 @@ export async function undoTagPlaylist(id) {
 }
 
 const rebuildTimers = new Map();
+let sweepTimer = null;
+
+/**
+ * Rebuild every switched-on playlist now and then.
+ *
+ * Rebuilds otherwise happen when something Psalter did changes: a rating
+ * saved here, songs relinked after an import. Plenty moves without that -
+ * play counts, a rating given in another client, an artist added to someone's
+ * library - and a rule about any of those would otherwise stay as it was the
+ * day it was written.
+ */
+export function startTagPlaylistSweep({ intervalMs = 6 * 60 * 60 * 1000 } = {}) {
+  if (sweepTimer) return;
+  sweepTimer = setInterval(async () => {
+    const owners = db.prepare("SELECT DISTINCT owner FROM tag_playlists WHERE enabled = 1").all();
+    for (const { owner } of owners) {
+      // Fresh: the point of the sweep is to notice what changed elsewhere.
+      songsByOwner.delete(owner);
+      scheduleTagPlaylistRebuild(owner, { delayMs: 0, reason: "regular sweep", fresh: true });
+    }
+  }, intervalMs);
+  sweepTimer.unref?.();
+}
+
+export function stopTagPlaylistSweep() {
+  if (sweepTimer) clearInterval(sweepTimer);
+  sweepTimer = null;
+}
+
 
 /** Rebuild a person's switched-on playlists soon, once for a burst of changes. */
-export function scheduleTagPlaylistRebuild(owner, { delayMs = 20_000, reason = "" } = {}) {
+export function scheduleTagPlaylistRebuild(owner, { delayMs = 20_000, reason = "", fresh = false } = {}) {
   if (!owner || rebuildTimers.has(owner)) return;
   const enabled = db.prepare("SELECT id FROM tag_playlists WHERE owner = ? AND enabled = 1").all(owner);
   if (!enabled.length) return;
   const timer = setTimeout(async () => {
     rebuildTimers.delete(owner);
+    // Their library itself changed, so the songs read a moment ago are no
+    // longer the songs there are.
+    if (fresh) songsByOwner.delete(owner);
     const counts = {};
     for (const { id } of enabled) {
-      const { status } = await buildTagPlaylist(id);
+      const { status } = await buildTagPlaylist(id, { fresh });
       counts[status] = (counts[status] || 0) + 1;
     }
     logger.info("library", `[TagPlaylists] Rebuilt ${owner}'s playlists${reason ? ` (${reason})` : ""}: ${JSON.stringify(counts)}`);

@@ -129,7 +129,15 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
     db.prepare(`
       INSERT INTO playlist_shares (owner, recipient, source_playlist_id, name, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT (source_playlist_id, recipient) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at
+      ON CONFLICT (source_playlist_id, recipient) DO UPDATE SET
+        name = excluded.name, updated_at = excluded.updated_at,
+        -- Sharing it again is asking again, so a copy they threw away comes
+        -- back - as a new one, since the old id points at nothing.
+        dropped_at = NULL, last_error = NULL,
+        mirror_playlist_id = CASE WHEN playlist_shares.dropped_at IS NOT NULL
+          THEN NULL ELSE playlist_shares.mirror_playlist_id END,
+        last_song_ids_json = CASE WHEN playlist_shares.dropped_at IS NOT NULL
+          THEN NULL ELSE playlist_shares.last_song_ids_json END
     `).run(owner, recipient, id, name, at, at);
     const share = db.prepare("SELECT * FROM playlist_shares WHERE source_playlist_id = ? AND recipient = ?").get(id, recipient);
     results.push(await syncShare(share, deps));
@@ -148,8 +156,32 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
  */
 export async function syncShare(share, deps = defaultDeps) {
   const at = now();
+  // Thrown away by the person it was for. Writing it again every quarter of an
+  // hour is not sharing, it is pestering.
+  if (share.dropped_at) return { recipient: share.recipient, status: "dropped" };
   try {
     const admin = deps.adminClient();
+
+    // A playlist nobody has touched holds what it held, so there is nothing to
+    // work out - unless songs were left out last time, because the music they
+    // were missing may have arrived since.
+    const record = await admin.getPlaylistRecord(share.source_playlist_id).catch(() => null);
+    const sourceUpdatedAt = String(record?.updatedAt || record?.updated_at || "");
+    const sourceName = clean(record?.name || share.name);
+    const settled = share.mirror_playlist_id
+      && !share.missing_count
+      && sourceUpdatedAt
+      && sourceUpdatedAt === share.source_updated_at
+      && sourceName === share.name;
+    if (settled) {
+      const stillThere = await deps.userClient(share.recipient)
+        ?.getSubsonicPlaylist(share.mirror_playlist_id).catch(() => null);
+      if (stillThere) {
+        db.prepare("UPDATE playlist_shares SET last_synced_at = ?, last_error = NULL WHERE id = ?").run(at, share.id);
+        return { recipient: share.recipient, status: "unchanged", songs: parse(share.last_song_ids_json, []).length, missing: 0 };
+      }
+    }
+
     const rows = await admin.getPlaylistTracks(share.source_playlist_id);
     const entries = rows
       .map((row) => ({
@@ -186,20 +218,36 @@ export async function syncShare(share, deps = defaultDeps) {
 
     const client = deps.userClient(share.recipient);
     if (!client) throw new SocialError("Navidrome is not configured", 503);
-    const name = `${share.name} (from ${share.owner})`;
+    const name = `${sourceName} (from ${share.owner})`;
     let mirrorId = share.mirror_playlist_id;
-    if (mirrorId && !await client.getSubsonicPlaylist(mirrorId).catch(() => null)) mirrorId = null;
+    let gone = false;
+    if (mirrorId && !await client.getSubsonicPlaylist(mirrorId).catch(() => null)) {
+      mirrorId = null;
+      gone = true;
+    }
 
-    const unchanged = mirrorId && JSON.stringify(mirrorSongIds) === (share.last_song_ids_json || "");
+    // Their copy is theirs: deleting it is how someone says no thank you, so
+    // the share stops rather than putting it back.
+    if (gone) {
+      db.prepare(`
+        UPDATE playlist_shares SET dropped_at = ?, mirror_playlist_id = NULL, updated_at = ?,
+          last_error = ? WHERE id = ?
+      `).run(at, at, `${share.recipient} removed their copy`, share.id);
+      logger.info("library", `[Social] ${share.recipient} deleted their copy of "${share.name}"; no longer syncing it`);
+      return { recipient: share.recipient, status: "dropped" };
+    }
+
+    const unchanged = mirrorId && JSON.stringify(mirrorSongIds) === (share.last_song_ids_json || "")
+      && name === `${share.name} (from ${share.owner})`;
     if (!unchanged) {
       if (mirrorId) await client.updatePlaylist(mirrorId, { name, songIds: mirrorSongIds });
       else mirrorId = (await client.createPlaylist(name, mirrorSongIds))?.id || null;
     }
 
     db.prepare(`
-      UPDATE playlist_shares SET mirror_playlist_id = ?, last_song_ids_json = ?, missing_count = ?,
-        last_synced_at = ?, last_error = NULL, updated_at = ? WHERE id = ?
-    `).run(mirrorId, JSON.stringify(mirrorSongIds), missing, at, at, share.id);
+      UPDATE playlist_shares SET mirror_playlist_id = ?, name = ?, last_song_ids_json = ?, missing_count = ?,
+        source_updated_at = ?, last_synced_at = ?, last_error = NULL, updated_at = ? WHERE id = ?
+    `).run(mirrorId, sourceName, JSON.stringify(mirrorSongIds), missing, sourceUpdatedAt || null, at, at, share.id);
     return {
       recipient: share.recipient,
       songs: mirrorSongIds.length,
@@ -228,8 +276,9 @@ export async function syncAllShares(deps = defaultDeps) {
 export function listSharesForRecipient(username) {
   return db.prepare(`
     SELECT id, owner, name, mirror_playlist_id AS playlistId, missing_count AS missing,
-           last_synced_at AS syncedAt, last_error AS error, last_song_ids_json AS songIds
-    FROM playlist_shares WHERE recipient = ? ORDER BY updated_at DESC
+           last_synced_at AS syncedAt, last_error AS error, last_song_ids_json AS songIds,
+           dropped_at AS droppedAt
+    FROM playlist_shares WHERE recipient = ? AND dropped_at IS NULL ORDER BY updated_at DESC
   `).all(username).map((row) => ({
     ...row,
     songIds: undefined,
@@ -240,7 +289,7 @@ export function listSharesForRecipient(username) {
 export function listSharesByOwner(username) {
   return db.prepare(`
     SELECT id, recipient, name, source_playlist_id AS sourcePlaylistId, missing_count AS missing,
-           last_synced_at AS syncedAt, last_error AS error
+           last_synced_at AS syncedAt, last_error AS error, dropped_at AS droppedAt
     FROM playlist_shares WHERE owner = ? ORDER BY updated_at DESC
   `).all(username);
 }

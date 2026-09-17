@@ -654,6 +654,10 @@ tryAddColumn("ALTER TABLE library_media_files ADD COLUMN album_id INTEGER");
 tryAddColumn("ALTER TABLE images_cache ADD COLUMN images_json TEXT");
 // Set when an admin dismisses a request from the Requests report.
 tryAddColumn("ALTER TABLE album_requests ADD COLUMN dismissed_at INTEGER");
+// A share the recipient has thrown away, and what the source looked like when
+// it was last copied, so an unchanged playlist costs nothing to check.
+tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN dropped_at INTEGER");
+tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN source_updated_at TEXT");
 
 function hasUniqueIndex(columns) {
   return db.prepare("PRAGMA index_list(library_media_files)").all().some((index) => {

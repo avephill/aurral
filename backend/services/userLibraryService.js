@@ -691,6 +691,21 @@ async function runReconcile() {
   if (totalChanges > 0 || navidrome.created > 0) {
     await triggerNavidromeScan();
   }
+  // Music has just joined or left someone's library, so any smart playlist of
+  // theirs is about a different set of songs than it was. Leave time for the
+  // scan above: until Navidrome has read the new links, nothing would change.
+  if (totalChanges > 0) {
+    const { scheduleTagPlaylistRebuild } = await import("./tagPlaylistService.js");
+    for (const entry of summary) {
+      if (entry.changes > 0) {
+        scheduleTagPlaylistRebuild(entry.username, {
+          delayMs: 5 * 60_000,
+          reason: "personal library changed",
+          fresh: true,
+        });
+      }
+    }
+  }
   const playlists = await normalizePlaylistsIfEnabled(config);
   return { skipped: false, totalChanges, users: summary, navidrome, playlists };
 }

@@ -63,10 +63,12 @@ function fakeDeps() {
     [REL.averyOnly]: [{ id: "song-outside-avery", path: REL.averyOnly, libraryId: 4 }],
     [REL.unindexed]: [{ id: "song-unindexed-main", path: REL.unindexed, libraryId: 1 }],
   };
+  const source = { name: "Road trip", updatedAt: "2026-09-17T00:00:00Z" };
   const admin = {
     isConfigured: () => true,
+    source,
     async getPlaylistRecord(id) {
-      return id === "pl-1" ? { id, name: "Road trip", ownerName: "avery" } : null;
+      return id === "pl-1" ? { id, name: source.name, updatedAt: source.updatedAt, ownerName: "avery" } : null;
     },
     async getPlaylistTracks() {
       return [
@@ -85,6 +87,7 @@ function fakeDeps() {
   return {
     playlists,
     calls,
+    source,
     adminClient: () => admin,
     songsByPath: async (path) => copies[path] || [],
     personalLibraryId: async () => 5,
@@ -140,6 +143,9 @@ test("a shared playlist is written into the recipient's own account", async () =
 });
 
 test("an unchanged playlist is not written again", async () => {
+  // Each fake starts with no playlists in it, so begin from nothing shared:
+  // otherwise the copy an earlier test made looks like one deleted since.
+  db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
   await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
   const before = deps.calls.length;
@@ -150,6 +156,7 @@ test("an unchanged playlist is not written again", async () => {
 });
 
 test("only the owner can share a playlist, and only with people who exist", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
   await assert.rejects(
     () => social.sharePlaylist({ owner: "kitty", playlistId: "pl-1", recipients: ["dunshill"], deps }),
@@ -162,6 +169,7 @@ test("only the owner can share a playlist, and only with people who exist", asyn
 });
 
 test("stopping a share leaves their copy unless asked to remove it", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
   await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
   const share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
@@ -170,6 +178,67 @@ test("stopping a share leaves their copy unless asked to remove it", async () =>
   assert.equal(result.copyDeleted, true);
   assert.deepEqual(social.listSharesForRecipient("dunshill"), []);
   assert.ok(deps.calls.some((call) => call.verb === "delete"));
+});
+
+test("a copy the recipient throws away is not put back", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
+  const deps = fakeDeps();
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  const mirrorId = [...deps.playlists.keys()][0];
+
+  // He deletes it in his own client, as anyone may with a playlist of theirs.
+  deps.playlists.delete(mirrorId);
+  const share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
+  assert.equal((await social.syncShare(share, deps)).status, "dropped");
+  assert.equal(deps.playlists.size, 0, "nothing written back");
+
+  // And it stays gone on the next pass, rather than reappearing every quarter hour.
+  const dropped = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
+  assert.equal((await social.syncShare(dropped, deps)).status, "dropped");
+  assert.equal(deps.playlists.size, 0);
+  assert.deepEqual(social.listSharesForRecipient("dunshill"), [], "and off his page");
+
+  // Sharing it again is asking again, so he gets a fresh copy.
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  assert.equal(deps.playlists.size, 1);
+  assert.equal(social.listSharesForRecipient("dunshill").length, 1);
+});
+
+test("renaming your playlist renames their copy", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
+  const deps = fakeDeps();
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+
+  deps.source.name = "Long drive";
+  deps.source.updatedAt = "2026-09-18T00:00:00Z";
+  const share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
+  await social.syncShare(share, deps);
+
+  const mirror = [...deps.playlists.values()][0];
+  assert.equal(mirror.name, "Long drive (from avery)");
+  assert.equal(social.listSharesForRecipient("dunshill")[0].name, "Long drive");
+});
+
+test("a playlist nobody has touched is not worked out again", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
+  const deps = fakeDeps();
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+
+  // One song was missing from his library, so it is still looked at each pass:
+  // what he was missing may have arrived.
+  let share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
+  assert.equal(share.missing_count, 1);
+  const lookups = [];
+  const watched = { ...deps, songsByPath: async (path) => { lookups.push(path); return deps.songsByPath(path); } };
+  await social.syncShare(share, watched);
+  assert.ok(lookups.length > 0, "still resolved while something is missing");
+
+  // With nothing missing and the source untouched, it settles.
+  db.prepare("UPDATE playlist_shares SET missing_count = 0 WHERE id = ?").run(share.id);
+  share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
+  lookups.length = 0;
+  assert.equal((await social.syncShare(share, watched)).status, "unchanged");
+  assert.equal(lookups.length, 0, "no per-song lookups at all");
 });
 
 test("a recommendation reaches named people, or everyone", () => {

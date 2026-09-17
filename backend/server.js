@@ -466,6 +466,11 @@ httpServer.listen(PORT, async () => {
   import("./services/socialService.js")
     .then(({ startSocialSync }) => startSocialSync())
     .catch((error) => logger.warn("library", `[Social] Share sync did not start: ${error.message}`));
+  // Smart playlists follow ratings and imports as they happen; this catches
+  // what moves without Psalter being told, such as play counts.
+  import("./services/tagPlaylistService.js")
+    .then(({ startTagPlaylistSweep }) => startTagPlaylistSweep())
+    .catch((error) => logger.warn("library", `[TagPlaylists] Sweep did not start: ${error.message}`));
   // Act on Lidarr webhook events a restart left waiting, and retry any that
   // failed once they are due.
   import("./services/lidarrWebhookService.js")
