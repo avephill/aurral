@@ -545,6 +545,13 @@ db.exec(`
     FOREIGN KEY (recommendation_id) REFERENCES recommendations (id) ON DELETE CASCADE
   );
 
+  -- What was read or hidden before that table existed. A recommendation
+  -- addressed to one person can be carried over exactly; one sent to everybody
+  -- cannot, because the row does not record who hid it, so it comes back.
+  INSERT OR IGNORE INTO recommendation_states (recommendation_id, username, read_at, dismissed_at)
+    SELECT id, recipient, read_at, dismissed_at FROM recommendations
+    WHERE recipient IS NOT NULL AND (read_at IS NOT NULL OR dismissed_at IS NOT NULL);
+
   -- What each person lets the Social page show about their listening.
   CREATE TABLE IF NOT EXISTS social_settings (
     username TEXT PRIMARY KEY,
