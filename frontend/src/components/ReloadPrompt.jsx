@@ -3,10 +3,13 @@ import { useRegisterSW } from "virtual:pwa-register/react";
 import { useAuth } from "../contexts/AuthContext";
 import { checkHealth } from "../utils/api/endpoints/auth.js";
 import {
+  isPageAlreadyCurrent,
   readDismissedUpdate,
   rememberDismissedUpdate,
   shouldOfferUpdate,
 } from "../utils/appUpdate.js";
+
+const runningVersion = import.meta.env.VITE_APP_VERSION || "";
 
 function ReloadPrompt() {
   const { bootstrap } = useAuth();
@@ -37,6 +40,16 @@ function ReloadPrompt() {
     };
   }, [needRefresh]);
 
+  // Nothing to tell anyone: the page is already the build the server has, so
+  // hand over to the new worker quietly rather than leaving it waiting and
+  // announcing itself again on the next load.
+  useEffect(() => {
+    if (!needRefresh) return;
+    if (!isPageAlreadyCurrent({ waitingVersion, runningVersion })) return;
+    updateServiceWorker(false);
+    setNeedRefresh(false);
+  }, [needRefresh, setNeedRefresh, updateServiceWorker, waitingVersion]);
+
   const close = () => {
     rememberDismissedUpdate(globalThis.localStorage, waitingVersion);
     setDismissedVersion(waitingVersion);
@@ -53,7 +66,7 @@ function ReloadPrompt() {
   // Someone being shown around the app is in the middle of something.
   if (bootstrap?.walkthroughPending === true) return null;
 
-  if (!shouldOfferUpdate({ needRefresh, waitingVersion, dismissedVersion })) {
+  if (!shouldOfferUpdate({ needRefresh, waitingVersion, dismissedVersion, runningVersion })) {
     return null;
   }
 
