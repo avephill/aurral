@@ -98,6 +98,16 @@ export const dbOps = {
     );
   },
 
+  // Whether someone has been shown around the app yet. An admin can clear it
+  // so the tour runs again - useful after setting an account up for someone.
+  getUserWalkthrough(userId) {
+    return dbOps.getJSONSetting(`user:${parseInt(userId, 10)}:walkthrough`);
+  },
+
+  setUserWalkthrough(userId, value) {
+    dbOps.setJSONSetting(`user:${parseInt(userId, 10)}:walkthrough`, value);
+  },
+
   getUserTheme(userId) {
     return dbOps.getJSONSetting(`user:${parseInt(userId, 10)}:theme`);
   },

@@ -13,6 +13,7 @@ import { DiscoverRecentProvider } from "./contexts/DiscoverRecentProvider";
 import { AudioQueueProvider } from "./contexts/AudioQueueProvider";
 import { AlertTriangle, XCircle } from "lucide-react";
 import ReloadPrompt from "./components/ReloadPrompt";
+import Walkthrough from "./components/Walkthrough";
 import { DotLoader } from "./components/DotLoader";
 import { useWebSocketChannel } from "./hooks/useWebSocket";
 import { buildActivityPath, DEFAULT_ACTIVITY_VIEW } from "./navigation/activityNavConfig";
@@ -352,6 +353,7 @@ function AppContent() {
                       <Route path="/blocklist" element={<AdminRoute><BlocklistPage /></AdminRoute>} />
                     </Routes>
                   </Suspense>
+                  <Walkthrough />
                 </Layout>
               </ProtectedRoute>
             </DiscoverRecentProvider>

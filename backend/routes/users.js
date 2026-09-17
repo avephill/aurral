@@ -409,6 +409,30 @@ function normalizeThemeSelection(raw) {
   return { themeId, appearance };
 }
 
+// Being shown around the app, once. The tour marks itself done; an admin can
+// clear it for someone else, which is what you want after setting up their
+// account by hand.
+router.patch("/me/walkthrough", requireAuth, (req, res) => {
+  try {
+    const done = req.body?.completed !== false;
+    dbOps.setUserWalkthrough(req.user.id, done ? { completedAt: Date.now() } : null);
+    res.json({ completed: done });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to save", message: e.message });
+  }
+});
+
+router.post("/:id/walkthrough/reset", requireAuth, requireAdmin, (req, res) => {
+  try {
+    const user = userOps.getUserById(Number(req.params.id));
+    if (!user) return res.status(404).json({ error: "User not found" });
+    dbOps.setUserWalkthrough(user.id, null);
+    return res.json({ username: user.username, completed: false });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to reset", message: e.message });
+  }
+});
+
 router.get("/me/theme", requireAuth, (req, res) => {
   try {
     const user = userOps.getUserById(req.user.id);

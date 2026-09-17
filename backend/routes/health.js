@@ -293,6 +293,8 @@ function buildBootstrapPayload(req) {
     payload.ticketmasterConfigured = !!getTicketmasterApiKey();
     payload.inboxEnabled = settings.inbox?.enabled !== false;
     payload.userLibrariesEnabled = getUserLibrariesSettings(settings).enabled;
+    // A first look around the app, until they have had it.
+    payload.walkthroughPending = !dbOps.getUserWalkthrough(currentUser.id)?.completedAt;
     const newsSettings = getNewsSettings();
     payload.newsConfigured = newsSettings.enabled && newsSettings.feeds.some(
       (feed) => feed.enabled && (feed.group === "custom" || newsSettings.groups[feed.group] !== false),

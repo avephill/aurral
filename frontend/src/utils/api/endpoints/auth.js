@@ -157,3 +157,10 @@ export const linkManagedPlexUser = (userId, plexUserId, { plexUsername, plexUuid
 export const adminUnlinkPlex = async (userId) => {
   await deleteData(`/users/${userId}/plex-link`);
 };
+
+// The first look around the app: marked done once someone has had it.
+export const completeWalkthrough = () => patchData("/users/me/walkthrough", { completed: true });
+
+// Admins only: let someone have the tour again, after setting their account up.
+export const resetWalkthroughFor = (userId) =>
+  postData(`/users/${encodeURIComponent(userId)}/walkthrough/reset`, {});

@@ -655,7 +655,7 @@ function GlobalSearch({ settingsMode = false }) {
 
   return (
     <form ref={searchContainerRef} onSubmit={handleSubmit} className="global-search">
-      <div className="global-search__box global-search__box--unified">
+      <div className="global-search__box global-search__box--unified" data-tour="search">
         <div className="global-search__input-wrap global-search__input-wrap--unified">
           <Search className="global-search__icon" />
           <input

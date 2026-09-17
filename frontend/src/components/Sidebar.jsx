@@ -488,6 +488,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
                     className={`sidebar-link ${
                       isIcons ? "sidebar-link--icons" : "sidebar-link--full"
                     }${active ? " is-active" : ""}`}
+                    data-tour={item.section || item.path?.replace("/", "") || undefined}
                     aria-label={
                       isIcons
                         ? showActivityDot

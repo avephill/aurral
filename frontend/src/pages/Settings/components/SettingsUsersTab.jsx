@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { loginApi } from "../../../utils/api/endpoints/auth.js";
+import { loginApi, resetWalkthroughFor } from "../../../utils/api/endpoints/auth.js";
 import { syncUserLibraries } from "../../../utils/api/endpoints/userLibrary.js";
 import { setStoredAuth } from "../../../utils/api/core.js";
 import PillToggle from "../../../components/PillToggle";
@@ -7,7 +7,7 @@ import { SettingsInput } from "./SettingsField";
 import { SettingsArrFieldSet, SettingsArrFormGroup } from "./arr/SettingsArrLayout";
 
 import { createPortal } from "react-dom";
-import { Lock, Trash2, UserPlus, X } from "lucide-react";
+import { Compass, Lock, Trash2, UserPlus, X } from "lucide-react";
 import { GRANULAR_PERMISSIONS, granularPerms } from "../constants";
 import { useModalDialog } from "../../../hooks/useModalDialog.js";
 import { AdminPlexLinkField } from "./AdminPlexLinkField";
@@ -179,6 +179,7 @@ export function SettingsUsersTab({
   const userLibrariesManageNavidrome = settings?.userLibraries?.manageNavidrome !== false;
   const userLibrariesNavidromeRootPath = settings?.userLibraries?.navidromeRootPath || "";
   const [syncingUserLibraries, setSyncingUserLibraries] = useState(false);
+  const [resettingTour, setResettingTour] = useState(null);
 
   const userLibrariesState = {
     enabled: userLibrariesEnabled,
@@ -497,6 +498,28 @@ export function SettingsUsersTab({
                               }}
                             >
                               <Lock className="artist-icon-sm" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
+                              className="arr-btn arr-btn--ghost arr-btn--icon"
+                              aria-label={`Show ${user.username} around the app again`}
+                              title="Give them the first-look walkthrough again, next time they open Psalter"
+                              disabled={resettingTour === user.id}
+                              onClick={async () => {
+                                setResettingTour(user.id);
+                                try {
+                                  await resetWalkthroughFor(user.id);
+                                  showSuccess(`${user.username} gets the walkthrough again next time they open Psalter`);
+                                } catch (error) {
+                                  showError(
+                                    error?.response?.data?.error || error?.message || "Could not reset the walkthrough",
+                                  );
+                                } finally {
+                                  setResettingTour(null);
+                                }
+                              }}
+                            >
+                              <Compass className="artist-icon-sm" aria-hidden />
                             </button>
                             <button
                               type="button"
