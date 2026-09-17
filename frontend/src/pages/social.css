@@ -208,3 +208,111 @@
     flex-direction: column;
   }
 }
+
+/* Recommendations read as records, not rows: cover first, then who sent it and
+   what they said. A shelf scrolls sideways rather than pushing the rest of the
+   page down when a few arrive at once. */
+
+.social__shelf {
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  overflow-x: auto;
+  list-style: none;
+  scroll-snap-type: x proximity;
+}
+
+.social__pick {
+  flex: 0 0 11rem;
+  width: 11rem;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.social__pick-art {
+  position: relative;
+  aspect-ratio: 1;
+  margin-bottom: 0.5rem;
+  border-radius: var(--aurral-radius-sm);
+  overflow: hidden;
+  background: var(--aurral-surface-raised);
+}
+
+.social__pick-art img,
+.social__pick-art a {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.social__pick-blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--aurral-text-muted);
+}
+
+.social__pick-blank svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.social__pick-hide {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.social__pick-hide svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.social__pick:hover .social__pick-hide,
+.social__pick-hide:focus-visible {
+  opacity: 1;
+}
+
+.social__pick-title {
+  color: var(--aurral-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.social__pick-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.social__pick-title a:hover {
+  text-decoration: underline;
+}
+
+.social__pick-from {
+  margin-top: 0.15rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+}
+
+.social__pick .social__note {
+  margin: 0.4rem 0 0;
+  font-size: 0.8125rem;
+}

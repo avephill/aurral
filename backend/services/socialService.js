@@ -3,6 +3,7 @@ import { createNavidromeUserClient } from "./navidromeUserClient.js";
 import { normalizePath } from "./navidromePathMapping.js";
 import { getAdminNavidromeClient, getPersonalLibraryIdForUser } from "./navidromeTrackResolver.js";
 import { logger } from "./logger.js";
+import { buildImageProxyUrl } from "./imageProxyService.js";
 
 /**
  * The social side of Psalter: playlists shared with one person, albums and
@@ -306,19 +307,57 @@ export function createRecommendation({ sender, kind, targetId, note = "", recipi
   return { sent: ids.length, toEveryone: !people.length, ids };
 }
 
-const recommendationView = (row) => ({
-  id: row.id,
-  sender: row.sender,
-  recipient: row.recipient,
-  toEveryone: row.recipient === null,
-  kind: row.kind,
-  targetId: row.target_id,
-  title: row.title,
-  subtitle: row.subtitle,
-  note: row.note,
-  createdAt: row.created_at,
-  readAt: row.read_at,
-});
+// The artwork a recommendation should carry. Album covers live in the album's
+// metadata, the same place the library pages read them from; a song borrows the
+// cover of the album it sits on.
+const albumCoverUrl = (metadataJson) => {
+  const images = parse(metadataJson, null)?.images;
+  const image = (Array.isArray(images) ? images : []).find((entry) =>
+    /^https?:\/\//i.test(entry?.remoteUrl || entry?.imageUrl || entry?.url || ""),
+  );
+  const source = image?.remoteUrl || image?.imageUrl || image?.url;
+  return /^https?:\/\//i.test(source || "") ? buildImageProxyUrl(source) : null;
+};
+
+// A recommendation also wants somewhere to go when it is clicked, which for a
+// song is the album holding it.
+const recommendationContext = (kind, targetId) => {
+  const id = Number(targetId);
+  if (!Number.isFinite(id)) return { coverUrl: null, albumId: null };
+  if (kind === "album") {
+    const row = db.prepare("SELECT id, metadata_json FROM library_albums WHERE id = ?").get(id);
+    return row ? { coverUrl: albumCoverUrl(row.metadata_json), albumId: row.id } : { coverUrl: null, albumId: null };
+  }
+  if (kind === "track") {
+    const row = db.prepare(`
+      SELECT album.id AS id, album.metadata_json AS metadata_json
+      FROM library_album_tracks AS link
+      JOIN library_albums AS album ON album.id = link.album_id
+      WHERE link.track_id = ? LIMIT 1
+    `).get(id);
+    return row ? { coverUrl: albumCoverUrl(row.metadata_json), albumId: row.id } : { coverUrl: null, albumId: null };
+  }
+  return { coverUrl: null, albumId: null };
+};
+
+const recommendationView = (row) => {
+  const context = recommendationContext(row.kind, row.target_id);
+  return {
+    id: row.id,
+    sender: row.sender,
+    recipient: row.recipient,
+    toEveryone: row.recipient === null,
+    kind: row.kind,
+    targetId: row.target_id,
+    coverUrl: context.coverUrl,
+    albumId: context.albumId,
+    title: row.title,
+    subtitle: row.subtitle,
+    note: row.note,
+    createdAt: row.created_at,
+    readAt: row.read_at,
+  };
+};
 
 /** What is waiting for one person: theirs by name, plus anything for everyone. */
 export function listRecommendationsFor(username, { limit = 50 } = {}) {

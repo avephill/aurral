@@ -16820,15 +16820,16 @@ button.native-library-genre-row:focus-visible {
   font-size: 0.9375rem;
 }
 
-.recommend-modal__note {
+.recommend-modal__field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  margin-top: 0.85rem;
   color: var(--aurral-text-muted);
   font-size: 0.8125rem;
 }
 
-.recommend-modal__note textarea {
+.recommend-modal__field textarea {
   width: 100%;
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--aurral-border);
@@ -16851,4 +16852,104 @@ button.native-library-genre-row:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+/* Naming people: chips in a box that takes one name at a time. */
+
+.people-picker {
+  position: relative;
+}
+
+.people-picker__field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface);
+  cursor: text;
+}
+
+.people-picker__field:focus-within {
+  border-color: var(--aurral-accent, #4f6bed);
+}
+
+.people-picker__field input {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  border: 0;
+  background: none;
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  outline: none;
+}
+
+.people-picker__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.35rem 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--aurral-surface-raised);
+  color: var(--aurral-text);
+  font-size: 0.8125rem;
+}
+
+.people-picker__chip button {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--aurral-text-muted);
+  cursor: pointer;
+}
+
+.people-picker__chip button svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+.people-picker__options {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface-raised);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+  list-style: none;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.people-picker__option {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: var(--aurral-radius-sm);
+  background: none;
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.people-picker__option.is-active,
+.people-picker__option:hover {
+  background: var(--aurral-surface);
+}
+
+.people-picker__hint {
+  margin: 0.35rem 0 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Send } from "lucide-react";
+import { Disc3, RefreshCw, Send, X } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
+import PeoplePicker from "../components/PeoplePicker";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -36,35 +37,6 @@ const KINDS = [
   { id: "album", label: "Album" },
   { id: "track", label: "Song" },
 ];
-
-function PeoplePicker({ people, chosen, onChange, everyoneLabel = null }) {
-  return (
-    <div className="social__people">
-      {everyoneLabel ? (
-        <label className="social__person">
-          <input
-            type="checkbox"
-            checked={chosen.length === 0}
-            onChange={() => onChange([])}
-          />
-          {everyoneLabel}
-        </label>
-      ) : null}
-      {people.map((person) => (
-        <label key={person} className="social__person">
-          <input
-            type="checkbox"
-            checked={chosen.includes(person)}
-            onChange={(event) => onChange(event.target.checked
-              ? [...chosen, person]
-              : chosen.filter((name) => name !== person))}
-          />
-          {person}
-        </label>
-      ))}
-    </div>
-  );
-}
 
 function RecommendForm({ people, onSent }) {
   const { showError, showSuccess } = useToast();
@@ -156,7 +128,13 @@ function RecommendForm({ people, onSent }) {
             maxLength={500}
             onChange={(event) => setNote(event.target.value)}
           />
-          <PeoplePicker people={people} chosen={recipients} onChange={setRecipients} everyoneLabel="Everyone" />
+          <PeoplePicker
+            people={people}
+            value={recipients}
+            onChange={setRecipients}
+            placeholder="Type a name, or leave empty for everyone"
+            emptyHint="Nobody chosen, so this goes to everyone."
+          />
           <button type="button" className="btn btn-primary btn-sm" disabled={send.isPending} onClick={() => send.mutate()}>
             {send.isPending ? <DotLoader size="sm" label={null} /> : <Send className="social__icon" aria-hidden="true" />}
             {recipients.length ? `Send to ${recipients.join(", ")}` : "Send to everyone"}
@@ -200,7 +178,12 @@ function SharePlaylistForm({ people, onShared }) {
           ))}
         </select>
       </div>
-      <PeoplePicker people={people} chosen={recipients} onChange={setRecipients} />
+      <PeoplePicker
+          people={people}
+          value={recipients}
+          onChange={setRecipients}
+          placeholder="Type a name"
+        />
       <button
         type="button"
         className="btn btn-primary btn-sm"
@@ -325,22 +308,50 @@ export default function SocialPage() {
         {inbox.length === 0 ? (
           <p className="social__muted">Nothing waiting for you.</p>
         ) : (
-          <ul className="social__list">
+          <ul className="social__shelf">
             {inbox.map((entry) => (
-              <li key={entry.id} className="social__card">
-                <div>
-                  <div className="social__title">
-                    {entry.title || `${entry.kind} ${entry.targetId}`}
-                    {entry.subtitle ? <span className="social__muted"> — {entry.subtitle}</span> : null}
-                  </div>
-                  <div className="social__muted">
-                    {entry.sender} {entry.toEveryone ? "told everyone" : "sent this to you"} · {when(entry.createdAt)}
-                  </div>
-                  {entry.note ? <p className="social__note">“{entry.note}”</p> : null}
+              <li key={entry.id} className="social__pick">
+                <div className="social__pick-art">
+                  {entry.albumId ? (
+                    <Link to={`/library/album/${encodeURIComponent(entry.albumId)}`}>
+                      {entry.coverUrl ? (
+                        <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" />
+                      ) : (
+                        <span className="social__pick-blank" aria-hidden="true">
+                          <Disc3 />
+                        </span>
+                      )}
+                    </Link>
+                  ) : entry.coverUrl ? (
+                    <img src={entry.coverUrl} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    <span className="social__pick-blank" aria-hidden="true">
+                      <Disc3 />
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="social__pick-hide"
+                    aria-label="Hide this recommendation"
+                    onClick={() => dismiss.mutate(entry.id)}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
                 </div>
-                <div className="social__actions">
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => dismiss.mutate(entry.id)}>Hide</button>
+                <div className="social__pick-title">
+                  {entry.albumId ? (
+                    <Link to={`/library/album/${encodeURIComponent(entry.albumId)}`}>
+                      {entry.title || `${entry.kind} ${entry.targetId}`}
+                    </Link>
+                  ) : (
+                    entry.title || `${entry.kind} ${entry.targetId}`
+                  )}
                 </div>
+                {entry.subtitle ? <div className="social__muted">{entry.subtitle}</div> : null}
+                <div className="social__pick-from">
+                  {entry.sender} {entry.toEveryone ? "told everyone" : "sent this to you"} · {when(entry.createdAt)}
+                </div>
+                {entry.note ? <p className="social__note">“{entry.note}”</p> : null}
               </li>
             ))}
           </ul>

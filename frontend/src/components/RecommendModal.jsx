@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import TooltipButton from "./TooltipButton";
 import { DotLoader } from "./DotLoader";
 import { useModalDialog } from "../hooks/useModalDialog.js";
+import PeoplePicker from "./PeoplePicker";
 import { useToast } from "../contexts/ToastContext";
 import { getSocialOverview, sendRecommendation } from "../utils/api/endpoints/social.js";
 
@@ -47,11 +48,6 @@ export default function RecommendModal({ target, onClose }) {
   }, [target]);
 
   if (!target) return null;
-
-  const toggle = (name) =>
-    setRecipients((current) =>
-      current.includes(name) ? current.filter((entry) => entry !== name) : [...current, name],
-    );
 
   const send = async () => {
     if (sending) return;
@@ -112,31 +108,24 @@ export default function RecommendModal({ target, onClose }) {
         {loading ? (
           <DotLoader label="Loading people" />
         ) : people.length ? (
-          <>
-            <p className="recommend-modal__hint">
-              Choose who to tell. With nobody chosen it goes to everyone.
-            </p>
-            <div className="recommend-modal__people">
-              {people.map((person) => (
-                <label className="recommend-modal__person" key={person}>
-                  <input
-                    type="checkbox"
-                    checked={recipients.includes(person)}
-                    onChange={() => toggle(person)}
-                    disabled={sending}
-                  />
-                  {person}
-                </label>
-              ))}
-            </div>
-          </>
+          <label className="recommend-modal__field">
+            <span>Send to</span>
+            <PeoplePicker
+              people={people}
+              value={recipients}
+              onChange={setRecipients}
+              disabled={sending}
+              placeholder="Type a name, or leave empty for everyone"
+              emptyHint="Nobody chosen, so this goes to everyone."
+            />
+          </label>
         ) : (
           <p className="recommend-modal__hint">
             Nobody else has an account yet, so this would go to everyone.
           </p>
         )}
 
-        <label className="recommend-modal__note">
+        <label className="recommend-modal__field">
           <span>Note (optional)</span>
           <textarea
             value={note}

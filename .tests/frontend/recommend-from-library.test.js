@@ -14,6 +14,8 @@ const trackList = read(
   "../../frontend/src/pages/ArtistDetails/components/ArtistDetailsReleaseTrackList.jsx",
 );
 const trackMenu = read("../../frontend/src/pages/ArtistDetails/components/TrackPlaylistMenu.jsx");
+const picker = read("../../frontend/src/components/PeoplePicker.jsx");
+const socialPage = read("../../frontend/src/pages/SocialPage.jsx");
 
 test("an album in the library can be recommended from its own page", () => {
   assert.match(page, /openRecommend\("album", libraryAlbum/);
@@ -43,7 +45,7 @@ test("it sends what the endpoint expects", () => {
 });
 
 test("choosing nobody means everybody, and the button says so", () => {
-  assert.match(modal, /With nobody chosen it goes to everyone/);
+  assert.match(modal, /Nobody chosen, so this goes to everyone\./);
   assert.match(modal, /recipients\.length \? "Send" : "Send to everyone"/);
 });
 
@@ -61,4 +63,24 @@ test("its songs are recommendable only when the server actually holds them", () 
 test("the shared track menu grew a recommend entry", () => {
   assert.match(trackMenu, /onRecommend \? \(/);
   assert.match(trackMenu, /Recommend to\.\.\./);
+});
+
+test("who to send to is typed, not hunted for in a row of checkboxes", () => {
+  assert.match(modal, /<PeoplePicker/);
+  assert.match(picker, /people-picker__chip/);
+  assert.match(picker, /event\.key === "ArrowDown"/, "the list is keyboard-navigable");
+  assert.match(picker, /event\.key === "Backspace" && !query && value\.length/, "backspace takes the last name back");
+});
+
+test("the Social page uses the same picker for both of its forms", () => {
+  assert.equal(socialPage.match(/<PeoplePicker/g)?.length, 2);
+  assert.doesNotMatch(socialPage, /function PeoplePicker/, "no second copy of it");
+});
+
+test("recommendations arrive with artwork and somewhere to go", () => {
+  const service = read("../../backend/services/socialService.js");
+  assert.match(service, /coverUrl: context\.coverUrl,/);
+  assert.match(service, /albumId: context\.albumId,/);
+  assert.match(socialPage, /social__shelf/);
+  assert.match(socialPage, /\/library\/album\/\$\{encodeURIComponent\(entry\.albumId\)\}/);
 });
