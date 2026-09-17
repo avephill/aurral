@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Disc3, RefreshCw, Send, X } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import PeoplePicker from "../components/PeoplePicker";
+import { describeRecommendationFrom } from "../utils/audience.js";
 import { useAuth } from "../contexts/AuthContext";
 import { useToast } from "../contexts/ToastContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -349,7 +350,7 @@ export default function SocialPage() {
                 </div>
                 {entry.subtitle ? <div className="social__muted">{entry.subtitle}</div> : null}
                 <div className="social__pick-from">
-                  {entry.sender} {entry.toEveryone ? "told everyone" : "sent this to you"} · {when(entry.createdAt)}
+                  {describeRecommendationFrom(entry, data?.me)} · {when(entry.createdAt)}
                 </div>
                 {entry.note ? <p className="social__note">“{entry.note}”</p> : null}
               </li>

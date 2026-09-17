@@ -189,6 +189,14 @@ test("a recommendation reaches named people, or everyone", () => {
   assert.equal(social.listRecommendationsFor("avery").inbox.length, 0);
   assert.equal(social.listRecommendationsFor("avery").sent.length, 2);
 
+  // A broadcast names the people it reached, so nobody has to wonder who
+  // "everyone" was.
+  const broadcast = his.inbox.find((entry) => entry.toEveryone);
+  assert.deepEqual(broadcast.audience.includes("dunshill"), true);
+  assert.equal(broadcast.audience.includes("avery"), false, "not the sender");
+  const mine = his.inbox.find((entry) => !entry.toEveryone);
+  assert.deepEqual(mine.audience, ["dunshill"]);
+
   assert.equal(social.markRecommendationsRead("dunshill") >= 2, true);
   assert.equal(social.listRecommendationsFor("dunshill").unread, 0);
 

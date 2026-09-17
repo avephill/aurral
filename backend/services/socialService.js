@@ -340,6 +340,12 @@ const recommendationContext = (kind, targetId) => {
   return { coverUrl: null, albumId: null };
 };
 
+// Who a recommendation went to. One sent to named people is stored a row per
+// person, so a row names one; a broadcast names nobody and means everyone with
+// an account, which is worth spelling out rather than leaving as "everyone".
+const audienceFor = (row) =>
+  row.recipient === null ? listPeople({ exclude: row.sender }) : [row.recipient];
+
 const recommendationView = (row) => {
   const context = recommendationContext(row.kind, row.target_id);
   return {
@@ -347,6 +353,7 @@ const recommendationView = (row) => {
     sender: row.sender,
     recipient: row.recipient,
     toEveryone: row.recipient === null,
+    audience: audienceFor(row),
     kind: row.kind,
     targetId: row.target_id,
     coverUrl: context.coverUrl,
