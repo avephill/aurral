@@ -16788,3 +16788,67 @@ button.native-library-genre-row:focus-visible {
     display: none;
   }
 }
+
+.recommend-modal {
+  width: min(30rem, calc(100vw - 2rem));
+}
+
+.recommend-modal__subtitle {
+  margin: 0.15rem 0 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+}
+
+.recommend-modal__hint {
+  margin: 0 0 0.75rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+}
+
+.recommend-modal__people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.recommend-modal__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--aurral-text);
+  font-size: 0.9375rem;
+}
+
+.recommend-modal__note {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.recommend-modal__note textarea {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface);
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  resize: vertical;
+}
+
+.recommend-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.native-library-detail__recommend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}

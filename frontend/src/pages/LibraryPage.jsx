@@ -20,6 +20,7 @@ import {
   Radio,
   RefreshCw,
   Search,
+  Send,
   Trash2,
   UserRound,
   X,
@@ -78,6 +79,7 @@ import { DeleteAlbumModal } from "./ArtistDetails/components/DeleteAlbumModal";
 import { DeleteArtistModal } from "./ArtistDetails/components/DeleteArtistModal";
 import { DeleteTrackModal } from "./ArtistDetails/components/DeleteTrackModal";
 import LibraryInfoModal from "./LibraryInfoModal";
+import RecommendModal from "../components/RecommendModal";
 import {
   buildSharedPlaylistTrackPayload,
   reserveUniquePlaylistName,
@@ -555,6 +557,7 @@ function LibraryPage() {
   const [trackDownloadStates, setTrackDownloadStates] = useState({});
   const [libraryRemoval, setLibraryRemoval] = useState(null);
   const [libraryInfo, setLibraryInfo] = useState(null);
+  const [recommending, setRecommending] = useState(null);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [deletingLibraryEntity, setDeletingLibraryEntity] = useState(false);
   const [homeAlbumsGridRef, homeAlbumColumns] = useResponsiveReleaseLimit({
@@ -1758,6 +1761,18 @@ function LibraryPage() {
     setLibraryInfo({ kind, entity, ...context });
   };
 
+  // Recommendations point at the canonical library row, which is what the
+  // library pages are listing, so the id on the item is the one to send.
+  const openRecommend = (kind, entity, subtitle) => {
+    if (!entity?.id) return;
+    setRecommending({
+      kind,
+      id: entity.id,
+      title: entity.title || entity.trackName || entity.name || "This record",
+      subtitle: subtitle || "",
+    });
+  };
+
   const handleDiscoverArtistOpen = (artist) => {
     if (!artist?.mbid) return;
     navigate("/artist/" + encodeURIComponent(artist.mbid), {
@@ -1990,6 +2005,13 @@ function LibraryPage() {
               label: "View info",
               icon: Info,
               onSelect: () => openLibraryInfo("track", track, { artist, album, trackNumber }),
+            },
+            {
+              id: "recommend",
+              label: "Recommend to...",
+              icon: Send,
+              onSelect: () =>
+                openRecommend("track", track, track.artistName || artist?.name || ""),
             },
             {
               id: "favorite",
@@ -2661,6 +2683,15 @@ function LibraryPage() {
                 label={libraryAlbum.title || "album"}
                 onClick={() => toggleFavorite("album", libraryAlbum)}
               />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm native-library-detail__recommend"
+                onClick={() =>
+                  openRecommend("album", libraryAlbum, artist?.name || libraryAlbum.albumArtist || "")
+                }
+              >
+                <Send aria-hidden="true" className="artist-icon-sm" /> Recommend
+              </button>
               <LibraryItemMenu
                 label={libraryAlbum.title || "Album"}
                 items={[
@@ -2676,6 +2707,13 @@ function LibraryPage() {
                     label: "View info",
                     icon: Info,
                     onSelect: () => openLibraryInfo("album", libraryAlbum, { artist }),
+                  },
+                  {
+                    id: "recommend",
+                    label: "Recommend to...",
+                    icon: Send,
+                    onSelect: () =>
+                      openRecommend("album", libraryAlbum, artist?.name || libraryAlbum.albumArtist || ""),
                   },
                   {
                     id: "favorite",
@@ -2925,6 +2963,7 @@ function LibraryPage() {
         deleting={deletingLibraryEntity}
       />
       <LibraryInfoModal item={libraryInfo} onClose={() => setLibraryInfo(null)} />
+      <RecommendModal target={recommending} onClose={() => setRecommending(null)} />
     </>
   );
 
