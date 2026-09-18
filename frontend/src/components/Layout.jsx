@@ -79,6 +79,9 @@ function Layout({ children, headerActions }) {
     location.pathname,
   );
   const isSettingsRoute = location.pathname.startsWith("/settings");
+  // Pages that fill the window and scroll inside themselves rather than as a
+  // whole. They need the shell's height handed down to be able to do it.
+  const isFillRoute = ["/library/playlists", "/library/tags"].includes(location.pathname);
   const closeMobileMenu = useCallback(() => setIsMobileMenuOpen(false), []);
   const navigate = useNavigate();
   const [installedApp] = useState(isInstalledApp);
@@ -462,8 +465,8 @@ function Layout({ children, headerActions }) {
             className={`app-main${
               isArtistDetailsRoute ? " app-main--artist-details" : ""
             }${isSettingsRoute ? " app-main--settings" : ""}${
-              isPlayerActive ? " app-main--player-active" : ""
-            }`}
+              isFillRoute ? " app-main--fills" : ""
+            }${isPlayerActive ? " app-main--player-active" : ""}`}
             ref={mainScrollRef}
             onScroll={() => {
               updateMainScrollbar();

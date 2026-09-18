@@ -926,6 +926,16 @@ textarea {
   padding: 0;
 }
 
+/* A page that fills the window and does its own scrolling inside, rather than
+   growing and scrolling as a whole. Only the shell knows how much height is
+   left after the topbar and the player, so it hands it down here. Phones are
+   left out: a box scrolling inside a box is hard to drag with a thumb. */
+@media (min-width: 768px) {
+  .app-main--fills .app-main__content {
+    height: 100%;
+  }
+}
+
 .app-main-scrollbar {
   position: absolute;
   top: 0;

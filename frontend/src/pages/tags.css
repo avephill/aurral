@@ -193,7 +193,7 @@
   border-bottom: 0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: 767px) {
   .tags-page__layout {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -201,11 +201,7 @@
 
 /* On a wide screen the page fills the window and does not scroll itself; the
    two boxes take the leftover height and scroll inside it. */
-@media (min-width: 801px) {
-  .app-shell:has(.tags-page) .app-main__content {
-    height: 100%;
-  }
-
+@media (min-width: 768px) {
   .tags-page {
     display: flex;
     height: 100%;
@@ -224,6 +220,6 @@
 
   .tags-page__panel {
     height: 100%;
-    max-height: none;
+    max-height: calc(100dvh - 13rem);
   }
 }
