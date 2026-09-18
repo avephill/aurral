@@ -2,6 +2,7 @@ import { db } from "../config/db-sqlite.js";
 import { normalizePath } from "./navidromePathMapping.js";
 import { mediaPathsForNavidromeSongIds } from "./navidromeTrackResolver.js";
 import { SocialError, defaultSocialDeps, resolveCopiesForUser } from "./socialService.js";
+import { sharesWith } from "./congregationService.js";
 import { logger } from "./logger.js";
 
 /**
@@ -69,6 +70,9 @@ export async function createCollabPlaylist({
     .filter((entry) => entry !== owner);
   for (const person of people) {
     if (!knownUser(person)) throw new SocialError(`No Psalter user is called ${person}`);
+    if (!sharesWith(owner, person)) {
+      throw new SocialError(`You and ${person} are not in a congregation together`);
+    }
   }
 
   let paths = [];
@@ -296,6 +300,9 @@ export async function addCollabMember({ id, requester, username, deps = defaultS
   if (!isMember(collab.id, requester)) throw new SocialError("That playlist is not yours", 403);
   const person = clean(username, 100);
   if (!knownUser(person)) throw new SocialError(`No Psalter user is called ${person}`);
+  if (!sharesWith(requester, person)) {
+    throw new SocialError(`You and ${person} are not in a congregation together`);
+  }
   const at = now();
   db.prepare(`
     INSERT INTO collab_members (collab_id, username, joined_at, updated_at) VALUES (?, ?, ?, ?)

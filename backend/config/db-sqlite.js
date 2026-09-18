@@ -613,6 +613,34 @@ db.exec(`
     SELECT id, recipient, read_at, dismissed_at FROM recommendations
     WHERE recipient IS NOT NULL AND (read_at IS NOT NULL OR dismissed_at IS NOT NULL);
 
+  -- Who reaches whom. A congregation is a group of people who share with each
+  -- other: what you send goes to everyone in every congregation you are in,
+  -- and nobody else. The server's library is not scoped by this - everyone can
+  -- still see and ask for the same music. This is about who sees what you make
+  -- and what you have been playing.
+  CREATE TABLE IF NOT EXISTS congregations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    description TEXT,
+    -- 'open': anyone can see it and put themselves in it.
+    -- 'assigned': only its own members and an admin can see it at all, and
+    -- only an admin puts people in it. Family is this one.
+    enrollment TEXT NOT NULL DEFAULT 'assigned',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS congregation_members (
+    congregation_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    joined_at INTEGER NOT NULL,
+    PRIMARY KEY (congregation_id, username),
+    FOREIGN KEY (congregation_id) REFERENCES congregations (id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_congregation_members_username
+    ON congregation_members (username);
+
   -- What each person lets the Social page show about their listening.
   CREATE TABLE IF NOT EXISTS social_settings (
     username TEXT PRIMARY KEY,
@@ -916,6 +944,26 @@ db.exec(`
   WHERE (listen_history_provider IS NULL OR TRIM(listen_history_provider) = '')
     AND listen_history_username IS NOT NULL
     AND TRIM(listen_history_username) != '';
+`);
+
+// Congregations decide who reaches whom, and switching them on must not take
+// away a way of sharing that already worked. So the first run puts everyone who
+// already has an account into one congregation together. Splitting that into
+// Family and the rest is a decision for a person, not a migration.
+db.exec(`
+  INSERT OR IGNORE INTO congregations (name, description, enrollment, created_at, updated_at)
+    SELECT 'Everyone', 'Everyone who had an account when congregations were switched on.', 'assigned',
+           CAST(strftime('%s','now') AS INTEGER) * 1000, CAST(strftime('%s','now') AS INTEGER) * 1000
+     WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'congregations:seeded:v1')
+       AND EXISTS (SELECT 1 FROM users);
+
+  INSERT OR IGNORE INTO congregation_members (congregation_id, username, joined_at)
+    SELECT c.id, u.username, CAST(strftime('%s','now') AS INTEGER) * 1000
+      FROM congregations AS c, users AS u
+     WHERE c.name = 'Everyone'
+       AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'congregations:seeded:v1');
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('congregations:seeded:v1', 'true');
 `);
 
 // Psalter looks like iTunes, for everyone rather than for whoever went looking

@@ -1,4 +1,5 @@
 import { db } from "../config/db-sqlite.js";
+import { peopleSharingWith, sharesWith } from "./congregationService.js";
 import { createNavidromeUserClient } from "./navidromeUserClient.js";
 import { normalizePath } from "./navidromePathMapping.js";
 import { getAdminNavidromeClient, getPersonalLibraryIdForUser } from "./navidromeTrackResolver.js";
@@ -42,7 +43,18 @@ export class SocialError extends Error {
 }
 
 /** Everyone with an account here, so a person can choose who to share with. */
-export function listPeople({ exclude = null } = {}) {
+/**
+ * Who someone shares with. Not everyone with an account: everyone in every
+ * congregation they are in, which is how a flatmate's listening stays away
+ * from a father's Social page. See congregationService.
+ *
+ * Called with nobody in particular - as the listening page once did - it can
+ * only mean every account, so it says so rather than quietly meaning something
+ * narrower.
+ */
+export function listPeople({ exclude = null, forUser = null } = {}) {
+  const who = forUser || exclude;
+  if (who) return peopleSharingWith(who).filter((username) => username !== exclude);
   return db.prepare("SELECT username FROM users ORDER BY username")
     .all()
     .map((row) => row.username)
@@ -120,6 +132,9 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
   if (!wanted.length) throw new SocialError("Choose at least one person");
   for (const recipient of wanted) {
     if (!knownUser(recipient)) throw new SocialError(`No Psalter user is called ${recipient}`);
+    if (!sharesWith(owner, recipient)) {
+      throw new SocialError(`You and ${recipient} are not in a congregation together`);
+    }
   }
 
   const at = now();
@@ -360,6 +375,11 @@ export function createRecommendation({ sender, kind, targetId, note = "", recipi
   const people = [...new Set(recipients.map((name) => clean(name, 100)).filter(Boolean))].filter((name) => name !== sender);
   for (const person of people) {
     if (!knownUser(person)) throw new SocialError(`No Psalter user is called ${person}`);
+    // Checked here rather than only in the picker: the picker is a courtesy,
+    // this is the rule.
+    if (!sharesWith(sender, person)) {
+      throw new SocialError(`You and ${person} are not in a congregation together`);
+    }
   }
   const at = now();
   const insert = db.prepare(`

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { completeWalkthrough } from "../utils/api/endpoints/auth.js";
 import { placeWalkthroughCard } from "../utils/walkthroughPlacement.js";
+import CongregationPicker from "./CongregationPicker";
 import "./walkthrough.css";
 
 // A short look around on someone's first visit: where their music is, how to
@@ -60,6 +61,16 @@ const STEPS = [
     body: "Somewhere to find records worth asking for - new releases, things like what you already play, and what has just been added to the server.",
     path: "/discover",
     anchor: '[data-tour="discover"]',
+  },
+  // Onboarding's one real question. Everything someone shares reaches their
+  // congregations and nowhere else, so it is worth asking before they start
+  // sharing rather than explaining afterwards.
+  {
+    title: "Who you share with",
+    body: "Psalter keeps people in congregations - a group of people who share with each other. Anything you send reaches everyone in every congregation you are in, and nobody else. The music on the server is the same for everybody; this is about who sees what you make and what you have been playing.",
+    content: "congregations",
+    anchor: '[data-tour="social"]',
+    path: "/social",
   },
   {
     title: "Social",
@@ -190,6 +201,11 @@ export default function Walkthrough() {
         <p className="walkthrough__count">{step + 1} of {steps.length}</p>
         <h2 className="walkthrough__title" id="walkthrough-title">{current.title}</h2>
         <p className="walkthrough__body">{current.body}</p>
+        {current.content === "congregations" ? (
+          <div className="walkthrough__content">
+            <CongregationPicker compact />
+          </div>
+        ) : null}
         <div className="walkthrough__actions">
           <button type="button" className="btn btn-ghost btn-sm" onClick={finish}>
             Skip

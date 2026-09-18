@@ -1,0 +1,75 @@
+/* Congregations: the groups of people someone shares with. */
+
+.congregations__list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.congregations__list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface-raised);
+}
+
+.congregations__list > li.is-in {
+  border-color: var(--aurral-accent);
+}
+
+.congregations__copy {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.congregations__name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--aurral-text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.congregations__name svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--aurral-text-muted);
+}
+
+.congregations__tick {
+  color: var(--aurral-accent) !important;
+}
+
+.congregations__meta,
+.congregations__assigned,
+.congregations__empty {
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.congregations__assigned {
+  flex-shrink: 0;
+  font-style: italic;
+}
+
+.congregations__error {
+  margin: 0.5rem 0 0;
+  color: var(--aurral-danger);
+  font-size: 0.8125rem;
+}
+
+.congregations--compact .congregations__list > li {
+  padding: 0.35rem 0.5rem;
+}
+
+.congregations--compact .congregations__meta {
+  font-size: 0.75rem;
+}

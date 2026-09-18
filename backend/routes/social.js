@@ -58,7 +58,7 @@ router.get("/overview", noCache, (req, res) => {
 // Slower than the rest: it asks Navidrome for each person's listening.
 router.get("/highlights", noCache, async (req, res) => {
   try {
-    res.json(await getListeningHighlights({}));
+    res.json(await getListeningHighlights({ people: listPeople({ exclude: me(req) }) }));
   } catch (error) {
     fail(res, error, "Could not read what people have been playing");
   }

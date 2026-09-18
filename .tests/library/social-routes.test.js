@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   cleanupIsolatedState,
+  shareWithEveryone,
   resetDatabase,
   setupIsolatedBackend,
 } from "../helpers/backendTestHarness.js";
@@ -26,6 +27,9 @@ let trackId;
 test.before(async () => {
   resetDatabase(db);
   for (const name of ["avery", "dunshill"]) userOps.createUser(name, "hash");
+  // Sharing needs a congregation in common; this suite is about what is
+  // shared, not about who may.
+  shareWithEveryone(db);
   const artist = libraryStore.upsertLibraryArtist({ identityKey: "a", name: "Neko Case", metadata: {} });
   const album = libraryStore.upsertLibraryAlbum({ identityKey: "al", artistId: artist.id, title: "Blacklisted", metadata: {} });
   const track = libraryStore.upsertLibraryTrack({ identityKey: "r:1", title: "Deep Red Bells", artistName: "Neko Case", metadata: {} });

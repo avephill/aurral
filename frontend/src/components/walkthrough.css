@@ -57,6 +57,15 @@
   line-height: 1.5;
 }
 
+/* A step that asks for something rather than only telling you. Kept short:
+   the card has to stay out of the way of what it is pointing at. */
+.walkthrough__content {
+  max-height: 14rem;
+  margin: 0 0 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .walkthrough__actions {
   display: flex;
   align-items: center;

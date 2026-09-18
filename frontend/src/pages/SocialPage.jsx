@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Disc3, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import PeoplePicker from "../components/PeoplePicker";
+import CongregationPicker from "../components/CongregationPicker";
 import { describeRecommendationFrom } from "../utils/audience.js";
 import { useUserLibrary } from "../hooks/useUserLibrary";
 import { addArtistToMyLibrary } from "../utils/api/endpoints/userLibrary.js";
@@ -671,6 +672,15 @@ export default function SocialPage() {
             ))}
           </ul>
         ) : null}
+      </section>
+
+      <section className="social__panel">
+        <h2>Who you share with</h2>
+        <p className="social__hint">
+          Everything on this page reaches everyone in every congregation you are in, and nobody
+          else. The server&apos;s music is the same for everybody either way.
+        </p>
+        <CongregationPicker onChanged={() => queryClient.invalidateQueries({ queryKey: ["social"] })} />
       </section>
 
       <section className="social__panel">

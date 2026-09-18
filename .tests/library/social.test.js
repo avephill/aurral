@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   cleanupIsolatedState,
+  shareWithEveryone,
   resetDatabase,
   setupIsolatedBackend,
 } from "../helpers/backendTestHarness.js";
@@ -27,6 +28,9 @@ const PATHS = {};
 test.before(() => {
   resetDatabase(db);
   for (const name of ["avery", "dunshill", "kitty"]) userOps.createUser(name, "hash");
+  // Sharing needs a congregation in common; this suite is about what is
+  // shared, not about who may.
+  shareWithEveryone(db);
   const artist = libraryStore.upsertLibraryArtist({ identityKey: "a", name: "Neko Case", metadata: {} });
   const album = libraryStore.upsertLibraryAlbum({ identityKey: "al", artistId: artist.id, title: "Blacklisted", metadata: {} });
   for (const name of ["shared", "outside"]) {
@@ -360,4 +364,21 @@ test("a recommendation carries the artist, so a page can offer to add them", () 
   const entry = social.listRecommendationsFor("kitty").inbox.find((row) => row.kind === "track");
   assert.ok(Object.prototype.hasOwnProperty.call(entry, "artistMbid"));
   assert.ok(Object.prototype.hasOwnProperty.call(entry, "albumId"));
+});
+
+// The congregation rule, where it actually bites: the picker offering the
+// right names is a courtesy, refusing the wrong ones is the rule.
+
+test("you cannot recommend to someone you share no congregation with", () => {
+  db.prepare("DELETE FROM congregation_members WHERE username = 'kitty'").run();
+  assert.equal(social.listPeople({ exclude: "avery" }).includes("kitty"), false, "and she is not offered");
+  assert.throws(
+    () => social.createRecommendation({
+      sender: "avery", kind: "track", targetId: trackIds.shared, recipients: ["kitty"],
+    }),
+    /not in a congregation together/,
+  );
+  // Put back, so the rest of the suite is about sharing again.
+  shareWithEveryone(db);
+  assert.ok(social.listPeople({ exclude: "avery" }).includes("kitty"));
 });

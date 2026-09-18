@@ -93,6 +93,23 @@ export function resetDatabase(db) {
   }
 }
 
+/**
+ * Put every account in one congregation, so that a suite about sharing is
+ * about sharing rather than about who is allowed to. Call it after the users
+ * exist; a suite testing the congregation rules themselves should not use it.
+ */
+export function shareWithEveryone(db, name = "Test congregation") {
+  const at = Date.now();
+  db.prepare(`
+    INSERT OR IGNORE INTO congregations (name, description, enrollment, created_at, updated_at)
+    VALUES (?, '', 'open', ?, ?)
+  `).run(name, at, at);
+  db.prepare(`
+    INSERT OR IGNORE INTO congregation_members (congregation_id, username, joined_at)
+    SELECT c.id, u.username, ? FROM congregations AS c, users AS u WHERE c.name = ?
+  `).run(at, name);
+}
+
 export function createMockHttpServer(handler) {
   const server = http.createServer(handler);
   return new Promise((resolve) => {
