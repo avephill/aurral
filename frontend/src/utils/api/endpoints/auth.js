@@ -81,6 +81,13 @@ export const getLidarrMetadataProfilesOnboarding = (url, apiKey) =>
 
 export const getUsers = () => getData("/users");
 
+// What quality a person's requests are fetched at. Admin only: it decides
+// what the downloaders go looking for and what a request costs in disk.
+export const getLidarrQualityProfiles = () => getData("/users/lidarr-profiles");
+
+export const setUserQualityProfile = (id, qualityProfileId) =>
+  patchData(`/users/${encodeURIComponent(id)}/quality-profile`, { qualityProfileId });
+
 export const createUser = (username, password, role, permissions) =>
   postData("/users", {
     username,

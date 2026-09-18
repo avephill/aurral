@@ -433,6 +433,57 @@ router.post("/:id/walkthrough/reset", requireAuth, requireAdmin, (req, res) => {
   }
 });
 
+// What quality new music is fetched at, per person. An admin's call: it
+// decides what the downloaders go looking for and how much disk a request
+// costs, which is not really the asker's business. Everyone follows the
+// server's own default until someone is given one of their own.
+router.get("/lidarr-profiles", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { lidarrClient } = await import("../services/lidarrClient.js");
+    const summary = await lidarrClient.getArtistAddPreferenceSummary(null);
+    res.json({
+      configured: summary.configured,
+      qualityProfiles: summary.qualityProfiles,
+      fallbackQualityProfileId: summary.fallbacks?.qualityProfileId ?? null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to read Lidarr profiles", message: e.message });
+  }
+});
+
+router.patch("/:id/quality-profile", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const user = userOps.getUserById(Number(req.params.id));
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const raw = req.body?.qualityProfileId;
+    // Null is a real answer: it means follow whatever the server is set to.
+    const wanted = raw === null || raw === "" || raw === undefined ? null : Number(raw);
+    if (wanted !== null && !Number.isSafeInteger(wanted)) {
+      return res.status(400).json({ error: "qualityProfileId must be a number or null", field: "qualityProfileId" });
+    }
+
+    if (wanted !== null) {
+      const { lidarrClient } = await import("../services/lidarrClient.js");
+      if (!lidarrClient.isConfigured()) {
+        return res.status(503).json({ error: "Lidarr is not configured" });
+      }
+      const summary = await lidarrClient.getArtistAddPreferenceSummary(null);
+      if (!summary.qualityProfiles.some((profile) => profile.id === wanted)) {
+        return res.status(400).json({ error: `Unknown Lidarr quality profile: ${wanted}`, field: "qualityProfileId" });
+      }
+    }
+
+    const updated = userOps.updateUser(user.id, { lidarrQualityProfileId: wanted });
+    return res.json({
+      username: user.username,
+      lidarrQualityProfileId: updated?.lidarrQualityProfileId ?? null,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to save", message: e.message });
+  }
+});
+
 router.get("/me/theme", requireAuth, (req, res) => {
   try {
     const user = userOps.getUserById(req.user.id);
@@ -503,6 +554,17 @@ router.patch("/me/lidarr-preferences", requireAuth, async (req, res) => {
       return res.status(400).json({
         error: "Invalid Lidarr preferences",
         message: "qualityProfileId must be a numeric id or null",
+        field: "qualityProfileId",
+      });
+    }
+
+    // Whose call this is changed: an admin decides what quality each person's
+    // requests are fetched at, so a change to it from anyone else is refused
+    // rather than quietly ignored.
+    if (hasQualityProfileId && req.user.role !== "admin") {
+      return res.status(403).json({
+        error: "Not yours to set",
+        message: "An admin chooses what quality your music is fetched at.",
         field: "qualityProfileId",
       });
     }
