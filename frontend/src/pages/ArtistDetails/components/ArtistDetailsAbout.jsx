@@ -6,6 +6,8 @@ import lastFmLogo from "../../../../images/logos/last-fm.svg?raw";
 import musicBrainzLogo from "../../../../images/logos/musicbrainz.svg?raw";
 import listenBrainzLogo from "../../../../images/logos/listenbrainz.svg?raw";
 
+import { rateYourMusicLink } from "../../../utils/rateYourMusic.js";
+
 import { UUID_REGEX } from "../../../../../lib/uuid.js";
 
 const toCurrentColorSvg = (svg) =>
@@ -110,6 +112,12 @@ export function ArtistDetailsAbout({
               : `add/search?term=lidarr:${encodeURIComponent(lidarrArtistId)}`
           }`
         : null;
+    const relationLinks = buildRelationLinks(artist);
+    // Prefer the real page when MusicBrainz knows it; otherwise a search.
+    const rym = rateYourMusicLink({
+      name: artist?.name,
+      hrefs: relationLinks.map((link) => link.href),
+    });
     const primary = [
       lidarrHref
         ? {
@@ -126,6 +134,15 @@ export function ArtistDetailsAbout({
             label: "Last.fm",
             href: `https://www.last.fm/music/${encodeURIComponent(artist.name)}`,
             logo: toCurrentColorSvg(lastFmLogo),
+            color: "var(--aurral-text-muted)",
+          }
+        : null,
+      rym
+        ? {
+            key: "rateyourmusic",
+            label: "RateYourMusic",
+            href: rym.href,
+            title: rym.exact ? undefined : `Search RateYourMusic for ${artist.name}`,
             color: "var(--aurral-text-muted)",
           }
         : null,
@@ -149,7 +166,7 @@ export function ArtistDetailsAbout({
         : null,
     ].filter(Boolean);
     const seen = new Set(primary.map((link) => link.href));
-    const secondary = buildRelationLinks(artist).filter((link) => {
+    const secondary = relationLinks.filter((link) => {
       if (seen.has(link.href)) return false;
       seen.add(link.href);
       return true;
@@ -252,6 +269,7 @@ export function ArtistDetailsAbout({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="artist-external-link"
+                    title={link.title}
                   >
                     {link.logo ? (
                       <span
