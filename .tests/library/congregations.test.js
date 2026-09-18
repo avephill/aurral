@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   cleanupIsolatedState,
@@ -95,4 +96,26 @@ test("two congregations cannot share a name", () => {
 test("only accounts that exist can be put in one", () => {
   const family = congregations.visibleCongregations("avery").find((entry) => entry.name === "Family");
   assert.throws(() => congregations.setMembers(family.id, ["nobody"]), /No account called nobody/);
+});
+
+test("an admin can manage them from Settings, and only an admin", () => {
+  const routes = readFileSync(new URL("../../backend/routes/congregations.js", import.meta.url), "utf8");
+  // Making, renaming, filling and removing one is an admin's job; seeing your
+  // own and joining an open one is not.
+  for (const guarded of [
+    'router.post("/", requireAdmin',
+    'router.patch("/:id", requireAdmin',
+    'router.put("/:id/members", requireAdmin',
+    'router.delete("/:id", requireAdmin',
+  ]) {
+    assert.ok(routes.includes(guarded), guarded);
+  }
+  assert.ok(routes.includes('router.post("/:id/join", (req'), "joining is yours to do");
+  assert.ok(routes.includes('router.post("/:id/leave", (req'), "and so is leaving");
+
+  const settings = readFileSync(
+    new URL("../../frontend/src/pages/Settings/components/SettingsUsersTab.jsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(settings, /<SettingsCongregations usersList=\{usersList\} \/>/, "under Settings with the users");
 });

@@ -5,6 +5,7 @@ import { setStoredAuth } from "../../../utils/api/core.js";
 import PillToggle from "../../../components/PillToggle";
 import { SettingsInput } from "./SettingsField";
 import { SettingsArrFieldSet, SettingsArrFormGroup } from "./arr/SettingsArrLayout";
+import { SettingsCongregations } from "./SettingsCongregations";
 
 import { createPortal } from "react-dom";
 import { Compass, Lock, Trash2, UserPlus, X } from "lucide-react";
@@ -539,6 +540,8 @@ export function SettingsUsersTab({
               </table>
             </div>
           </SettingsArrFieldSet>
+
+          <SettingsCongregations usersList={usersList} />
 
           {deleteUserTarget
             ? createPortal(
