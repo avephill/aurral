@@ -100,3 +100,20 @@ test("a recommendation offers the library the album page offers", () => {
   assert.match(socialPage, /addArtistToMyLibrary\(entry\.artistMbid\)/);
   assert.match(socialPage, /heldArtistMbids\.has\(entry\.artistMbid\)/);
 });
+
+test("the share actions say what they do to the copy", () => {
+  // "Refresh" and "Remove" read as reloading a page and deleting a playlist.
+  assert.match(socialPage, /Get the latest/);
+  assert.match(socialPage, /Keep it, stop updating/);
+  assert.match(socialPage, /Send changes now/);
+  assert.doesNotMatch(socialPage, /btn-xs" onClick=\{\(\) => resync/);
+});
+
+test("a copy says it is a copy, and what happens to changes made in it", () => {
+  assert.match(socialPage, /kept in step with theirs/);
+  assert.match(socialPage, /replaced next time they change the original/);
+});
+
+test("the owner is told when someone has thrown their copy away", () => {
+  assert.match(socialPage, /removed their copy\. Share it again/);
+});

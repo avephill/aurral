@@ -362,6 +362,11 @@ export default function SocialPage() {
         {received.length === 0 ? (
           <p className="social__muted">Nothing yet. A playlist someone shares with you appears here, and in your own playlists.</p>
         ) : (
+          <>
+          <p className="social__muted">
+            Each of these is your own copy, kept in step with theirs. Anything you change in one is
+            replaced next time they change the original - keep it and it stops following theirs.
+          </p>
           <ul className="social__list">
             {received.map((share) => (
               <li key={share.id} className="social__card">
@@ -379,12 +384,29 @@ export default function SocialPage() {
                   {share.error ? <div className="social__warning">{share.error}</div> : null}
                 </div>
                 <div className="social__actions">
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => resync.mutate(share.id)}>Refresh</button>
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => unshare.mutate(share.id)}>Remove</button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    title={`Copy over whatever ${share.owner} has in it now`}
+                    onClick={() => resync.mutate(share.id)}
+                    disabled={resync.isPending}
+                  >
+                    Get the latest
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    title="The playlist stays in your account and stops following theirs"
+                    onClick={() => unshare.mutate(share.id)}
+                    disabled={unshare.isPending}
+                  >
+                    Keep it, stop updating
+                  </button>
                 </div>
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
 
@@ -448,11 +470,32 @@ export default function SocialPage() {
                     {share.missing ? ` · ${share.missing} left out` : ""}
                     {share.syncedAt ? ` · updated ${when(share.syncedAt)}` : ""}
                   </div>
+                  {share.droppedAt ? (
+                    <div className="social__muted">
+                      {share.recipient} removed their copy. Share it again to send them a new one.
+                    </div>
+                  ) : null}
                   {share.error ? <div className="social__warning">{share.error}</div> : null}
                 </div>
                 <div className="social__actions">
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => resync.mutate(share.id)}>Refresh</button>
-                  <button type="button" className="btn btn-ghost btn-xs" onClick={() => unshare.mutate(share.id)}>Stop sharing</button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    title={`Copy your changes into ${share.recipient}'s copy now`}
+                    onClick={() => resync.mutate(share.id)}
+                    disabled={resync.isPending}
+                  >
+                    Send changes now
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    title={`${share.recipient} keeps the copy they have; it stops following yours`}
+                    onClick={() => unshare.mutate(share.id)}
+                    disabled={unshare.isPending}
+                  >
+                    Stop sharing
+                  </button>
                 </div>
               </li>
             ))}
