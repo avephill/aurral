@@ -927,12 +927,27 @@ textarea {
 }
 
 /* A page that fills the window and does its own scrolling inside, rather than
-   growing and scrolling as a whole. Only the shell knows how much height is
-   left after the topbar and the player, so it hands it down here. Phones are
-   left out: a box scrolling inside a box is hard to drag with a thumb. */
+   growing and scrolling as a whole.
+
+   The height is handed down as flex space rather than as a percentage: a
+   percentage has to resolve against every ancestor in turn and silently
+   becomes "as tall as the content" if any one of them is not definite, which
+   is exactly how this page ended up scrolling as a whole twice. `overflow:
+   hidden` here is the guarantee behind it - whatever the page does with the
+   space, the shell itself cannot scroll. Phones are left out: a box scrolling
+   inside a box is hard to drag with a thumb. */
 @media (min-width: 768px) {
+  .app-main--fills {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
   .app-main--fills .app-main__content {
-    height: 100%;
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
   }
 }
 

@@ -227,9 +227,12 @@
    it. Phones keep scrolling the page, where a box inside a box is hard to
    drag. */
 @media (min-width: 768px) {
+  /* Takes the space the shell has left rather than asking for a share of a
+     height that may not be there. */
   .nd-playlists {
     display: flex;
-    height: 100%;
+    min-height: 0;
+    flex: 1;
     flex-direction: column;
     padding-bottom: 0;
   }
@@ -247,7 +250,7 @@
 
   .nd-playlists__list {
     height: 100%;
-    max-height: calc(100dvh - 13rem);
+    max-height: none;
   }
 
   .nd-playlists__detail {
@@ -265,7 +268,7 @@
   .nd-playlists__detail > .nd-playlists__tracks {
     flex: 1;
     min-height: 0;
-    max-height: calc(100dvh - 19rem);
+    max-height: none;
     padding: 0.25rem 0.5rem;
     border: 1px solid var(--aurral-border);
     border-radius: var(--aurral-radius);

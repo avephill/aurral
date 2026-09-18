@@ -31,7 +31,6 @@
 .tags-page__panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  max-height: max(20rem, calc(100dvh - 26rem));
   min-height: 18rem;
   border: 1px solid var(--aurral-border);
   border-radius: var(--aurral-radius);
@@ -204,7 +203,8 @@
 @media (min-width: 768px) {
   .tags-page {
     display: flex;
-    height: 100%;
+    min-height: 0;
+    flex: 1;
     flex-direction: column;
     padding-bottom: 0;
   }
@@ -220,6 +220,6 @@
 
   .tags-page__panel {
     height: 100%;
-    max-height: calc(100dvh - 13rem);
+    max-height: none;
   }
 }
