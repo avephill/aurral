@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Disc3, Plus, RefreshCw, Send, X } from "lucide-react";
+import { Disc3, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import PeoplePicker from "../components/PeoplePicker";
 import { describeRecommendationFrom } from "../utils/audience.js";
@@ -23,6 +23,11 @@ import {
   stopSharing,
   syncShare,
   withdrawRecommendation,
+  addCollabMember,
+  createCollabPlaylist,
+  endCollabPlaylist,
+  leaveCollabPlaylist,
+  syncCollabPlaylist,
 } from "../utils/api/endpoints/social.js";
 import "./social.css";
 
@@ -252,6 +257,62 @@ function SharePlaylistForm({ people, onShared }) {
   );
 }
 
+function CollabForm({ people, playlists, onMade }) {
+  const { showError, showSuccess } = useToast();
+  const [name, setName] = useState("");
+  const [members, setMembers] = useState([]);
+  const [fromPlaylistId, setFromPlaylistId] = useState("");
+
+  const make = useMutation({
+    mutationFn: () => createCollabPlaylist({ name, members, fromPlaylistId }),
+    onSuccess: (result) => {
+      showSuccess(`Started "${result.name}" with ${result.members.length} people`);
+      setName("");
+      setMembers([]);
+      setFromPlaylistId("");
+      onMade();
+    },
+    onError: (error) => showError(errorText(error, "Could not start that playlist")),
+  });
+
+  return (
+    <div className="social__form">
+      <div className="social__row">
+        <input
+          type="text"
+          className="input input-sm"
+          placeholder="Name it"
+          value={name}
+          maxLength={200}
+          onChange={(event) => setName(event.target.value)}
+        />
+        <select
+          className="input input-sm"
+          value={fromPlaylistId}
+          onChange={(event) => setFromPlaylistId(event.target.value)}
+        >
+          <option value="">Start empty</option>
+          {playlists.map((playlist) => (
+            <option key={playlist.id} value={playlist.id}>
+              Start from {playlist.name} ({playlist.trackCount || 0})
+            </option>
+          ))}
+        </select>
+      </div>
+      <PeoplePicker people={people} value={members} onChange={setMembers} placeholder="Who is building it with you" />
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        disabled={make.isPending || !name.trim() || !members.length}
+        onClick={() => make.mutate()}
+      >
+        {make.isPending ? <DotLoader size="sm" label={null} /> : <Users className="social__icon" aria-hidden="true" />}
+        Start it
+      </button>
+    </div>
+  );
+}
+
 export default function SocialPage() {
   useDocumentTitle("Social");
   const { user } = useAuth();
@@ -265,6 +326,12 @@ export default function SocialPage() {
     enabled: Boolean(user),
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["social"] });
+
+  const myPlaylistsQuery = useQuery({
+    queryKey: ["social", "my-playlists"],
+    queryFn: ({ signal }) => getNavidromePlaylists({ signal }),
+    enabled: Boolean(user),
+  });
 
   const highlights = useQuery({
     queryKey: ["social", "highlights"],
@@ -325,6 +392,29 @@ export default function SocialPage() {
     onSuccess: refresh,
     onError: (error) => showError(errorText(error, "Could not stop sharing")),
   });
+  const collabSync = useMutation({
+    mutationFn: (id) => syncCollabPlaylist(id),
+    onSuccess: () => {
+      showSuccess("Everyone's copy is up to date");
+      refresh();
+    },
+    onError: (error) => showError(errorText(error, "Could not bring that up to date")),
+  });
+  const collabLeave = useMutation({
+    mutationFn: ({ id, username }) => leaveCollabPlaylist(id, username),
+    onSuccess: refresh,
+    onError: (error) => showError(errorText(error, "Could not leave that")),
+  });
+  const collabEnd = useMutation({
+    mutationFn: (id) => endCollabPlaylist(id),
+    onSuccess: refresh,
+    onError: (error) => showError(errorText(error, "Could not end that")),
+  });
+  const collabAdd = useMutation({
+    mutationFn: ({ id, username }) => addCollabMember(id, username),
+    onSuccess: refresh,
+    onError: (error) => showError(errorText(error, "Could not add them")),
+  });
   const listening = useMutation({
     mutationFn: (value) => setShareListening(value),
     onSuccess: refresh,
@@ -336,6 +426,8 @@ export default function SocialPage() {
   const inbox = data?.recommendations?.inbox || [];
   const mySent = data?.recommendations?.sent || [];
   const received = data?.shares?.received || [];
+  const collabs = data?.collabs || [];
+  const myPlaylists = (myPlaylistsQuery.data?.playlists || []).filter((playlist) => playlist.owned);
   const sent = data?.shares?.sent || [];
 
   if (overview.isLoading) {
@@ -451,6 +543,84 @@ export default function SocialPage() {
 
         <h3>Recommend something</h3>
         <RecommendForm people={people} onSent={refresh} />
+      </section>
+
+      <section className="social__panel">
+        <h2>Built together</h2>
+        <p className="social__muted">
+          Everyone holds their own copy and everyone can change it. What you add or take out reaches
+          the others within a quarter of an hour, or at once with the button below. Songs somebody&apos;s
+          library does not hold are left out of their copy and stay on the list.
+        </p>
+        {collabs.length ? (
+          <ul className="social__list">
+            {collabs.map((collab) => (
+              <li key={collab.id} className="social__card">
+                <div>
+                  <div className="social__title">
+                    {collab.playlistId ? (
+                      <Link to={`/library/playlists?id=${encodeURIComponent(collab.playlistId)}`}>{collab.name}</Link>
+                    ) : collab.name}
+                  </div>
+                  <div className="social__muted">
+                    {collab.members.join(", ")} · {collab.songCount} songs
+                    {collab.missing ? ` · ${collab.missing} not in your library` : ""}
+                    {collab.isOwner ? " · you started it" : ""}
+                  </div>
+                  {collab.error ? <div className="social__warning">{collab.error}</div> : null}
+                </div>
+                <div className="social__actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    onClick={() => collabSync.mutate(collab.id)}
+                    disabled={collabSync.isPending}
+                  >
+                    Bring everyone up to date
+                  </button>
+                  {people.filter((person) => !collab.members.includes(person)).length ? (
+                    <select
+                      className="input input-sm"
+                      value=""
+                      aria-label={`Add somebody to ${collab.name}`}
+                      onChange={(event) =>
+                        event.target.value && collabAdd.mutate({ id: collab.id, username: event.target.value })
+                      }
+                    >
+                      <option value="">Add somebody…</option>
+                      {people
+                        .filter((person) => !collab.members.includes(person))
+                        .map((person) => <option key={person} value={person}>{person}</option>)}
+                    </select>
+                  ) : null}
+                  {collab.isOwner ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      title="Everyone keeps the copy they have"
+                      onClick={() => collabEnd.mutate(collab.id)}
+                    >
+                      End it
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      title="You keep your copy; it stops following the others"
+                      onClick={() => collabLeave.mutate({ id: collab.id, username: data?.me })}
+                    >
+                      Leave
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="social__muted">Nothing yet.</p>
+        )}
+        <h3>Start one</h3>
+        <CollabForm people={people} playlists={myPlaylists} onMade={refresh} />
       </section>
 
       <section className="social__panel">

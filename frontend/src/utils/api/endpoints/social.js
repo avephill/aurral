@@ -30,3 +30,20 @@ export const withdrawRecommendation = (id) =>
   deleteData(`/social/recommendations/${encodeURIComponent(id)}`);
 
 export const setShareListening = (shareListening) => putData("/social/settings", { shareListening });
+
+// Playlists built together: the list lives in Psalter and each member holds a
+// copy, so what they do to theirs is read back on the next pass.
+
+export const createCollabPlaylist = ({ name, members, fromPlaylistId }) =>
+  postData("/social/collabs", { name, members, fromPlaylistId }, { timeout: SLOW_TIMEOUT_MS });
+
+export const syncCollabPlaylist = (id) =>
+  postData(`/social/collabs/${encodeURIComponent(id)}/sync`, {}, { timeout: SLOW_TIMEOUT_MS });
+
+export const addCollabMember = (id, username) =>
+  postData(`/social/collabs/${encodeURIComponent(id)}/members`, { username }, { timeout: SLOW_TIMEOUT_MS });
+
+export const leaveCollabPlaylist = (id, username) =>
+  deleteData(`/social/collabs/${encodeURIComponent(id)}/members/${encodeURIComponent(username)}`);
+
+export const endCollabPlaylist = (id) => deleteData(`/social/collabs/${encodeURIComponent(id)}`);

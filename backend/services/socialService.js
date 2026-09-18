@@ -66,7 +66,7 @@ export function setShareListening(username, shareListening) {
 
 // ---------------------------------------------------------------- shares
 
-const defaultDeps = {
+export const defaultSocialDeps = {
   adminClient: () => getAdminNavidromeClient(),
   userClient: (username) => createNavidromeUserClient({ username }),
   personalLibraryId: (username) => getPersonalLibraryIdForUser(username),
@@ -104,7 +104,7 @@ export function resetSocialCaches() {
 }
 
 /** Share one of your playlists with people, and write their copies now. */
-export async function sharePlaylist({ owner, playlistId, recipients = [], deps = defaultDeps } = {}) {
+export async function sharePlaylist({ owner, playlistId, recipients = [], deps = defaultSocialDeps } = {}) {
   const id = clean(playlistId);
   if (!id) throw new SocialError("playlistId is required");
   const admin = deps.adminClient();
@@ -146,6 +146,33 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
 }
 
 /**
+ * Which song id each of these files is, for one person: their own library's
+ * copy where they have one, otherwise any copy they can reach.
+ *
+ * A file's path is the only identity shared across Navidrome libraries - the
+ * ids deliberately differ per library - so everything that hands music from
+ * one account to another goes through here.
+ */
+export async function resolveCopiesForUser({ username, paths = [], preferSongIds = new Map(), deps = defaultSocialDeps } = {}) {
+  const preferLibraryId = await deps.personalLibraryId(username).catch(() => null);
+  const allowed = await librariesFor(username, deps);
+  const resolved = new Map();
+  for (const path of paths) {
+    if (resolved.has(path)) continue;
+    const copies = await deps.songsByPath(path).catch(() => []);
+    const exact = (Array.isArray(copies) ? copies : [])
+      .filter((song) => song?.id && normalizePath(song?.path) === path);
+    const pick = exact.find((song) => Number(song.libraryId) === Number(preferLibraryId))
+      || exact.find((song) => allowed.size && allowed.has(Number(song.libraryId)))
+      // Their libraries are unknown, so leave the copy the sender had rather
+      // than guess at one they may not be able to play.
+      || (allowed.size ? null : exact.find((song) => String(song.id) === String(preferSongIds.get(path) || "")));
+    resolved.set(path, pick?.id ? String(pick.id) : null);
+  }
+  return resolved;
+}
+
+/**
  * Write one share's copy, or leave it alone when it already matches.
  *
  * The recipient's copy of each file is found through Navidrome by path rather
@@ -154,7 +181,7 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
  * 45 songs of one real Christmas playlist - which would otherwise vanish from
  * the copy without anyone noticing.
  */
-export async function syncShare(share, deps = defaultDeps) {
+export async function syncShare(share, deps = defaultSocialDeps) {
   const at = now();
   // Thrown away by the person it was for. Writing it again every quarter of an
   // hour is not sharing, it is pestering.
@@ -190,23 +217,13 @@ export async function syncShare(share, deps = defaultDeps) {
       }))
       .filter((entry) => entry.path);
 
-    const preferLibraryId = await deps.personalLibraryId(share.recipient).catch(() => null);
-    const allowed = await librariesFor(share.recipient, deps);
-
     // One lookup per distinct file, not per entry: a playlist often repeats one.
-    const theirCopy = new Map();
-    for (const entry of entries) {
-      if (theirCopy.has(entry.path)) continue;
-      const copies = await deps.songsByPath(entry.path).catch(() => []);
-      const exact = (Array.isArray(copies) ? copies : [])
-        .filter((song) => song?.id && normalizePath(song?.path) === entry.path);
-      const pick = exact.find((song) => Number(song.libraryId) === Number(preferLibraryId))
-        || exact.find((song) => allowed.size && allowed.has(Number(song.libraryId)))
-        // Their libraries are unknown, so leave the copy the owner had rather
-        // than guess at one they may not be able to play.
-        || (allowed.size ? null : exact.find((song) => String(song.id) === entry.songId));
-      theirCopy.set(entry.path, pick?.id ? String(pick.id) : null);
-    }
+    const theirCopy = await resolveCopiesForUser({
+      username: share.recipient,
+      paths: entries.map((entry) => entry.path),
+      preferSongIds: new Map(entries.map((entry) => [entry.path, entry.songId])),
+      deps,
+    });
 
     const mirrorSongIds = [];
     let missing = 0;
@@ -262,7 +279,7 @@ export async function syncShare(share, deps = defaultDeps) {
 }
 
 /** Keep every share in step; cheap, because an unchanged copy is not written. */
-export async function syncAllShares(deps = defaultDeps) {
+export async function syncAllShares(deps = defaultSocialDeps) {
   const shares = db.prepare("SELECT * FROM playlist_shares").all();
   const counts = {};
   for (const share of shares) {
@@ -298,7 +315,7 @@ export function listSharesByOwner(username) {
  * Stop sharing. The recipient's copy is theirs, so it is left in place unless
  * the person who shared it asks for it to go.
  */
-export async function removeShare({ id, requester, deleteCopy = false, deps = defaultDeps } = {}) {
+export async function removeShare({ id, requester, deleteCopy = false, deps = defaultSocialDeps } = {}) {
   const share = db.prepare("SELECT * FROM playlist_shares WHERE id = ?").get(Number(id));
   if (!share) throw new SocialError("No such share", 404);
   if (share.owner !== requester && share.recipient !== requester) {
@@ -515,7 +532,7 @@ const albumView = (album) => ({
  * What people have been playing, for anyone who lets it be shown. Read from
  * Navidrome as each person, so it is their own listening and nobody else's.
  */
-export async function getListeningHighlights({ deps = defaultDeps, people = null } = {}) {
+export async function getListeningHighlights({ deps = defaultSocialDeps, people = null } = {}) {
   const usernames = people || listPeople();
   const entries = [];
   for (const username of usernames) {
@@ -540,6 +557,10 @@ export function startSocialSync({ intervalMs = 15 * 60 * 1000 } = {}) {
   if (syncTimer) return;
   syncTimer = setInterval(() => {
     syncAllShares().catch((error) => logger.warn("library", `[Social] Share sync failed: ${error.message}`));
+    // Playlists built together are read back the same way, in the same pass.
+    import("./collabPlaylistService.js")
+      .then(({ syncAllCollabPlaylists }) => syncAllCollabPlaylists())
+      .catch((error) => logger.warn("library", `[Collab] Sync failed: ${error.message}`));
   }, intervalMs);
   syncTimer.unref?.();
 }

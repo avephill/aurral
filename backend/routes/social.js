@@ -17,6 +17,14 @@ import {
   syncShare,
   withdrawRecommendation,
 } from "../services/socialService.js";
+import {
+  addCollabMember,
+  createCollabPlaylist,
+  deleteCollabPlaylist,
+  listCollabPlaylistsFor,
+  removeCollabMember,
+  syncCollabPlaylist,
+} from "../services/collabPlaylistService.js";
 import { db } from "../config/db-sqlite.js";
 
 // The Social page: playlists shared with you, albums and songs people point
@@ -40,6 +48,7 @@ router.get("/overview", noCache, (req, res) => {
       settings: getSocialSettings(username),
       shares: { received: listSharesForRecipient(username), sent: listSharesByOwner(username) },
       recommendations: listRecommendationsFor(username),
+      collabs: listCollabPlaylistsFor(username),
     });
   } catch (error) {
     fail(res, error, "Could not load the social page");
@@ -89,6 +98,61 @@ router.delete("/shares/:id", async (req, res) => {
     }));
   } catch (error) {
     fail(res, error, "Could not stop sharing");
+  }
+});
+
+// ---------------------------------------------------------------- together
+
+router.post("/collabs", async (req, res) => {
+  try {
+    res.json(await createCollabPlaylist({
+      owner: me(req),
+      name: req.body?.name,
+      members: Array.isArray(req.body?.members) ? req.body.members : [],
+      fromPlaylistId: req.body?.fromPlaylistId || "",
+    }));
+  } catch (error) {
+    fail(res, error, "Could not start that playlist");
+  }
+});
+
+router.post("/collabs/:id/sync", async (req, res) => {
+  try {
+    res.json(await syncCollabPlaylist(req.params.id));
+  } catch (error) {
+    fail(res, error, "Could not bring that playlist up to date");
+  }
+});
+
+router.post("/collabs/:id/members", async (req, res) => {
+  try {
+    res.json(await addCollabMember({
+      id: req.params.id,
+      requester: me(req),
+      username: req.body?.username,
+    }));
+  } catch (error) {
+    fail(res, error, "Could not add them");
+  }
+});
+
+router.delete("/collabs/:id/members/:username", (req, res) => {
+  try {
+    res.json(removeCollabMember({
+      id: req.params.id,
+      requester: me(req),
+      username: req.params.username,
+    }));
+  } catch (error) {
+    fail(res, error, "Could not remove them");
+  }
+});
+
+router.delete("/collabs/:id", (req, res) => {
+  try {
+    res.json(deleteCollabPlaylist({ id: req.params.id, requester: me(req) }));
+  } catch (error) {
+    fail(res, error, "Could not end that playlist");
   }
 });
 

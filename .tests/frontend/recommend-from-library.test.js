@@ -72,8 +72,9 @@ test("who to send to is typed, not hunted for in a row of checkboxes", () => {
   assert.match(picker, /event\.key === "Backspace" && !query && value\.length/, "backspace takes the last name back");
 });
 
-test("the Social page uses the same picker for both of its forms", () => {
-  assert.equal(socialPage.match(/<PeoplePicker/g)?.length, 2);
+test("every form on the Social page names people the same way", () => {
+  // Recommending, sharing, and starting one together.
+  assert.equal(socialPage.match(/<PeoplePicker/g)?.length, 3);
   assert.doesNotMatch(socialPage, /function PeoplePicker/, "no second copy of it");
 });
 

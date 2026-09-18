@@ -514,6 +514,45 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_playlist_shares_recipient
     ON playlist_shares (recipient, updated_at DESC);
 
+  -- A playlist several people build together. Navidrome has one owner per
+  -- playlist and no way for anyone else to edit it, so the real list lives
+  -- here and every member gets their own copy of it. What they do to their
+  -- copy is read back on the next pass and folded in.
+  CREATE TABLE IF NOT EXISTS collab_playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  -- The list itself, as file paths: a path is the one identity a song keeps
+  -- across everybody's libraries.
+  CREATE TABLE IF NOT EXISTS collab_tracks (
+    collab_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    path TEXT NOT NULL,
+    added_by TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    PRIMARY KEY (collab_id, path),
+    FOREIGN KEY (collab_id) REFERENCES collab_playlists (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS collab_members (
+    collab_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    copy_playlist_id TEXT,
+    last_song_ids_json TEXT,
+    last_paths_json TEXT,
+    missing_count INTEGER NOT NULL DEFAULT 0,
+    left_at INTEGER,
+    last_error TEXT,
+    joined_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (collab_id, username),
+    FOREIGN KEY (collab_id) REFERENCES collab_playlists (id) ON DELETE CASCADE
+  );
+
   -- An album, song or playlist one person points another at, with a note.
   -- A row with no recipient is meant for everyone.
   CREATE TABLE IF NOT EXISTS recommendations (
