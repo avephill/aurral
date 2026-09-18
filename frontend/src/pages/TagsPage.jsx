@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Tag as TagIcon, Trash2 } from "lucide-react";
+import { Search, Tag as TagIcon, Trash2 } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import { useToast } from "../contexts/ToastContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
@@ -26,6 +26,7 @@ export default function TagsPage() {
   const queryClient = useQueryClient();
   const { showError, showSuccess } = useToast();
   const [selected, setSelected] = useState("");
+  const [filter, setFilter] = useState("");
   const [renaming, setRenaming] = useState("");
   const [newName, setNewName] = useState("");
 
@@ -67,6 +68,9 @@ export default function TagsPage() {
   });
 
   const rows = tags.data?.tags || [];
+  const needle = filter.trim().toLowerCase();
+  const visible = needle ? rows.filter((row) => row.tag.toLowerCase().includes(needle)) : rows;
+  const songs = tracks.data?.tracks || [];
 
   return (
     <div className="tags-page">
@@ -74,8 +78,7 @@ export default function TagsPage() {
         <h1 className="page-title">Tags</h1>
         <p className="page-subtitle">
           Words on your songs, and what your smart playlists read. The ones your iTunes library
-          brought are marked; anything you add here works the same way, including on music that
-          arrived since.
+          brought are marked; anything you add here works the same way.
         </p>
       </header>
 
@@ -87,78 +90,110 @@ export default function TagsPage() {
         </p>
       ) : (
         <div className="tags-page__layout">
-          <ul className="tags-page__list">
-            {rows.map((row) => (
-              <li key={row.tag} className={row.tag === selected ? "is-selected" : ""}>
-                <button type="button" className="tags-page__tag" onClick={() => setSelected(row.tag)}>
-                  <TagIcon aria-hidden="true" />
-                  <span className="tags-page__name">{row.tag}</span>
-                  <span className="tags-page__count">{row.songs}</span>
-                </button>
-                <div className="tags-page__row-actions">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs"
-                    onClick={() => { setRenaming(row.tag); setNewName(row.tag); }}
-                  >
-                    Rename
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs"
-                    title="Takes it off every song, here and from the import"
-                    onClick={() => drop.mutate(row.tag)}
-                    disabled={drop.isPending}
-                  >
-                    <Trash2 aria-hidden="true" />
-                  </button>
-                </div>
-                {row.imported ? (
-                  <p className="tags-page__origin">
-                    {row.imported} from iTunes{row.own ? `, ${row.own} added here` : ""}
-                  </p>
-                ) : null}
-                {renaming === row.tag ? (
-                  <div className="tags-page__rename">
-                    <input
-                      type="text"
-                      className="input input-sm"
-                      value={newName}
-                      autoFocus
-                      onChange={(event) => setNewName(event.target.value)}
-                      onKeyDown={(event) => event.key === "Enter" && newName.trim() && rename.mutate()}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-xs"
-                      disabled={!newName.trim() || rename.isPending}
-                      onClick={() => rename.mutate()}
-                    >
-                      Save
-                    </button>
-                    <button type="button" className="btn btn-secondary btn-xs" onClick={() => setRenaming("")}>
-                      Cancel
-                    </button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          <section className="tags-page__panel">
+            <div className="tags-page__panel-head">
+              <label className="tags-page__search">
+                <Search aria-hidden="true" />
+                <input
+                  type="search"
+                  value={filter}
+                  placeholder="Search tags"
+                  aria-label="Search tags"
+                  onChange={(event) => setFilter(event.target.value)}
+                />
+              </label>
+              <span className="tags-page__muted">
+                {needle ? `${visible.length} of ${rows.length}` : `${rows.length} tag${rows.length === 1 ? "" : "s"}`}
+              </span>
+            </div>
+            <div className="tags-page__panel-body">
+              {visible.length === 0 ? (
+                <p className="tags-page__muted">No tag has &ldquo;{filter.trim()}&rdquo; in it.</p>
+              ) : (
+                <ul className="tags-page__list">
+                  {visible.map((row) => (
+                    <li key={row.tag} className={row.tag === selected ? "is-selected" : ""}>
+                      <button type="button" className="tags-page__tag" onClick={() => setSelected(row.tag)}>
+                        <TagIcon aria-hidden="true" />
+                        <span className="tags-page__name">{row.tag}</span>
+                        <span className="tags-page__count">{row.songs}</span>
+                      </button>
+                      <div className="tags-page__row-actions">
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          onClick={() => { setRenaming(row.tag); setNewName(row.tag); }}
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-xs"
+                          title="Takes it off every song, here and from the import"
+                          onClick={() => drop.mutate(row.tag)}
+                          disabled={drop.isPending}
+                        >
+                          <Trash2 aria-hidden="true" />
+                        </button>
+                      </div>
+                      {row.imported ? (
+                        <p className="tags-page__origin">
+                          {row.imported} from iTunes{row.own ? `, ${row.own} added here` : ""}
+                        </p>
+                      ) : null}
+                      {renaming === row.tag ? (
+                        <div className="tags-page__rename">
+                          <input
+                            type="text"
+                            className="input input-sm"
+                            value={newName}
+                            autoFocus
+                            onChange={(event) => setNewName(event.target.value)}
+                            onKeyDown={(event) => event.key === "Enter" && newName.trim() && rename.mutate()}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-xs"
+                            disabled={!newName.trim() || rename.isPending}
+                            onClick={() => rename.mutate()}
+                          >
+                            Save
+                          </button>
+                          <button type="button" className="btn btn-secondary btn-xs" onClick={() => setRenaming("")}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
 
-          <div className="tags-page__songs">
-            {!selected ? (
-              <p className="tags-page__muted">Choose a tag to see what carries it.</p>
-            ) : tracks.isLoading ? (
-              <div className="tags-page__state"><DotLoader size="sm" label="Reading" /></div>
-            ) : (
-              <>
-                <h2>{selected}</h2>
-                <ul>
-                  {(tracks.data?.tracks || []).map((track) => (
+          <section className="tags-page__panel">
+            <div className="tags-page__panel-head">
+              <h2>{selected || "Songs"}</h2>
+              {selected && !tracks.isLoading ? (
+                <span className="tags-page__muted">
+                  {songs.length} song{songs.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
+            <div className="tags-page__panel-body">
+              {!selected ? (
+                <p className="tags-page__muted">Choose a tag to see what carries it.</p>
+              ) : tracks.isLoading ? (
+                <div className="tags-page__state"><DotLoader size="sm" label="Reading" /></div>
+              ) : songs.length === 0 ? (
+                <p className="tags-page__muted">Nothing carries this tag any more.</p>
+              ) : (
+                <ul className="tags-page__songs">
+                  {songs.map((track) => (
                     <li key={track.id}>
                       <span>
                         <strong>{track.title}</strong>
-                        <span className="tags-page__muted"> — {track.artistName}{track.album ? ` · ${track.album}` : ""}</span>
+                        <span className="tags-page__muted"> &mdash; {track.artistName}{track.album ? ` \u00b7 ${track.album}` : ""}</span>
                       </span>
                       <button
                         type="button"
@@ -171,9 +206,9 @@ export default function TagsPage() {
                     </li>
                   ))}
                 </ul>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          </section>
         </div>
       )}
     </div>

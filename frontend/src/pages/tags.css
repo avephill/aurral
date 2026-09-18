@@ -1,4 +1,7 @@
-/* Tags: the words on songs that smart playlists read. */
+/* Tags: the words on songs that smart playlists read.
+
+   Two boxes side by side, each scrolling on its own - running down a long
+   song list should not carry the tag list away with it. */
 
 .tags-page {
   display: grid;
@@ -6,7 +9,7 @@
   width: 100%;
   max-width: 68rem;
   margin-inline: auto;
-  padding-bottom: 3rem;
+  padding-bottom: 1rem;
 }
 
 .tags-page__muted {
@@ -21,14 +24,74 @@
 .tags-page__layout {
   display: grid;
   gap: 1.5rem;
-  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  grid-template-columns: minmax(15rem, 22rem) minmax(0, 1fr);
   align-items: start;
 }
 
-@media (max-width: 800px) {
-  .tags-page__layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.tags-page__panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100vh - 16rem);
+  min-height: 18rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius);
+  background: var(--aurral-surface-raised);
+  overflow: hidden;
+}
+
+.tags-page__panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--aurral-border);
+}
+
+.tags-page__panel-head h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tags-page__panel-body {
+  padding: 0.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tags-page__search {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface);
+}
+
+.tags-page__search svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  color: var(--aurral-text-muted);
+}
+
+.tags-page__search input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.875rem;
+  outline: none;
 }
 
 .tags-page__list {
@@ -49,7 +112,7 @@
 }
 
 .tags-page__list > li.is-selected {
-  background: var(--aurral-surface-raised);
+  background: var(--aurral-surface-hover);
 }
 
 .tags-page__tag {
@@ -108,10 +171,10 @@
   padding-top: 0.35rem;
 }
 
-.tags-page__songs ul {
+.tags-page__songs {
   display: grid;
   gap: 0.35rem;
-  margin: 0.75rem 0 0;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -121,13 +184,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.35rem 0;
+  padding: 0.35rem 0.25rem;
   border-bottom: 1px solid var(--aurral-border);
   font-size: 0.9375rem;
 }
 
-.tags-page__songs h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 650;
+.tags-page__songs li:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 800px) {
+  .tags-page__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tags-page__panel {
+    max-height: max(20rem, calc(100dvh - 26rem));
+  }
 }
