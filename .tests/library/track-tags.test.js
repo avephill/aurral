@@ -133,10 +133,131 @@ test("the app offers tagging where the songs are", async () => {
   const routed = read("../../backend/routes/tags.js");
 
   assert.match(library, /label: "Tags\.\.\."/, "on the song's own menu");
-  assert.match(library, /<TrackTagsModal track=\{tagging\}/);
+  assert.match(library, /<TagsModal subject=\{tagging\}/);
+  assert.match(library, /kind: "album"/, "and on a whole record's menu");
   assert.match(nav, /path: "\/library\/tags"/, "and a page of its own under Library");
   assert.match(routes, /path="\/library\/tags"/);
   // Tagging your own songs is not an admin job, unlike the iTunes import tools.
   assert.doesNotMatch(routed, /requireAdmin/);
   assert.match(routed, /router\.use\(requireAuth\)/);
+});
+
+// Tagging a whole record. A tag on an album belongs to every song on it - and
+// to any song added to it later - so it is kept once on the album rather than
+// copied onto each song.
+
+const albumIds = {};
+
+test("a record can be tagged, and every song on it counts", () => {
+  const artistId = libraryStore.upsertLibraryArtist({
+    identityKey: "a:cole", name: "Nat King Cole", metadata: {},
+  }).id;
+  albumIds.christmas = libraryStore.upsertLibraryAlbum({
+    identityKey: "al:christmas", artistId, title: "The Christmas Song", metadata: {},
+  }).id;
+  for (const name of ["carol", "newer"]) {
+    libraryStore.linkLibraryAlbumTrack({ albumId: albumIds.christmas, trackId: trackIds[name] });
+  }
+
+  tags.setAlbumTags({ owner: "dunshill", albumId: albumIds.christmas, tags: ["yuletide"] });
+
+  assert.deepEqual(
+    tags.tracksWithTag({ owner: "dunshill", tag: "yuletide" }).sort(),
+    [trackIds.carol, trackIds.newer].sort(),
+    "both songs on the record carry it",
+  );
+  const listed = tags.listTags({ owner: "dunshill" }).find((entry) => entry.tag === "yuletide");
+  assert.equal(listed.songs, 2);
+  assert.equal(listed.album, 2, "counted as coming from a record");
+  assert.equal(listed.albums, 1);
+  const written = db.prepare("SELECT tags_json AS tags FROM track_tags WHERE owner = 'dunshill'").all();
+  assert.ok(
+    written.every((row) => !row.tags.includes("yuletide")),
+    "and nothing was written onto the songs themselves",
+  );
+});
+
+test("a song added to the record later is already tagged", () => {
+  const late = libraryStore.upsertLibraryTrack({
+    identityKey: "r:bonus", title: "bonus", artistName: "Nat King Cole", metadata: {},
+  }).id;
+  libraryStore.linkLibraryAlbumTrack({ albumId: albumIds.christmas, trackId: late });
+  assert.ok(
+    tags.tracksWithTag({ owner: "dunshill", tag: "yuletide" }).includes(late),
+    "no re-tagging needed",
+  );
+});
+
+test("a rule sees the record's tags on each of its songs", () => {
+  const seen = tags.mergeOwnTags(new Map(), "dunshill");
+  assert.match(seen.get(trackIds.newer).comment, /yuletide/);
+  assert.match(
+    seen.get(trackIds.carol).comment,
+    /holiday/,
+    "and what iTunes brought is still there beside it",
+  );
+  assert.match(seen.get(trackIds.carol).comment, /yuletide/);
+});
+
+test("one song can say no to a tag the whole record has", () => {
+  const result = tags.tagTracks({
+    owner: "dunshill", trackIds: [trackIds.newer], tag: "yuletide", remove: true,
+  });
+  assert.equal(result.changed, 1);
+  assert.ok(
+    !tags.tracksWithTag({ owner: "dunshill", tag: "yuletide" }).includes(trackIds.newer),
+  );
+  assert.deepEqual(
+    tags.getAlbumTags({ owner: "dunshill", albumId: albumIds.christmas }),
+    ["yuletide"],
+    "the record keeps it for everything else",
+  );
+  const detail = tags.getTrackTagDetail({ owner: "dunshill", trackId: trackIds.newer });
+  assert.deepEqual(detail.removed, ["yuletide"]);
+  assert.deepEqual(detail.inherited, [], "so it is not offered as inherited any more");
+});
+
+test("putting it back on that song clears the refusal", () => {
+  tags.tagTracks({ owner: "dunshill", trackIds: [trackIds.newer], tag: "yuletide" });
+  assert.ok(tags.tracksWithTag({ owner: "dunshill", tag: "yuletide" }).includes(trackIds.newer));
+  const own = tags.getTrackTags({ owner: "dunshill", trackId: trackIds.newer });
+  assert.ok(!own.includes("-yuletide"), "the note refusing it is gone");
+});
+
+test("a song says where each of its tags comes from", () => {
+  // A song of its own, so earlier tests cannot have moved its tags about.
+  const trackId = libraryStore.upsertLibraryTrack({
+    identityKey: "r:origins", title: "origins", artistName: "Nat King Cole", metadata: {},
+  }).id;
+  libraryStore.linkLibraryAlbumTrack({ albumId: albumIds.christmas, trackId });
+  const record = db.prepare(`
+    INSERT INTO song_records (owner, source, source_key, title, artist, comment, created_at, updated_at)
+    VALUES ('dunshill', 'itunes', 'k-origins', 'origins', 'Nat King Cole', 'crooner', ?, ?)
+  `).run(Date.now(), Date.now()).lastInsertRowid;
+  db.prepare(`
+    INSERT INTO song_record_links (record_id, track_id, method, status, updated_at)
+    VALUES (?, ?, 'exact', 'linked', ?)
+  `).run(record, trackId, Date.now());
+
+  const detail = tags.getTrackTagDetail({ owner: "dunshill", trackId });
+  const from = new Map(detail.inherited.map((entry) => [entry.tag, entry.from]));
+  assert.equal(from.get("yuletide"), "The Christmas Song");
+  assert.equal(from.get("crooner"), "iTunes");
+  assert.deepEqual(detail.tags, [], "and it has none of its own");
+});
+
+test("renaming a record's tag is one row, not one per song", () => {
+  const before = db.prepare("SELECT COUNT(*) AS n FROM track_tags WHERE owner = 'dunshill'").get().n;
+  const result = tags.renameTag({ owner: "dunshill", from: "yuletide", to: "christmas" });
+  assert.equal(result.albums, 1);
+  assert.deepEqual(
+    tags.getAlbumTags({ owner: "dunshill", albumId: albumIds.christmas }),
+    ["christmas"],
+  );
+  assert.equal(
+    db.prepare("SELECT COUNT(*) AS n FROM track_tags WHERE owner = 'dunshill'").get().n,
+    before,
+    "the songs were left alone",
+  );
+  assert.ok(tags.tracksWithTag({ owner: "dunshill", tag: "christmas" }).includes(trackIds.carol));
 });

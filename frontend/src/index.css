@@ -16967,6 +16967,20 @@ button.native-library-genre-row:focus-visible {
   height: 0.9375rem;
 }
 
+/* A tag a song only inherits: it is really there, but the place to change it
+   is the record or the import, so it reads quieter and says where it is from. */
+.track-tags__chip--inherited {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--aurral-border);
+  color: var(--aurral-text-muted);
+}
+
+.track-tags__chip--inherited em {
+  color: var(--aurral-text-subtle);
+  font-size: 0.6875rem;
+  font-style: normal;
+}
+
 .track-tags__suggestions {
   display: flex;
   flex-wrap: wrap;

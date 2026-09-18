@@ -639,7 +639,11 @@
 }
 
 :root[data-theme-id="itunes"] .nd-playlists__tracks {
+  /* Square corners and rows that run to the edge, the way a list view in
+     iTunes does - the default panel rounds and insets them. */
+  padding: 0;
   border: 1px solid var(--itunes-box-border);
+  border-radius: 0;
   background: #ffffff;
 }
 

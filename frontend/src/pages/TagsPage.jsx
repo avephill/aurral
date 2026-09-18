@@ -21,6 +21,17 @@ import "./tags.css";
 const errorText = (error, fallback) =>
   error?.response?.data?.error || error?.message || fallback;
 
+const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+// Where a tag came from, said only when there is more than one answer.
+const describeOrigin = (row) => {
+  const parts = [];
+  if (row.imported) parts.push(`${row.imported} from iTunes`);
+  if (row.album) parts.push(`${row.album} from ${plural(row.albums || 1, "record")}`);
+  if (row.own) parts.push(`${row.own} added here`);
+  return parts.length > 1 || row.imported || row.albums ? parts.join(", ") : "";
+};
+
 export default function TagsPage() {
   useDocumentTitle("Tags");
   const queryClient = useQueryClient();
@@ -77,8 +88,9 @@ export default function TagsPage() {
       <header>
         <h1 className="page-title">Tags</h1>
         <p className="page-subtitle">
-          Words on your songs, and what your smart playlists read. The ones your iTunes library
-          brought are marked; anything you add here works the same way.
+          Words on your songs, and what your smart playlists read. Tag a whole record and every
+          song on it counts, including any added to it later. The ones your iTunes library brought
+          are marked.
         </p>
       </header>
 
@@ -86,7 +98,8 @@ export default function TagsPage() {
         <div className="tags-page__state"><DotLoader size="sm" label="Reading your tags" /></div>
       ) : rows.length === 0 ? (
         <p className="tags-page__muted">
-          Nothing tagged yet. Put a tag on a song from the ••• beside it in your library.
+          Nothing tagged yet. Put a tag on a song, or on a whole record, from the ••• beside it
+          in your library.
         </p>
       ) : (
         <div className="tags-page__layout">
@@ -136,10 +149,8 @@ export default function TagsPage() {
                           <Trash2 aria-hidden="true" />
                         </button>
                       </div>
-                      {row.imported ? (
-                        <p className="tags-page__origin">
-                          {row.imported} from iTunes{row.own ? `, ${row.own} added here` : ""}
-                        </p>
+                      {describeOrigin(row) ? (
+                        <p className="tags-page__origin">{describeOrigin(row)}</p>
                       ) : null}
                       {renaming === row.tag ? (
                         <div className="tags-page__rename">

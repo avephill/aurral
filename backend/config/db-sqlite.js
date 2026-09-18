@@ -432,6 +432,15 @@ db.exec(`
     FOREIGN KEY (track_id) REFERENCES library_tracks (id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS album_tags (
+    owner TEXT NOT NULL,
+    album_id INTEGER NOT NULL,
+    tags_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (owner, album_id),
+    FOREIGN KEY (album_id) REFERENCES library_albums (id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS song_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner TEXT NOT NULL,

@@ -31,7 +31,7 @@
 .tags-page__panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  max-height: calc(100vh - 16rem);
+  max-height: max(20rem, calc(100dvh - 26rem));
   min-height: 18rem;
   border: 1px solid var(--aurral-border);
   border-radius: var(--aurral-radius);
@@ -197,8 +197,33 @@
   .tags-page__layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* On a wide screen the page fills the window and does not scroll itself; the
+   two boxes take the leftover height and scroll inside it. */
+@media (min-width: 801px) {
+  .app-shell:has(.tags-page) .app-main__content {
+    height: 100%;
+  }
+
+  .tags-page {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+
+  .tags-page > * {
+    flex: none;
+  }
+
+  .tags-page__layout {
+    flex: 1;
+    min-height: 0;
+  }
 
   .tags-page__panel {
-    max-height: max(20rem, calc(100dvh - 26rem));
+    height: 100%;
+    max-height: none;
   }
 }

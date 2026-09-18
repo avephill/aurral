@@ -3,9 +3,11 @@ import { noCache } from "../middleware/cache.js";
 import { requireAuth } from "../middleware/requirePermission.js";
 import { db } from "../config/db-sqlite.js";
 import {
-  getTrackTags,
+  getAlbumTags,
+  getTrackTagDetail,
   listTags,
   renameTag,
+  setAlbumTags,
   setTrackTags,
   tagTracks,
   tracksWithTag,
@@ -51,9 +53,28 @@ router.get("/tracks", noCache, (req, res) => {
 
 router.get("/track/:trackId", noCache, (req, res) => {
   try {
-    res.json({ trackId: Number(req.params.trackId), tags: getTrackTags({ owner: me(req), trackId: req.params.trackId }) });
+    res.json(getTrackTagDetail({ owner: me(req), trackId: req.params.trackId }));
   } catch (error) {
     fail(res, error, "Could not read that song's tags");
+  }
+});
+
+router.get("/album/:albumId", noCache, (req, res) => {
+  try {
+    res.json({
+      albumId: Number(req.params.albumId),
+      tags: getAlbumTags({ owner: me(req), albumId: req.params.albumId }),
+    });
+  } catch (error) {
+    fail(res, error, "Could not read that record's tags");
+  }
+});
+
+router.put("/album/:albumId", (req, res) => {
+  try {
+    res.json(setAlbumTags({ owner: me(req), albumId: req.params.albumId, tags: req.body?.tags }));
+  } catch (error) {
+    fail(res, error, "Could not save those tags");
   }
 });
 

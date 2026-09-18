@@ -83,7 +83,7 @@ import { DeleteTrackModal } from "./ArtistDetails/components/DeleteTrackModal";
 import LibraryInfoModal from "./LibraryInfoModal";
 import { useUserLibrary } from "../hooks/useUserLibrary";
 import RecommendModal from "../components/RecommendModal";
-import TrackTagsModal from "../components/TrackTagsModal";
+import TagsModal from "../components/TagsModal";
 import {
   buildSharedPlaylistTrackPayload,
   reserveUniquePlaylistName,
@@ -2035,6 +2035,7 @@ function LibraryPage() {
               icon: TagIcon,
               onSelect: () =>
                 setTagging({
+                  kind: "track",
                   id: track.id,
                   title: track.title || "This song",
                   subtitle: track.artistName || artist?.name || "",
@@ -2753,6 +2754,18 @@ function LibraryPage() {
                     onSelect: () => openLibraryInfo("album", libraryAlbum, { artist }),
                   },
                   {
+                    id: "tags",
+                    label: "Tags...",
+                    icon: TagIcon,
+                    onSelect: () =>
+                      setTagging({
+                        kind: "album",
+                        id: libraryAlbum.id,
+                        title: libraryAlbum.title || "This record",
+                        subtitle: artist?.name || libraryAlbum.albumArtist || "",
+                      }),
+                  },
+                  {
                     id: "recommend",
                     label: "Recommend to...",
                     icon: Send,
@@ -3025,7 +3038,7 @@ function LibraryPage() {
       />
       <LibraryInfoModal item={libraryInfo} onClose={() => setLibraryInfo(null)} />
       <RecommendModal target={recommending} onClose={() => setRecommending(null)} />
-      <TrackTagsModal track={tagging} onClose={() => setTagging(null)} />
+      <TagsModal subject={tagging} onClose={() => setTagging(null)} />
     </>
   );
 

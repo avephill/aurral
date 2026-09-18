@@ -220,15 +220,74 @@
   list-style: none;
 }
 
-/* On a wide screen the song table scrolls inside its own box, so the
-   playlist's title, Play and search stay in view however long it runs, the
-   way the source list beside it already does. Phones keep scrolling the page,
-   where a box inside a box is hard to drag. */
+/* On a wide screen the page itself does not scroll: it fills the window, and
+   the source list and the song table each scroll inside their own box. The
+   playlist's title, Play and search stay in view however long it runs, and
+   running down a long playlist never carries the list of playlists away with
+   it. Phones keep scrolling the page, where a box inside a box is hard to
+   drag. */
 @media (min-width: 768px) {
-  .nd-playlists__tracks {
-    max-height: max(20rem, calc(100dvh - 22rem));
+  .app-shell:has(.nd-playlists) .app-main__content {
+    height: 100%;
+  }
+
+  .nd-playlists {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+    padding-bottom: 0;
+  }
+
+  .nd-playlists__header,
+  .nd-playlists__notice {
+    flex: none;
+  }
+
+  .nd-playlists__body {
+    flex: 1;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .nd-playlists__list {
+    height: 100%;
+    max-height: none;
+  }
+
+  .nd-playlists__detail {
+    display: flex;
+    height: 100%;
+    flex-direction: column;
+  }
+
+  /* Only the song table takes the leftover height; everything else in the
+     panel keeps the size it asks for rather than being squeezed. */
+  .nd-playlists__detail > * {
+    flex: none;
+  }
+
+  .nd-playlists__detail > .nd-playlists__tracks {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid var(--aurral-border);
+    border-radius: var(--aurral-radius);
+    background: var(--aurral-surface-raised);
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  .nd-playlists__detail > .nd-playlists__tracks > .nd-playlists__track:last-child {
+    border-bottom: 0;
+  }
+
+  /* With nothing chosen the panel is empty, so let its message sit in the
+     middle of the space rather than hard against the top. */
+  .nd-playlists__detail > .nd-playlists__placeholder,
+  .nd-playlists__detail > .nd-playlists__state {
+    flex: 1;
+    align-content: center;
   }
 }
 
