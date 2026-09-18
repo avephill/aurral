@@ -213,7 +213,10 @@
     flex: none;
   }
 
+  /* Named for the same reason as the playlists page: an implicit grid row is
+     `auto` and grows to its content rather than fitting the space given. */
   .tags-page__layout {
+    grid-template-rows: minmax(0, 1fr);
     flex: 1;
     min-height: 0;
   }

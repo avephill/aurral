@@ -242,7 +242,12 @@
     flex: none;
   }
 
+  /* The row has to be named. A grid's implicit row is `auto`, which means it
+     grows to its tallest item's content no matter how little height the grid
+     itself has - so the columns stretched past the window and, with the shell
+     clipping, nothing could scroll at all. */
   .nd-playlists__body {
+    grid-template-rows: minmax(0, 1fr);
     flex: 1;
     min-height: 0;
     align-items: stretch;
@@ -256,6 +261,7 @@
   .nd-playlists__detail {
     display: flex;
     height: 100%;
+    min-height: 0;
     flex-direction: column;
   }
 

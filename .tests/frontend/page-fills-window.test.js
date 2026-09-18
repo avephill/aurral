@@ -60,6 +60,24 @@ test("the boxes inside take the whole height, with no ceiling of their own", () 
   }
 });
 
+test("a grid that fills the space names its row", () => {
+  // An implicit grid row is `auto`: it grows to its tallest item's content
+  // however little height the grid has. Left unnamed, the columns ran past
+  // the window and - with the shell clipping - nothing scrolled at all.
+  for (const [name, css, selector] of [
+    ["playlists", playlists, ".nd-playlists__body"],
+    ["tags", tags, ".tags-page__layout"],
+  ]) {
+    const from = css.indexOf("@media (min-width: 768px)");
+    const next = css.indexOf("@media", from + 1);
+    const desktop = css.slice(from, next === -1 ? undefined : next);
+    const rule = desktop.match(new RegExp(`\\${selector} \\{[^}]*\\}`));
+    assert.ok(rule, `${name} sizes its grid in the filling block`);
+    assert.match(rule[0], /flex: 1;/, `${name}: takes the space left over`);
+    assert.match(rule[0], /grid-template-rows: minmax\(0, 1fr\);/, `${name}: and fits it`);
+  }
+});
+
 test("the boxes are what scroll", () => {
   assert.match(playlists, /overflow-y: auto;\s*overscroll-behavior: contain;/);
   assert.match(tags, /\.tags-page__panel-body \{[^}]*overflow-y: auto;/);
