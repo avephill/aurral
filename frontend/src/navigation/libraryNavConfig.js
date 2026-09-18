@@ -20,7 +20,7 @@ export const LIBRARY_VIEWS = [
   { id: "genres", label: "Genres", path: "/library/genres" },
   // Words on songs rather than a property of the file, and what the smart
   // playlists read.
-  { id: "tags", label: "Tags", path: "/library/tags" },
+  { id: "tags", label: "Tags", path: "/library/tags", tour: "tags" },
   // Personal-library bulk editor; only offered when the admin enabled user libraries.
   {
     id: "mine",

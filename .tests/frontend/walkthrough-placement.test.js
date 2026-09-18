@@ -114,3 +114,29 @@ test("the sidebar can be pointed at by name", () => {
   assert.match(sidebar, /data-tour=\{entry\.tour \|\| undefined\}/);
   assert.match(nav, /tour: "bulk-migration"/);
 });
+
+// Only a library that came in from iTunes gets the comparison with how
+// tagging worked there; to anyone else it is a comparison with nothing.
+
+test("the tour explains tags against iTunes, for the people who had iTunes", () => {
+  const source = readFileSync(
+    new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
+    "utf8",
+  );
+  const step = source.match(/\{[^{}]*title: "Tags, and playlists that fill themselves"[\s\S]*?\},/);
+  assert.ok(step, "the step is there");
+  assert.match(step[0], /needs: \(bootstrap\) => bootstrap\?\.itunesLibraryImported === true/);
+  assert.match(step[0], /path: "\/library\/tags"/);
+  assert.match(step[0], /data-tour="tags"/);
+  // The point of it: tags are their own thing here, and the import is left alone.
+  assert.match(step[0], /instead of typing into its comment field/);
+  assert.match(step[0], /kept exactly as it was/);
+});
+
+test("the server says whose library came from iTunes", () => {
+  const health = readFileSync(
+    new URL("../../backend/routes/health.js", import.meta.url),
+    "utf8",
+  );
+  assert.match(health, /payload\.itunesLibraryImported = hasSongRecords\(currentUser\.username\)/);
+});

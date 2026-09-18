@@ -918,6 +918,19 @@ db.exec(`
     AND TRIM(listen_history_username) != '';
 `);
 
+// Psalter looks like iTunes, for everyone rather than for whoever went looking
+// in Settings. A one-time pass over the themes already chosen, recorded so it
+// never runs twice: anyone who picks something else afterwards keeps it, and
+// their light-or-dark preference is left exactly as they set it.
+db.exec(`
+  UPDATE settings
+     SET value = json_set(CASE WHEN json_valid(value) THEN value ELSE '{}' END, '$.themeId', 'itunes')
+   WHERE key LIKE 'user:%:theme'
+     AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'theme:itunesForEveryone:v1');
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('theme:itunesForEveryone:v1', 'true');
+`);
+
 export const dbHelpers = {
   parseJSON: (text) => {
     if (!text) return null;

@@ -324,6 +324,12 @@ export function scheduleSongRecordRelink({ delayMs = 30_000 } = {}) {
 }
 
 /** People with an imported library, and how far along each one's is. */
+/** Whether this person's library came in from iTunes, records and all. */
+export function hasSongRecords(owner) {
+  if (!owner) return false;
+  return Boolean(db.prepare("SELECT 1 FROM song_records WHERE owner = ? LIMIT 1").get(owner));
+}
+
 export function listSongRecordOwners() {
   return db.prepare(`
     SELECT record.owner AS owner,

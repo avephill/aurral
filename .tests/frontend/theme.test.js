@@ -9,6 +9,7 @@ import {
   CUSTOM_THEMES_STORAGE_KEY,
   getCustomThemes,
   getThemeSettings,
+  INITIAL_THEME_ID,
   installCustomTheme,
   invalidateThemeCaches,
   replaceCustomTheme,
@@ -124,7 +125,9 @@ test("temporary theme previews change the page without changing saved selection"
   assert.equal(styles.get("--aurral-accent"), "#ff00aa");
   assert.equal(attributes.get("data-theme-id"), "terminal-sexy-preview");
   assert.equal(stored.has(THEME_STORAGE_KEY), false);
-  assert.deepEqual(getThemeSettings(), { themeId: "aurral", appearance: "system" });
+  // Still whatever someone sees before choosing anything, untouched by the
+  // preview - which is the iTunes theme now, not Aurral's own.
+  assert.deepEqual(getThemeSettings(), { themeId: INITIAL_THEME_ID, appearance: "system" });
 });
 
 test("terminal.sexy ANSI colors become a complete Aurral palette", () => {

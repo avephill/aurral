@@ -28,6 +28,7 @@ import {
   getLocalNetworkBypassStatus,
 } from "../middleware/auth.js";
 import { getOidcBootstrapInfo } from "../services/oidcAuth.js";
+import { hasSongRecords } from "../services/songRecordService.js";
 import { lidarrClient } from "../services/lidarrClient.js";
 import {
   getDiscoveryCache,
@@ -295,6 +296,9 @@ function buildBootstrapPayload(req) {
     payload.userLibrariesEnabled = getUserLibrariesSettings(settings).enabled;
     // A first look around the app, until they have had it.
     payload.walkthroughPending = !dbOps.getUserWalkthrough(currentUser.id)?.completedAt;
+    // Whether their library came in from iTunes, which decides whether the
+    // tour says anything about how tagging works here compared with there.
+    payload.itunesLibraryImported = hasSongRecords(currentUser.username);
     const newsSettings = getNewsSettings();
     payload.newsConfigured = newsSettings.enabled && newsSettings.feeds.some(
       (feed) => feed.enabled && (feed.group === "custom" || newsSettings.groups[feed.group] !== false),

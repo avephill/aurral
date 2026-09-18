@@ -40,6 +40,15 @@ const STEPS = [
     path: "/library/playlists",
     anchor: '[data-tour="library"]',
   },
+  // Only for someone whose library came in from iTunes: it is a comparison,
+  // and it means nothing to anyone with nothing to compare it against.
+  {
+    title: "Tags, and playlists that fill themselves",
+    body: "A playlist here can be a fixed list of songs, or a set of rules that keeps filling itself - the way a smart playlist did in iTunes. The words you tagged songs with came across with your library, and they are their own thing now: put one on a song, or on a whole record at once, from the ••• beside it, instead of typing into its comment field. What your library arrived with is kept exactly as it was.",
+    path: "/library/tags",
+    anchor: '[data-tour="tags"]',
+    needs: (bootstrap) => bootstrap?.itunesLibraryImported === true,
+  },
   {
     title: "Adding music",
     body: "Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for it, and when it arrives it goes into your library too. Once an artist is in your library, anything of theirs that reaches the server later joins it on its own.",

@@ -4,6 +4,10 @@ export const CUSTOM_THEMES_STORAGE_KEY = "aurralThemes:v1";
 export const THEME_FILE_VERSION = 1;
 export const DEFAULT_THEME_ID = "aurral";
 export const ITUNES_THEME_ID = "itunes";
+// What someone sees before they have chosen anything. Not the same as
+// DEFAULT_THEME_ID, which names the Aurral theme itself and is what the older
+// storage format and the follows-the-system case are written against.
+export const INITIAL_THEME_ID = ITUNES_THEME_ID;
 export const THEME_APPEARANCES = ["system", "light", "dark"];
 
 export const THEME_COLOR_ROLES = [
@@ -442,7 +446,7 @@ export function hasStoredThemeSelection() {
 export function getThemeSettings() {
   const storedTheme = readStoredValue(THEME_STORAGE_KEY);
   if (THEME_APPEARANCES.includes(storedTheme)) return { themeId: DEFAULT_THEME_ID, appearance: storedTheme };
-  const themeId = getThemeDefinition(storedTheme) ? storedTheme : DEFAULT_THEME_ID;
+  const themeId = getThemeDefinition(storedTheme) ? storedTheme : INITIAL_THEME_ID;
   const storedAppearance = readStoredValue(THEME_APPEARANCE_STORAGE_KEY);
   return { themeId, appearance: isThemeMode(storedAppearance) ? storedAppearance : "system" };
 }
