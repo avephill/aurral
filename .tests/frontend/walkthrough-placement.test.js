@@ -69,3 +69,44 @@ test("the Discover step mentions what has just been added", () => {
 test("it opens by saying what the app is for, without the sales pitch", () => {
   assert.match(source, /listen to your music, rate it, and add more of it/);
 });
+
+// The tour sends someone to Bulk migration before anything else: picking what
+// of the server's music is theirs is what makes the rest of the app useful.
+
+test("the tour starts people at bulk migration", () => {
+  const source = readFileSync(
+    new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /title: "Start here"/);
+  assert.match(source, /path: "\/library\/mine"/);
+  assert.match(source, /data-tour="bulk-migration"/);
+  // It comes before the steps about finding and playing things.
+  assert.ok(
+    source.indexOf('title: "Start here"') < source.indexOf('title: "Finding something"'),
+  );
+});
+
+test("the step is dropped where personal libraries are off", () => {
+  const source = readFileSync(
+    new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /needs: \(bootstrap\) => bootstrap\?\.userLibrariesEnabled === true/);
+  // And the count reads off what is actually being shown, not the full list.
+  assert.match(source, /\{step \+ 1\} of \{steps\.length\}/);
+  assert.match(source, /STEPS\.filter\(\(entry\) => !entry\.needs \|\| entry\.needs\(bootstrap\)\)/);
+});
+
+test("the sidebar can be pointed at by name", () => {
+  const sidebar = readFileSync(
+    new URL("../../frontend/src/components/Sidebar.jsx", import.meta.url),
+    "utf8",
+  );
+  const nav = readFileSync(
+    new URL("../../frontend/src/navigation/libraryNavConfig.js", import.meta.url),
+    "utf8",
+  );
+  assert.match(sidebar, /data-tour=\{entry\.tour \|\| undefined\}/);
+  assert.match(nav, /tour: "bulk-migration"/);
+});

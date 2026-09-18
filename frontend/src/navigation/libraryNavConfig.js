@@ -22,7 +22,14 @@ export const LIBRARY_VIEWS = [
   // playlists read.
   { id: "tags", label: "Tags", path: "/library/tags" },
   // Personal-library bulk editor; only offered when the admin enabled user libraries.
-  { id: "mine", label: "Bulk migration", path: "/library/mine", requiresUserLibraries: true },
+  {
+    id: "mine",
+    label: "Bulk migration",
+    path: "/library/mine",
+    requiresUserLibraries: true,
+    // The walkthrough sends people here first, so it needs to be able to find it.
+    tour: "bulk-migration",
+  },
 ];
 
 export const isLibraryViewAvailable = (view, { hasPermission, userLibrariesEnabled } = {}) => {

@@ -41,14 +41,18 @@ function ReloadPrompt() {
   }, [needRefresh]);
 
   // Nothing to tell anyone: the page is already the build the server has, so
-  // hand over to the new worker quietly rather than leaving it waiting and
-  // announcing itself again on the next load.
+  // say nothing and leave the waiting worker alone.
+  //
+  // Emphatically do not hand over to it to tidy up. The registration installs
+  // a listener that reloads the page the moment any new worker takes control,
+  // and asking it not to reload does not opt out of that - the argument is
+  // ignored, and all the call does is send skip-waiting. Handing over here is
+  // what reloaded the page a second time a couple of seconds after the first.
   useEffect(() => {
     if (!needRefresh) return;
     if (!isPageAlreadyCurrent({ waitingVersion, runningVersion })) return;
-    updateServiceWorker(false);
     setNeedRefresh(false);
-  }, [needRefresh, setNeedRefresh, updateServiceWorker, waitingVersion]);
+  }, [needRefresh, setNeedRefresh, waitingVersion]);
 
   const close = () => {
     rememberDismissedUpdate(globalThis.localStorage, waitingVersion);

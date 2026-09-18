@@ -379,6 +379,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
               to={targetPath}
               className={`sidebar-subnav-link${active ? " is-active" : ""}`}
               aria-current={active ? "page" : undefined}
+              data-tour={entry.tour || undefined}
             >
               {showReviewAlert ? (
                 <span

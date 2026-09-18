@@ -128,12 +128,24 @@ test("storage that throws leaves the prompt working", () => {
   assert.doesNotThrow(() => rememberDismissedUpdate(storage, "2.8.0-174"));
 });
 
-test("the prompt hands over quietly when the page is already current", () => {
+test("the prompt says nothing when the page is already current", () => {
   const source = readFileSync(
     new URL("../../frontend/src/components/ReloadPrompt.jsx", import.meta.url),
     "utf8",
   );
   assert.match(source, /isPageAlreadyCurrent\(\{ waitingVersion, runningVersion \}\)/);
-  assert.match(source, /updateServiceWorker\(false\)/, "activate it without reloading the page");
   assert.match(source, /import\.meta\.env\.VITE_APP_VERSION/, "the build stamps its own version in");
+});
+
+test("nothing hands over to the waiting worker behind someone's back", () => {
+  const source = readFileSync(
+    new URL("../../frontend/src/components/ReloadPrompt.jsx", import.meta.url),
+    "utf8",
+  );
+  // The registration reloads the page as soon as any new worker takes
+  // control, and `updateServiceWorker(false)` does not opt out of that - its
+  // argument is ignored. Tidying up a worker nobody asked about therefore
+  // reloaded the page a second time, seconds after the first.
+  const calls = [...source.matchAll(/updateServiceWorker\(([^)]*)\)/g)].map((match) => match[1]);
+  assert.deepEqual(calls, ["true"], "only the Reload button hands over");
 });

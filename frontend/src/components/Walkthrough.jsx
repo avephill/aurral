@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { completeWalkthrough } from "../utils/api/endpoints/auth.js";
@@ -6,8 +6,9 @@ import { placeWalkthroughCard } from "../utils/walkthroughPlacement.js";
 import "./walkthrough.css";
 
 // A short look around on someone's first visit: where their music is, how to
-// find something, where playlists live, and the two pages worth knowing about.
-// Six steps, no lectures - enough to start, and it never comes back.
+// pick what they want out of the server, how to find something, where
+// playlists live, and the two pages worth knowing about. No lectures - enough
+// to start, and it never comes back.
 
 const STEPS = [
   {
@@ -26,6 +27,15 @@ const STEPS = [
     body: "The server holds more music than your library does - other people's records live there too. Yours is the part you have picked out, and it is what you see by default.",
     path: "/library",
     anchor: '[data-tour="library"]',
+  },
+  {
+    title: "Start here",
+    body: "Bulk migration is the quickest way to say which of the server's music is yours: tick the artists you want and they and their records join your library in one go. Worth doing before anything else - the rest of the app is far more useful once your library is yours.",
+    path: "/library/mine",
+    anchor: '[data-tour="bulk-migration"]',
+    // Nothing to send anyone to when the server keeps one library for
+    // everyone; the step would open a page saying so.
+    needs: (bootstrap) => bootstrap?.userLibrariesEnabled === true,
   },
   {
     title: "Finding something",
@@ -61,6 +71,10 @@ const STEPS = [
 export default function Walkthrough() {
   const { bootstrap, isAuthenticated, refreshAuth } = useAuth();
   const navigate = useNavigate();
+  const steps = useMemo(
+    () => STEPS.filter((entry) => !entry.needs || entry.needs(bootstrap)),
+    [bootstrap],
+  );
   const [step, setStep] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [spotlight, setSpotlight] = useState(null);
@@ -68,7 +82,7 @@ export default function Walkthrough() {
   const cardRef = useRef(null);
 
   const pending = isAuthenticated && bootstrap?.walkthroughPending === true && !dismissed;
-  const current = STEPS[step];
+  const current = steps[step];
 
   // Follow the tour to the page it is talking about, so what it describes is
   // on screen behind it.
@@ -140,7 +154,7 @@ export default function Walkthrough() {
 
   if (!pending || !current) return null;
 
-  const last = step === STEPS.length - 1;
+  const last = step === steps.length - 1;
   return (
     <div className="walkthrough" role="dialog" aria-modal="true" aria-labelledby="walkthrough-title">
       <div className="walkthrough__veil" onClick={finish} />
@@ -160,7 +174,7 @@ export default function Walkthrough() {
         ref={cardRef}
         style={cardAt ? { top: `${cardAt.top}px`, left: `${cardAt.left}px`, right: "auto", bottom: "auto" } : undefined}
       >
-        <p className="walkthrough__count">{step + 1} of {STEPS.length}</p>
+        <p className="walkthrough__count">{step + 1} of {steps.length}</p>
         <h2 className="walkthrough__title" id="walkthrough-title">{current.title}</h2>
         <p className="walkthrough__body">{current.body}</p>
         <div className="walkthrough__actions">
