@@ -6,9 +6,10 @@ import { placeWalkthroughCard } from "../utils/walkthroughPlacement.js";
 import "./walkthrough.css";
 
 // A short look around on someone's first visit: where their music is, how to
-// pick what they want out of the server, how to find something, where
-// playlists live, and the two pages worth knowing about. No lectures - enough
-// to start, and it never comes back.
+// find something, where playlists live, and the two pages worth knowing about.
+// It ends on Bulk migration and stays there, because picking what of the
+// server's music is theirs is the thing to do first. No lectures - enough to
+// start, and it never comes back.
 
 const STEPS = [
   {
@@ -27,15 +28,6 @@ const STEPS = [
     body: "The server holds more music than your library does - other people's records live there too. Yours is the part you have picked out, and it is what you see by default.",
     path: "/library",
     anchor: '[data-tour="library"]',
-  },
-  {
-    title: "Start here",
-    body: "Bulk migration is the quickest way to say which of the server's music is yours: tick the artists you want and they and their records join your library in one go. Worth doing before anything else - the rest of the app is far more useful once your library is yours.",
-    path: "/library/mine",
-    anchor: '[data-tour="bulk-migration"]',
-    // Nothing to send anyone to when the server keeps one library for
-    // everyone; the step would open a page saying so.
-    needs: (bootstrap) => bootstrap?.userLibrariesEnabled === true,
   },
   {
     title: "Finding something",
@@ -65,6 +57,18 @@ const STEPS = [
     body: "Playlists other people share with you, and albums or songs they think you would like. You can send some back.",
     path: "/social",
     anchor: '[data-tour="social"]',
+  },
+  // Last, and left open: the tour ends on the page worth using first, with
+  // the artists already in front of them rather than a page away.
+  {
+    title: "Where to start",
+    body: "Bulk migration is the quickest way to say which of the server's music is yours: tick the artists you want and they and their records join your library in one go. It is the one thing worth doing before anything else, so the tour leaves you here.",
+    path: "/library/mine",
+    anchor: '[data-tour="bulk-migration"]',
+    cta: "Pick my artists",
+    // Nothing to send anyone to when the server keeps one library for
+    // everyone; the step would open a page saying so.
+    needs: (bootstrap) => bootstrap?.userLibrariesEnabled === true,
   },
 ];
 
@@ -192,7 +196,7 @@ export default function Walkthrough() {
               className="btn btn-primary btn-sm"
               onClick={() => (last ? finish() : setStep(step + 1))}
             >
-              {last ? "Start listening" : "Next"}
+              {last ? current.cta || "Start listening" : "Next"}
             </button>
           </div>
         </div>

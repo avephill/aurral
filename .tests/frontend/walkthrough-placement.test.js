@@ -70,21 +70,25 @@ test("it opens by saying what the app is for, without the sales pitch", () => {
   assert.match(source, /listen to your music, rate it, and add more of it/);
 });
 
-// The tour sends someone to Bulk migration before anything else: picking what
-// of the server's music is theirs is what makes the rest of the app useful.
+// The tour ends on Bulk migration and leaves someone there: picking what of
+// the server's music is theirs is the thing to do first, and they should be
+// looking at it when the tour gets out of the way.
 
-test("the tour starts people at bulk migration", () => {
+test("the tour leaves people on bulk migration", () => {
   const source = readFileSync(
     new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
     "utf8",
   );
-  assert.match(source, /title: "Start here"/);
+  assert.match(source, /title: "Where to start"/);
   assert.match(source, /path: "\/library\/mine"/);
   assert.match(source, /data-tour="bulk-migration"/);
-  // It comes before the steps about finding and playing things.
+  // It is the last step, so finishing the tour does not navigate away from it.
   assert.ok(
-    source.indexOf('title: "Start here"') < source.indexOf('title: "Finding something"'),
+    source.indexOf('title: "Where to start"') > source.indexOf('title: "Social"'),
+    "after every other step",
   );
+  assert.match(source, /cta: "Pick my artists"/, "and the button says what it leaves them doing");
+  assert.match(source, /\{last \? current\.cta \|\| "Start listening" : "Next"\}/);
 });
 
 test("the step is dropped where personal libraries are off", () => {
