@@ -173,15 +173,10 @@ export class NavidromeClient {
       }));
   }
 
-  // `extra` carries the listener's quality: a format, and a ceiling in kbps
-  // when there is one. Navidrome transcodes to fit, or hands over the file.
-  getStreamUrl(songId, extra = {}) {
+  getStreamUrl(songId) {
     if (!this.isConfigured()) throw new Error("Navidrome not configured");
     const params = new URLSearchParams(this.getAuthParams());
     params.delete("f");
-    for (const [key, value] of Object.entries(extra)) {
-      if (value !== undefined && value !== null && value !== "") params.set(key, value);
-    }
     return `${this.url}/rest/stream?id=${encodeURIComponent(songId)}&${params.toString()}`;
   }
 

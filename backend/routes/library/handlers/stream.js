@@ -2,7 +2,6 @@ import axios from "../../../../lib/axiosFetch.js";
 import { noCache } from "../../../middleware/cache.js";
 import { verifyTokenAuth } from "../../../middleware/auth.js";
 import { dbOps } from "../../../db/helpers/index.js";
-import { streamParams } from "../../../services/streamQuality.js";
 
 export function registerStream(router) {
   router.get("/stream/:songId", noCache, async (req, res) => {
@@ -18,13 +17,7 @@ export function registerStream(router) {
     try {
       const { NavidromeClient } = await import("../../../services/navidrome.js");
       const client = new NavidromeClient(nd.url, nd.username, nd.password);
-      // Whatever an admin set for whoever is listening. Resolved per request
-      // rather than baked into the URL, so changing it takes effect on the
-      // next song instead of the next sign-in.
-      const streamUrl = client.getStreamUrl(
-        songId,
-        streamParams(dbOps.getUserStreamQuality(req.user?.id)),
-      );
+      const streamUrl = client.getStreamUrl(songId);
       const response = await axios.get(streamUrl, {
         responseType: "stream",
         timeout: 30000,
