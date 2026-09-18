@@ -21,6 +21,11 @@ import { validateExternalUrl } from "../middleware/urlValidator.js";
 import { normalizeKoitoBaseUrl } from "../services/koitoClient.js";
 import { registerPlexLink, resolveGlobalPlexAccount } from "./users/plexLinkHandlers.js";
 import { plexConnectionStore } from "../services/plex/plexConnectionStore.js";
+import {
+  DEFAULT_STREAM_QUALITY,
+  STREAM_QUALITIES,
+  isStreamQuality,
+} from "../services/streamQuality.js";
 
 const buildListenHistoryUpdates = (body, existing) => {
   const hasLegacyLastfmUpdate = Object.hasOwn(body, "lastfmUsername");
@@ -169,6 +174,7 @@ router.get("/", requireAuth, requireAdmin, async (req, res) => {
     res.json(
       users.map((user) => ({
         ...user,
+        streamQuality: dbOps.getUserStreamQuality(user.id) || DEFAULT_STREAM_QUALITY,
         plexLink: plexConnectionStore.getPublicStatus(user.id),
         plexGlobalAccount: globalPlexAccount,
       })),
@@ -430,6 +436,28 @@ router.post("/:id/walkthrough/reset", requireAuth, requireAdmin, (req, res) => {
     return res.json({ username: user.username, completed: false });
   } catch (e) {
     return res.status(500).json({ error: "Failed to reset", message: e.message });
+  }
+});
+
+// How good the audio is for one person. An admin's call: it is about what
+// their connection and their device can take, which they are not always the
+// best judge of, and it costs the server real work.
+router.get("/stream-qualities", requireAuth, requireAdmin, (req, res) => {
+  res.json({ qualities: STREAM_QUALITIES, default: DEFAULT_STREAM_QUALITY });
+});
+
+router.patch("/:id/stream-quality", requireAuth, requireAdmin, (req, res) => {
+  try {
+    const user = userOps.getUserById(Number(req.params.id));
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const id = String(req.body?.quality || "");
+    if (!isStreamQuality(id)) {
+      return res.status(400).json({ error: "Unknown quality", field: "quality" });
+    }
+    dbOps.setUserStreamQuality(user.id, id);
+    return res.json({ username: user.username, streamQuality: id });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to save", message: e.message });
   }
 });
 

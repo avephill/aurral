@@ -108,6 +108,15 @@ export const dbOps = {
     dbOps.setJSONSetting(`user:${parseInt(userId, 10)}:walkthrough`, value);
   },
 
+  // How good the audio is for this person. An admin's choice, not theirs.
+  getUserStreamQuality(userId) {
+    return dbOps.getJSONSetting(`user:${parseInt(userId, 10)}:streamQuality`)?.id || null;
+  },
+
+  setUserStreamQuality(userId, id) {
+    dbOps.setJSONSetting(`user:${parseInt(userId, 10)}:streamQuality`, { id });
+  },
+
   getUserTheme(userId) {
     return dbOps.getJSONSetting(`user:${parseInt(userId, 10)}:theme`);
   },

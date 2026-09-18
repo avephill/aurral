@@ -81,6 +81,13 @@ export const getLidarrMetadataProfilesOnboarding = (url, apiKey) =>
 
 export const getUsers = () => getData("/users");
 
+// How good the audio is for one person. Admin only, because it is about what
+// their connection can take and what the server has to do about it.
+export const getStreamQualities = () => getData("/users/stream-qualities");
+
+export const setUserStreamQuality = (id, quality) =>
+  patchData(`/users/${encodeURIComponent(id)}/stream-quality`, { quality });
+
 export const createUser = (username, password, role, permissions) =>
   postData("/users", {
     username,
