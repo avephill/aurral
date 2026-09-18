@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  Tag as TagIcon,
   Trash2,
   UserRound,
   X,
@@ -82,6 +83,7 @@ import { DeleteTrackModal } from "./ArtistDetails/components/DeleteTrackModal";
 import LibraryInfoModal from "./LibraryInfoModal";
 import { useUserLibrary } from "../hooks/useUserLibrary";
 import RecommendModal from "../components/RecommendModal";
+import TrackTagsModal from "../components/TrackTagsModal";
 import {
   buildSharedPlaylistTrackPayload,
   reserveUniquePlaylistName,
@@ -560,6 +562,7 @@ function LibraryPage() {
   const [libraryRemoval, setLibraryRemoval] = useState(null);
   const [libraryInfo, setLibraryInfo] = useState(null);
   const [recommending, setRecommending] = useState(null);
+  const [tagging, setTagging] = useState(null);
   const [deleteFiles, setDeleteFiles] = useState(false);
   const [deletingLibraryEntity, setDeletingLibraryEntity] = useState(false);
   const [homeAlbumsGridRef, homeAlbumColumns] = useResponsiveReleaseLimit({
@@ -2027,6 +2030,17 @@ function LibraryPage() {
                 openRecommend("track", track, track.artistName || artist?.name || ""),
             },
             {
+              id: "tags",
+              label: "Tags...",
+              icon: TagIcon,
+              onSelect: () =>
+                setTagging({
+                  id: track.id,
+                  title: track.title || "This song",
+                  subtitle: track.artistName || artist?.name || "",
+                }),
+            },
+            {
               id: "favorite",
               label: isFavorite ? "Remove from favorites" : "Add to favorites",
               icon: Heart,
@@ -3011,6 +3025,7 @@ function LibraryPage() {
       />
       <LibraryInfoModal item={libraryInfo} onClose={() => setLibraryInfo(null)} />
       <RecommendModal target={recommending} onClose={() => setRecommending(null)} />
+      <TrackTagsModal track={tagging} onClose={() => setTagging(null)} />
     </>
   );
 

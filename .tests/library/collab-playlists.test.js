@@ -209,6 +209,25 @@ test("deleting your copy is how you leave, and the rest carry on", async () => {
   assert.deepEqual(collab.listCollabPlaylistsFor("avery")[0].members, ["avery"]);
 });
 
+test("a smart playlist cannot be built together, but its songs can start one", async () => {
+  startClean();
+  const deps = fakeDeps();
+  const admin = deps.adminClient();
+  const record = await admin.getPlaylistRecord("seed");
+  admin.getPlaylistRecord = async (id) =>
+    (id === "seed" ? { ...record, rules: { all: [{ is: { genre: "jazz" } } ] } } : null);
+
+  await assert.rejects(
+    () => collab.createCollabPlaylist({
+      owner: "avery", name: "Rules", members: ["dunshill"], fromPlaylistId: "seed", deps,
+    }),
+    /keeps itself, so it cannot be built together/,
+  );
+
+  // Nothing half-made is left behind by the refusal.
+  assert.deepEqual(collab.listCollabPlaylistsFor("avery"), []);
+});
+
 test("only the person who started it can put someone out, or end it", async () => {
   startClean();
   const deps = fakeDeps();

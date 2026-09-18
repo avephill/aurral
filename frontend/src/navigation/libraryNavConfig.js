@@ -18,6 +18,9 @@ export const LIBRARY_VIEWS = [
   // generates, which is a different thing.
   { id: "playlists", label: "Playlists", path: "/library/playlists" },
   { id: "genres", label: "Genres", path: "/library/genres" },
+  // Words on songs rather than a property of the file, and what the smart
+  // playlists read.
+  { id: "tags", label: "Tags", path: "/library/tags" },
   // Personal-library bulk editor; only offered when the admin enabled user libraries.
   { id: "mine", label: "Bulk migration", path: "/library/mine", requiresUserLibraries: true },
 ];

@@ -46,6 +46,7 @@ const BlocklistPage = lazy(() => import("./pages/BlocklistPage"));
 const RequestsPage = lazy(() => import("./pages/RequestsPage"));
 const ItunesLibraryPage = lazy(() => import("./pages/ItunesLibraryPage"));
 const SocialPage = lazy(() => import("./pages/SocialPage"));
+const TagsPage = lazy(() => import("./pages/TagsPage"));
 const ArtistDetailsPage = lazy(() => import("./pages/ArtistDetails/ArtistDetailsPage"));
 const ArtistReleaseListPage = lazy(() => import("./pages/ArtistDetails/ArtistReleaseListPage"));
 const ReleasePage = lazy(() => import("./pages/ArtistDetails/ReleasePage"));
@@ -307,6 +308,7 @@ function AppContent() {
                       <Route path="/library/mine" element={<MyLibraryPage />} />
                       <Route path="/library/album/:albumId" element={<LibraryPage />} />
                       <Route path="/library/artist/:artistId" element={<LibraryPage />} />
+                      <Route path="/library/tags" element={<TagsPage />} />
                       <Route path="/library/:section?" element={<LibraryPage />} />
                       <Route
                         path="/flows"

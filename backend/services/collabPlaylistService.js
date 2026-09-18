@@ -33,6 +33,11 @@ const parse = (text, fallback) => {
   }
 };
 
+/** One of Psalter's own rule-kept playlists, which are ordinary ones to Navidrome. */
+const isTagPlaylist = (owner, name) => Boolean(db.prepare(
+  "SELECT 1 FROM tag_playlists WHERE owner = ? AND enabled = 1 AND LOWER(TRIM(name)) = LOWER(TRIM(?))",
+).get(owner, String(name || "")));
+
 const knownUser = (username) =>
   Boolean(db.prepare("SELECT 1 FROM users WHERE username = ?").get(username));
 
@@ -74,6 +79,15 @@ export async function createCollabPlaylist({
     if (!record) throw new SocialError("No such playlist", 404);
     const ownerName = record.ownerName || record.owner;
     if (ownerName && ownerName !== owner) throw new SocialError("That playlist is not yours to share", 403);
+    // A smart playlist is a rule, not a list: whoever holds the rule decides
+    // what is in it, so there is nothing for anyone else to add or take out,
+    // and the next evaluation would undo them if they tried. Its songs can
+    // start one of these off, but the rule itself does not come along.
+    if (record.rules || isTagPlaylist(owner, record.name)) {
+      throw new SocialError(
+        "A smart playlist keeps itself, so it cannot be built together. Share it instead, or start this from its songs as they are now.",
+      );
+    }
     const rows = await admin.getPlaylistTracks(fromPlaylistId);
     paths = rows
       .map((row) => normalizePath(row?.path ?? row?.mediaFile?.path ?? ""))

@@ -4,6 +4,7 @@ import { createNavidromeUserClient } from "./navidromeUserClient.js";
 import { getPersonalLibraryIdForUser, mediaPathsForNavidromeSongIds } from "./navidromeTrackResolver.js";
 import { getLibraryIdsForNavidromeSongIds } from "./navidromeSongIdStore.js";
 import { getRecordPlaylistTracks, getTrackTagsForOwner } from "./songRecordService.js";
+import { mergeOwnTags } from "./trackTagService.js";
 import { logger } from "./logger.js";
 
 /**
@@ -130,6 +131,11 @@ export function resetTagPlaylistState() {
   songsByOwner.clear();
   for (const timer of rebuildTimers.values()) clearTimeout(timer);
   rebuildTimers.clear();
+}
+
+/** Everything tagged, from the iTunes import and from tagging done here. */
+function tagsForOwner(owner) {
+  return mergeOwnTags(getTrackTagsForOwner(owner), owner);
 }
 
 // ---------------------------------------------------------------- rules
@@ -299,7 +305,7 @@ async function readCurrentPlaylists(client) {
  */
 export async function getTagPlaylistReport({ owner, fresh = false } = {}) {
   const { songs, client, libraryId } = await getOwnerSongs(owner, { fresh });
-  const tags = getTrackTagsForOwner(owner);
+  const tags = tagsForOwner(owner);
   const originals = getRecordPlaylistTracks(owner);
   const current = await readCurrentPlaylists(client);
   const inLibrary = new Set(songs.keys());
@@ -381,7 +387,7 @@ export async function buildTagPlaylist(id, { fresh = false } = {}) {
   const at = Date.now();
   try {
     const { songs, client } = await getOwnerSongs(row.owner, { fresh });
-    const { songs: picked } = evaluateTagPlaylistRules(parse(row.rules_json, { conditions: [] }), songs, getTrackTagsForOwner(row.owner));
+    const { songs: picked } = evaluateTagPlaylistRules(parse(row.rules_json, { conditions: [] }), songs, tagsForOwner(row.owner));
     const songIds = picked.map((song) => song.songId);
 
     let playlistId = row.navidrome_playlist_id;
@@ -393,6 +399,15 @@ export async function buildTagPlaylist(id, { fresh = false } = {}) {
       const existing = (await client.getSubsonicPlaylists())
         .filter((playlist) => playlist.owner === client.user && String(playlist.name).trim().toLowerCase() === row.name.trim().toLowerCase())
         .sort((a, b) => (b.songCount || 0) - (a.songCount || 0))[0];
+      // Nor a playlist several people are building together: the rules would
+      // take out what they put in, every time it ran.
+      if (existing?.id && db.prepare(
+        "SELECT 1 FROM collab_members WHERE copy_playlist_id = ? AND left_at IS NULL",
+      ).get(String(existing.id))) {
+        throw new Error(
+          `"${row.name}" is being built with other people; rename one of them so this does not undo their changes`,
+        );
+      }
       // A playlist Navidrome keeps by its own rules is not one to write songs
       // into: it recomputes them and the writing is lost without a word.
       if (existing?.id && await hasNavidromeRules(existing.id)) {

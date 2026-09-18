@@ -419,6 +419,19 @@ db.exec(`
   -- outlives any file: which file it is lives in song_record_links, so a song
   -- not on the server yet keeps its tags until it arrives. source_key is the
   -- iTunes path tail (or artist|album|title|length), stable across exports.
+  -- Tags a person puts on a song here, as opposed to the ones their iTunes
+  -- library arrived with. Kept apart from the imported records on purpose: the
+  -- import is a historical document and should stay as it was exported, while
+  -- these are edited, and they are the only tags music added since can have.
+  CREATE TABLE IF NOT EXISTS track_tags (
+    owner TEXT NOT NULL,
+    track_id INTEGER NOT NULL,
+    tags_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (owner, track_id),
+    FOREIGN KEY (track_id) REFERENCES library_tracks (id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS song_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner TEXT NOT NULL,

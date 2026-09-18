@@ -1,0 +1,133 @@
+/* Tags: the words on songs that smart playlists read. */
+
+.tags-page {
+  display: grid;
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 68rem;
+  margin-inline: auto;
+  padding-bottom: 3rem;
+}
+
+.tags-page__muted {
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+}
+
+.tags-page__state {
+  padding: 1.5rem 0;
+}
+
+.tags-page__layout {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .tags-page__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tags-page__list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags-page__list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--aurral-radius-sm);
+}
+
+.tags-page__list > li.is-selected {
+  background: var(--aurral-surface-raised);
+}
+
+.tags-page__tag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.9375rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tags-page__tag svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  color: var(--aurral-text-muted);
+}
+
+.tags-page__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tags-page__count {
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.tags-page__row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tags-page__row-actions svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.tags-page__origin {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+}
+
+.tags-page__rename {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.35rem;
+  padding-top: 0.35rem;
+}
+
+.tags-page__songs ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags-page__songs li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--aurral-border);
+  font-size: 0.9375rem;
+}
+
+.tags-page__songs h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
