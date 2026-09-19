@@ -367,7 +367,7 @@
   transform: none;
 }
 
-/* Page headings: the big thin "Music" title, not the heavy Aurral one. */
+/* Page headings: the big thin "Music" title, not the heavy Psalter one. */
 :root[data-theme-id="itunes"] .page-title {
   font-size: clamp(1.75rem, 3vw, 2.25rem);
   font-weight: 300;

@@ -851,7 +851,7 @@ export const recordTrackReused = ({ track = {}, playlistId, sourceType = "librar
     sourceType === "lidarr"
       ? "from Lidarr library"
       : sourceType === "aurral"
-        ? "from Aurral library"
+        ? "from Psalter library"
         : "from library";
   return appendAurralHistory({
     kind: sourceType === "lidarr" ? "track_reused_lidarr" : "track_reused_aurral",

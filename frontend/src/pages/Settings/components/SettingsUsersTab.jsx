@@ -19,7 +19,7 @@ function getLocalBypassStatus(status) {
   if (!status) {
     return {
       title: "Unavailable: status unknown",
-      detail: "Aurral could not load the current local-network auto-login status.",
+      detail: "Psalter could not load the current local-network auto-login status.",
       canToggle: false,
     };
   }
@@ -44,7 +44,7 @@ function getLocalBypassStatus(status) {
       return {
         title: "Disabled",
         detail:
-          "Automatically sign in as the sole admin user when accessing Aurral from this server's local subnet. If additional users are added, this setting turns off automatically.",
+          "Automatically sign in as the sole admin user when accessing Psalter from this server's local subnet. If additional users are added, this setting turns off automatically.",
         canToggle: true,
       };
     case "not_single_user":
@@ -64,7 +64,7 @@ function getLocalBypassStatus(status) {
       return {
         title: "Unavailable: local subnet could not be determined",
         detail:
-          "Aurral could not infer a single trusted IPv4 local subnet for this server, so local-network auto-login stays disabled.",
+          "Psalter could not infer a single trusted IPv4 local subnet for this server, so local-network auto-login stays disabled.",
         canToggle: false,
       };
     case "not_onboarded":
@@ -356,7 +356,7 @@ export function SettingsUsersTab({
             <SettingsArrFormGroup
               label="Libraries folder"
               labelFor="user-libraries-root"
-              help="Folder (as seen by Aurral) that holds one subfolder per user, e.g. /data/music/users. Must be on the same filesystem mount as the Lidarr library so relative symlinks resolve everywhere."
+              help="Folder (as seen by Psalter) that holds one subfolder per user, e.g. /data/music/users. Must be on the same filesystem mount as the Lidarr library so relative symlinks resolve everywhere."
             >
               <SettingsInput
                 id="user-libraries-root"
@@ -385,7 +385,7 @@ export function SettingsUsersTab({
             <SettingsArrFormGroup
               label="Libraries folder as seen by Navidrome"
               labelFor="user-libraries-navidrome-root"
-              help="Only needed if Navidrome mounts the libraries folder at a different path than Aurral. Leave blank when both containers use the same path."
+              help="Only needed if Navidrome mounts the libraries folder at a different path than Psalter. Leave blank when both containers use the same path."
             >
               <SettingsInput
                 id="user-libraries-navidrome-root"

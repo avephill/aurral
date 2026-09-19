@@ -8,7 +8,7 @@ import { db } from "../config/db-sqlite.js";
  * per person: a path like "Rock/Best of", or nothing for a playlist that sits
  * at the top.
  *
- * The cost of that is worth saying out loud: a folder exists in Aurral and
+ * The cost of that is worth saying out loud: a folder exists in Psalter and
  * nowhere else. Every Navidrome client still shows one flat list. The gain is
  * that nothing about the playlists themselves is changed to carry it, so a
  * folder can be renamed or thrown away without touching a single playlist.

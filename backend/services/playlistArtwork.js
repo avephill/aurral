@@ -84,7 +84,7 @@ const escapeXml = (value) =>
 const normalizeDisplayName = (playlistName) =>
   String(playlistName || "")
     .replace(/^\[(?:A|AS)\]\s*/i, "")
-    .replace(/^Aurral(?: Shared)?\s+/i, "")
+    .replace(/^Psalter(?: Shared)?\s+/i, "")
     .trim();
 
 const normalizeKind = (kind) =>

@@ -45,7 +45,7 @@ export const generateFlowArtwork = (playlistId) =>
     `/playlists/artwork/${encodeURIComponent(playlistId)}/generate`,
   );
 
-// Hand-made playlists live either in Aurral or in Navidrome. Which store is
+// Hand-made playlists live either in Psalter or in Navidrome. Which store is
 // in use, and how to talk to each, is in ../playlistProviders.js; the helpers
 // below ask the current provider rather than branching on the mode.
 export {
@@ -78,7 +78,7 @@ export {
 const fetchPlaylistStatus = async (signal) => {
   const status = await getData("/playlists/status", { signal });
   if (!isNavidromePlaylistStore()) return status;
-  // Aurral's own shared playlists are not in use; show the Navidrome ones in
+  // Psalter's own shared playlists are not in use; show the Navidrome ones in
   // their place so the menus that read status.sharedPlaylists keep working.
   try {
     const { playlists } = await getNavidromePlaylists({ signal });

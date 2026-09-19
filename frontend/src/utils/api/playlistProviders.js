@@ -10,10 +10,10 @@ import { queryClient, queryKeys } from "../../queryClient.js";
 /**
  * Where hand-made playlists live.
  *
- * Aurral can hold them itself, or leave them in Navidrome and read and edit
+ * Psalter can hold them itself, or leave them in Navidrome and read and edit
  * them there as the signed-in user. The two stores answer different endpoints
  * and disagree on small things (Navidrome addresses an entry by its position,
- * Aurral by a job id), so each one is written out here as a provider with the
+ * Psalter by a job id), so each one is written out here as a provider with the
  * same shape, and the rest of the app asks the current provider rather than
  * asking which store is in use.
  *
@@ -56,7 +56,7 @@ export const removeNavidromePlaylistEntry = (playlistId, index, songId = null) =
     + (songId ? `?songId=${encodeURIComponent(songId)}` : ""),
   );
 
-// Folders live in Aurral, not in Navidrome, so these never touch a playlist.
+// Folders live in Psalter, not in Navidrome, so these never touch a playlist.
 export const getNavidromePlaylistFolders = ({ signal } = {}) =>
   getData("/navidrome-playlists/folders", { signal });
 
@@ -107,7 +107,7 @@ const unwrapPlaylist = (result) => result?.playlist || result;
 
 const aurralPlaylistProvider = {
   id: "aurral",
-  // Aurral's own store addresses a track by the download job that produced it.
+  // Psalter's own store addresses a track by the download job that produced it.
   entryAddressing: "jobId",
   status: ({ signal } = {}) => getData("/playlists/status", { signal }),
   list: async ({ signal } = {}) => {
@@ -123,7 +123,7 @@ const aurralPlaylistProvider = {
   remove: (playlistId) => deleteData(`/playlists/shared-playlists/${playlistId}`),
   removeEntry: (playlistId, { jobId } = {}) =>
     deleteData(`/playlists/shared-playlists/${playlistId}/tracks/${jobId}`),
-  // Aurral's own store keeps playlists in insertion order and has no move.
+  // Psalter's own store keeps playlists in insertion order and has no move.
   canReorder: false,
   moveEntry: null,
   invalidate: () => queryClient.invalidateQueries({ queryKey: queryKeys.playlistStatus }),

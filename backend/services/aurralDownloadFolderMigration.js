@@ -276,7 +276,7 @@ async function copyWithoutRemovingSource(sourcePath, targetPath) {
 
 async function removeSource(sourcePath, rootPath) {
   if (!isPathInsideRoot(sourcePath, rootPath)) {
-    throw new Error("Migration source is outside the Aurral root");
+    throw new Error("Migration source is outside the Psalter root");
   }
   await fs.rm(sourcePath, { force: true });
   let current = path.dirname(sourcePath);
@@ -381,7 +381,7 @@ async function defaultIndexDestination({ rootPath, targetPath, metadataReader })
   await scanMusicRoot({ rootPath, source: "aurral", filePaths: [targetPath], metadataReader });
   const media = getLibraryMediaFile({ source: "aurral", path: targetPath });
   if (!media?.available) {
-    throw new Error("Destination was not indexed as available Aurral media");
+    throw new Error("Destination was not indexed as available Psalter media");
   }
   return media;
 }
@@ -471,7 +471,7 @@ export async function migrateAurralDownloadFolder(options = {}) {
   const logger = options.logger || console;
   const lidarrRoots = configuredLidarrRoots(options);
   if (lidarrRoots.some((candidate) => pathsOverlap(rootPath, candidate))) {
-    const reason = "Aurral DL_FOLDER overlaps a configured Lidarr root";
+    const reason = "Psalter DL_FOLDER overlaps a configured Lidarr root";
     log(logger, "error", `[AurralMigration] ${reason}`);
     return { status: "blocked", rootPath, reason, scanned: 0, migrated: 0, removed: 0, retained: 0 };
   }
@@ -595,7 +595,7 @@ export async function migrateAurralDownloadFolder(options = {}) {
       `${trackName}${path.extname(sourcePath).toLowerCase() || ".mp3"}`,
     );
     if (!isPathInsideRoot(destination, rootPath)) {
-      retainItem(state, sourcePath, "destination escaped Aurral root", logger);
+      retainItem(state, sourcePath, "destination escaped Psalter root", logger);
       result.retained += 1;
       continue;
     }
@@ -680,7 +680,7 @@ export async function migrateAurralDownloadFolder(options = {}) {
       try {
         if (batchError) throw batchError;
         if (!indexed.has(entry.targetPath)) {
-          throw new Error("Destination was not indexed as available Aurral media");
+          throw new Error("Destination was not indexed as available Psalter media");
         }
         await commitIndexedMigrationItem({
           state,

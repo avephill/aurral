@@ -2,7 +2,7 @@
  * Applies the plan from smart_playlists.py: for each playlist, a set of rules
  * Navidrome will keep up to date.
  *
- * Runs inside the Aurral container, because that is where both connections to
+ * Runs inside the Psalter container, because that is where both connections to
  * Navidrome live. A playlist is created as its owner through their own
  * connection, so it belongs to them, and the rules are attached through the
  * admin one, which is the only connection allowed to write rules.
@@ -30,7 +30,7 @@ const ownerName = process.env.OWNER || plan.owner;
 if (!ownerName) throw new Error("Set OWNER, or put an owner in the plan");
 
 const owner = userOps.getUserByUsername(ownerName);
-if (!owner) throw new Error(`No Aurral user called ${ownerName}`);
+if (!owner) throw new Error(`No Psalter user called ${ownerName}`);
 
 const userClient = createNavidromeUserClient(owner);
 const admin = getAdminNavidromeClient();

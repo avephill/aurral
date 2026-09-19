@@ -4,7 +4,7 @@ import { SettingsPlaybackSection } from "./SettingsPlaybackSection";
 
 const PLAYLIST_ARTWORK_STYLE_OPTIONS = [
   { value: "photo", label: "Photo texture" },
-  { value: "aurral", label: "Aurral generated" },
+  { value: "aurral", label: "Psalter generated" },
 ];
 
 export function SettingsPlaybackTab({
@@ -37,7 +37,7 @@ export function SettingsPlaybackTab({
           <SettingsArrFormGroup
             label="Generated cover style"
             labelFor="playlist-artwork-style"
-            help="Photo texture uses a photo background. Aurral generated uses abstract palette covers."
+            help="Photo texture uses a photo background. Psalter generated uses abstract palette covers."
           >
             <SettingsSelect
               id="playlist-artwork-style"

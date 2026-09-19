@@ -56,7 +56,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   const canAccessSettings = user?.role === "admin" || !!user?.permissions?.accessSettings;
   const userLibrariesEnabled = bootstrap?.userLibrariesEnabled === true;
   const discoveryEnabled = bootstrap?.discoveryEnabled !== false;
-  // Flows and Discover playlists are Aurral's automatic playlists; with those
+  // Flows and Discover playlists are Psalter's automatic playlists; with those
   // off only hand-made playlists remain, under Library.
   const automaticPlaylistsEnabled = bootstrap?.automaticPlaylistsEnabled !== false;
   const libraryRecommendationsEnabled = bootstrap?.libraryRecommendationsEnabled !== false;

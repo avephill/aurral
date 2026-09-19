@@ -1,7 +1,7 @@
 {
   "name": "aurral-backend",
   "version": "0.0.0",
-  "description": "Backend API for Aurral artist request manager",
+  "description": "Backend API for Psalter artist request manager",
   "private": true,
   "main": "server.js",
   "type": "module",

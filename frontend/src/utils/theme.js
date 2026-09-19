@@ -5,7 +5,7 @@ export const THEME_FILE_VERSION = 1;
 export const DEFAULT_THEME_ID = "aurral";
 export const ITUNES_THEME_ID = "itunes";
 // What someone sees before they have chosen anything. Not the same as
-// DEFAULT_THEME_ID, which names the Aurral theme itself and is what the older
+// DEFAULT_THEME_ID, which names the Psalter theme itself and is what the older
 // storage format and the follows-the-system case are written against.
 export const INITIAL_THEME_ID = ITUNES_THEME_ID;
 export const THEME_APPEARANCES = ["system", "light", "dark"];
@@ -167,7 +167,7 @@ export function createThemeColors(appearance, background, accent, overrides = {}
 export const BUILT_IN_THEMES = [
   {
     id: DEFAULT_THEME_ID,
-    label: "Aurral",
+    label: "Psalter",
     appearance: "light",
     colors: createThemeColors("light", "#ffffff", "#525252", {
       chrome: "#e5e7eb",
@@ -295,7 +295,7 @@ function parseThemeColors(value, appearance) {
   if (!isRecord(value)) throw new Error("Theme colors must be an object.");
   const colors = { ...getDefaultThemeColors(appearance) };
   for (const [role, color] of Object.entries(value)) {
-    if (!THEME_COLOR_ROLE_SET.has(role)) throw new Error(`"${role}" is not a supported Aurral theme color role.`);
+    if (!THEME_COLOR_ROLE_SET.has(role)) throw new Error(`"${role}" is not a supported Psalter theme color role.`);
     const normalized = normalizeThemeColor(color);
     if (!normalized) throw new Error(`The color for "${role}" is invalid.`);
     colors[role] = normalized;
@@ -393,7 +393,7 @@ function saveCustomThemes(themes) {
   try {
     globalThis.localStorage?.setItem(CUSTOM_THEMES_STORAGE_KEY, JSON.stringify(themes.map(storedThemeFile)));
   } catch {
-    throw new Error("Aurral could not save themes on this device.");
+    throw new Error("Psalter could not save themes on this device.");
   }
   customThemeCache = themes;
   notify(customThemeListeners);

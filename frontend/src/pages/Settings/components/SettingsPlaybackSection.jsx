@@ -482,7 +482,7 @@ export function SettingsPlaybackSection({
     <>
       <SettingsArrFieldSet legend="Playback servers">
         <div className="arr-info">
-          Where Aurral writes playlists.
+          Where Psalter writes playlists.
         </div>
         <SettingsArrCardGrid>
           <IntegrationCard
@@ -680,7 +680,7 @@ export function SettingsPlaybackSection({
           }
         >
           <SettingsModalIntro>
-            Connect Jellyfin to publish Aurral flow and shared playlists into its music library.
+            Connect Jellyfin to publish Psalter flow and shared playlists into its music library.
           </SettingsModalIntro>
           <SettingsModalSection title="Connection">
             <SettingsAdapterFields
@@ -714,7 +714,7 @@ export function SettingsPlaybackSection({
           }
         >
           <SettingsModalIntro>
-            Connect Plex to create a library and playlists for Aurral flows.
+            Connect Plex to create a library and playlists for Psalter flows.
           </SettingsModalIntro>
 
           <SettingsModalSection title="Account">
@@ -780,13 +780,13 @@ export function SettingsPlaybackSection({
             )}
           </SettingsModalSection>
 
-          <SettingsModalSection title="Aurral library path">
+          <SettingsModalSection title="Psalter library path">
             <SettingsModalField
-              label="Plex Aurral Library path (optional)"
+              label="Plex Psalter Library path (optional)"
               hint={
                 <>
                   Only needed when Plex sees downloads at a different path. Enter the Plex-side
-                  path to the Aurral Downloads Folder.
+                  path to the Psalter Downloads Folder.
                 </>
               }
             >
@@ -849,7 +849,7 @@ export function SettingsPlaybackSection({
 
             {plex.mainLibrarySectionId && libraryAccessCheck?.checking ? (
               <p className="settings-modal__hint">
-                <DotLoader size="xs" label={null} /> Checking whether Aurral can
+                <DotLoader size="xs" label={null} /> Checking whether Psalter can
                 already read this library…
               </p>
             ) : null}
@@ -858,10 +858,10 @@ export function SettingsPlaybackSection({
             libraryAccessCheck?.checked &&
             !libraryAccessCheck.accessible ? (
               <p className="settings-modal__hint">
-                <AlertTriangle className="artist-icon-xs" aria-hidden /> Aurral can&apos;t read this
+                <AlertTriangle className="artist-icon-xs" aria-hidden /> Psalter can&apos;t read this
                 library directly yet. Plex reports its files at{" "}
                 <code>{libraryAccessCheck.reportedPath}</code> — set a path mapping below so
-                Aurral knows where to find that same file.
+                Psalter knows where to find that same file.
               </p>
             ) : null}
 
@@ -878,7 +878,7 @@ export function SettingsPlaybackSection({
                 label="Local path for this library (optional)"
                 hint={
                   <>
-                    Enter the same path as Aurral sees it; leave blank to remove the mapping.
+                    Enter the same path as Psalter sees it; leave blank to remove the mapping.
                   </>
                 }
               >
@@ -929,7 +929,7 @@ export function SettingsPlaybackSection({
               </button>
             </SettingsModalActions>
             <p className="settings-modal__hint">
-              Creates the Aurral library and flow playlists, then scans Plex. Saves before syncing.
+              Creates the Psalter library and flow playlists, then scans Plex. Saves before syncing.
             </p>
           </SettingsModalSection>
         </SettingsIntegrationModal>

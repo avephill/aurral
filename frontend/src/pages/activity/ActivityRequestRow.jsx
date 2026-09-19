@@ -48,7 +48,7 @@ function getRequestMeta(request, title) {
   const album = String(request.albumName || "").trim();
   const isTrack = Boolean(request.trackName);
   const values = [artist, isTrack && album !== title ? album : null].filter(Boolean);
-  return values.join(" · ") || String(request.subtitle || "").trim() || "Aurral activity";
+  return values.join(" · ") || String(request.subtitle || "").trim() || "Psalter activity";
 }
 
 export default function ActivityRequestRow({

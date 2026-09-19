@@ -48,7 +48,7 @@ export const QUEUE_DEFINITIONS = [
     queue: "library-scan",
     label: "Library Scans",
     workerLabel: "Library Scan Worker",
-    description: "Refreshes Aurral's view of files after playlist or library changes.",
+    description: "Refreshes Psalter's view of files after playlist or library changes.",
     worker: "library-scan",
   },
   {
@@ -96,11 +96,11 @@ export const SYSTEM_TASK_LABELS = {
   },
   "weekly-flow-startup-reuse-repair": {
     label: "Startup Playlist Reuse Repair",
-    description: "Checks reusable playlist links after Aurral starts.",
+    description: "Checks reusable playlist links after Psalter starts.",
   },
   "weekly-flow-startup-check": {
     label: "Startup Playlist Schedule Check",
-    description: "Resumes pending playlist work after Aurral starts.",
+    description: "Resumes pending playlist work after Psalter starts.",
   },
   "discovery-refresh-check": {
     label: "Discovery Auto Refresh Check",
@@ -167,7 +167,7 @@ const PAYLOAD_DETAIL_KEY = {
       : "Scans playlists for tracks missing MusicBrainz IDs and queues enrichment jobs.",
   "library-scan": (p, desc) =>
     p?.force
-      ? "Refreshes Aurral's library view after a requested refresh."
+      ? "Refreshes Psalter's library view after a requested refresh."
       : desc,
   "discovery-user-refresh": (p, desc) =>
     p?.listenHistoryProfile?.listenHistoryUsername

@@ -19,7 +19,7 @@ registerArtworkServe(router);
 router.use(requireAuth);
 router.use(requirePermission("accessFlow"));
 
-// Flows are Aurral's automatic playlists. With those switched off the routes
+// Flows are Psalter's automatic playlists. With those switched off the routes
 // that would create or run one are closed, while hand-made playlists stay.
 router.use("/flows", (req, res, next) => {
   if (req.method === "GET" || isAutomaticPlaylistsEnabled()) return next();

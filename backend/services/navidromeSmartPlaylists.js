@@ -2,7 +2,7 @@
  * Smart playlists, the iTunes idea: a playlist described by rules rather than
  * by a list of songs, kept up to date on its own.
  *
- * Navidrome evaluates the rules, so Aurral's job is to say what the rules are
+ * Navidrome evaluates the rules, so Psalter's job is to say what the rules are
  * in a shape a person can edit and Navidrome will accept. The two shapes
  * differ: an editor wants a row of field, operator and value, while Navidrome
  * wants `{ "contains": { "title": "love" } }`. Everything crossing that line

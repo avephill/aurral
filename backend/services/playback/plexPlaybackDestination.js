@@ -110,7 +110,7 @@ export class PlexPlaybackDestination {
       if (this._sectionId == null) {
         this._sectionId = (await this.client.ensureWeeklyFlowLibrary(this._libraryPath()))?.key ?? null;
       }
-      if (this._sectionId == null) throw new Error("Could not create or find the Aurral Plex library");
+      if (this._sectionId == null) throw new Error("Could not create or find the Psalter Plex library");
       await this._loadTracks();
       return playbackOperationSuccess();
     } catch (error) {

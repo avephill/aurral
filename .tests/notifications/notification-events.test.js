@@ -194,7 +194,7 @@ test("notifyRequestMade queues Gotify with actor and webhook payload", async () 
     const gotify = requests.find((entry) => entry.url.startsWith("/message"));
     const webhook = requests.find((entry) => entry.url === "/hook");
     assert.ok(gotify);
-    assert.equal(gotify.body.title, "Aurral – Request");
+    assert.equal(gotify.body.title, "Psalter – Request");
     assert.equal(
       gotify.body.message,
       "Album requested: Blue Train by John Coltrane (alice)",

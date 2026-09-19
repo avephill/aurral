@@ -33,7 +33,7 @@ import {
 
 /**
  * Hand-made playlists that live in Navidrome, read and edited as the
- * signed-in user. Nothing is stored in Aurral: a change here is visible in
+ * signed-in user. Nothing is stored in Psalter: a change here is visible in
  * every Navidrome client at once, and a change made in a Navidrome client is
  * visible here on the next load.
  */
@@ -41,7 +41,7 @@ import {
 // Signed in is enough. These are each person's own Navidrome playlists, read
 // and written as them, so Navidrome only lets them change their own; the few
 // edits that go through the admin connection check ownership above. The
-// accessFlow permission gates the playlists Aurral generates and downloads,
+// accessFlow permission gates the playlists Psalter generates and downloads,
 // a different thing, and requiring it here kept listeners out of their own.
 const router = express.Router();
 router.use(requireAuth);
@@ -117,7 +117,7 @@ function toPlaylistSummary(playlist, username, record = null, folder = "") {
     // Null when the rules use something this editor cannot show; the playlist
     // still works, it just cannot be opened in the rule editor.
     rules: smart ? fromNavidromeRules(record.rules) : null,
-    // Consumers of Aurral's own playlists look for these; an empty set means
+    // Consumers of Psalter's own playlists look for these; an empty set means
     // "unknown", never "already added".
     trackIdentities: [],
     trackEntries: [],
@@ -129,7 +129,7 @@ function sendNavidromeError(res, error, fallback) {
     return res.status(502).json({
       error: "Navidrome did not accept the user",
       message:
-        "Navidrome rejected the trusted username header. Add Aurral's address to Navidrome's "
+        "Navidrome rejected the trusted username header. Add Psalter's address to Navidrome's "
         + "external-auth trusted sources and make sure the header names match.",
       code: error.code ?? null,
     });
@@ -219,7 +219,7 @@ router.get("/", noCache, async (req, res) => {
   }
 });
 
-// Folders. Navidrome has none, so these read and write Aurral's own tree and
+// Folders. Navidrome has none, so these read and write Psalter's own tree and
 // never touch a playlist.
 router.get("/folders", noCache, (req, res) => {
   if (!isNavidromePlaylistsEnabled()) {

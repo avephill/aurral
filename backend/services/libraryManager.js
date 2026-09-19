@@ -1647,13 +1647,13 @@ export class LibraryManager {
           const failure = deletionResults.find((result) => result.status === "rejected");
           if (failure) {
             const error = failure.reason;
-            logger.error("library", `[LibraryManager] Failed to delete Aurral track file: ${error.message}`);
+            logger.error("library", `[LibraryManager] Failed to delete Psalter track file: ${error.message}`);
             return { success: false, code: "failed", error: error.message };
           }
           removeLibraryTrackIfNoAvailableMedia(id);
           return { success: true };
         } catch (error) {
-          logger.error("library", `[LibraryManager] Failed to delete Aurral track file: ${error.message}`);
+          logger.error("library", `[LibraryManager] Failed to delete Psalter track file: ${error.message}`);
           return { success: false, code: "failed", error: error.message };
         }
       }

@@ -338,7 +338,7 @@ async function checkSharedVolumeSection() {
   }
 
   steps.push(
-    healthStep("roots", "pass", "Browsable storage roots in Aurral", {
+    healthStep("roots", "pass", "Browsable storage roots in Psalter", {
       detail: formatLimitedList(browseRoots),
     }),
   );
@@ -410,7 +410,7 @@ async function checkPathMappingsSection() {
     steps.push(
       healthStep("local-readable", "fail", "Mapped local paths are readable directories", {
         detail: formatLimitedList(inaccessibleLocalPaths),
-        fix: "Create or mount the local side of each mapping inside the Aurral container. Remove mappings for apps that already share the same container paths.",
+        fix: "Create or mount the local side of each mapping inside the Psalter container. Remove mappings for apps that already share the same container paths.",
       }),
     );
   } else {
@@ -438,7 +438,7 @@ async function checkDownloadsSection() {
         fix: `Choose a downloads folder under your shared mount, for example ${suggested}.`,
       }),
     );
-    return buildSection("downloads", "Aurral downloads", steps);
+    return buildSection("downloads", "Psalter downloads", steps);
   }
 
   steps.push(
@@ -460,7 +460,7 @@ async function checkDownloadsSection() {
         fix: "Create the folder or pick a path that already exists inside the mounted volume.",
       }),
     );
-    return buildSection("downloads", "Aurral downloads", steps);
+    return buildSection("downloads", "Psalter downloads", steps);
   }
 
   steps.push(
@@ -472,16 +472,16 @@ async function checkDownloadsSection() {
   const writeProbe = await runDirectoryWriteProbe(downloadFolder);
   if (!writeProbe.ok) {
     steps.push(
-      healthStep("writable", "fail", "Aurral can create and move files", {
+      healthStep("writable", "fail", "Psalter can create and move files", {
         detail: writeProbe.detail,
         fix: "Check container permissions (PUID/PGID), read-only mounts, ACLs, and filesystem permissions for the configured downloads folder.",
       }),
     );
-    return buildSection("downloads", "Aurral downloads", steps);
+    return buildSection("downloads", "Psalter downloads", steps);
   }
 
   steps.push(
-    healthStep("writable", "pass", "Aurral can create and move files", {
+    healthStep("writable", "pass", "Psalter can create and move files", {
       detail: writeProbe.detail,
     }),
   );
@@ -507,7 +507,7 @@ async function checkDownloadsSection() {
     );
   }
 
-  return buildSection("downloads", "Aurral downloads", steps);
+  return buildSection("downloads", "Psalter downloads", steps);
 }
 
 async function checkLidarrSection() {
@@ -599,7 +599,7 @@ async function checkDownloadClientSection({
   const readablePath = await checkPathReadable(completedPath, key);
   if (!readablePath) {
     steps.push(
-      healthStep("path-readable", "fail", `Aurral can read ${title} completed files`, {
+      healthStep("path-readable", "fail", `Psalter can read ${title} completed files`, {
         detail: completedPath,
         fix: pathFix(completedPath),
       }),
@@ -608,7 +608,7 @@ async function checkDownloadClientSection({
   }
 
   steps.push(
-    healthStep("path-readable", "pass", `Aurral can read ${title} completed files`, {
+    healthStep("path-readable", "pass", `Psalter can read ${title} completed files`, {
       detail: formatPathAccessDetail(completedPath, readablePath),
     }),
   );
@@ -616,14 +616,14 @@ async function checkDownloadClientSection({
   const transferProbe = await runDownloadTransferProbe(readablePath, resolvePlaylistRoot());
   if (!transferProbe.ok) {
     steps.push(
-      healthStep("transfer", "fail", `Aurral can transfer ${title} completed files`, {
+      healthStep("transfer", "fail", `Psalter can transfer ${title} completed files`, {
         detail: transferProbe.detail,
-        fix: `${pathFix(completedPath)} Also verify that Aurral can create and remove files in the completed folder and has enough free space at the destination.`,
+        fix: `${pathFix(completedPath)} Also verify that Psalter can create and remove files in the completed folder and has enough free space at the destination.`,
       }),
     );
   } else {
     steps.push(
-      healthStep("transfer", "pass", `Aurral can transfer ${title} completed files`, {
+      healthStep("transfer", "pass", `Psalter can transfer ${title} completed files`, {
         detail: transferProbe.detail,
       }),
     );
@@ -642,11 +642,11 @@ async function checkSlskdSection() {
     resolveCompletedPath: (_, connection) =>
       String(connection.downloadPath || "").trim(),
     missingPathFix:
-      "Configure the completed downloads folder in slskd, then make that reported path readable and writable by Aurral through a shared mount or an slskd remote path mapping.",
+      "Configure the completed downloads folder in slskd, then make that reported path readable and writable by Psalter through a shared mount or an slskd remote path mapping.",
     pathFix: (downloadPath) =>
       looksLikeExternalOnlyPath(downloadPath)
-        ? "slskd reports a host path Aurral cannot read inside Docker. Mount the shared parent folder into both containers, or add an slskd mapping under Settings → Download Clients → Remote Path Mappings."
-        : `Mount the same host folder into Aurral at the path slskd uses, or add an slskd mapping for ${downloadPath} under Settings → Download Clients → Remote Path Mappings.`,
+        ? "slskd reports a host path Psalter cannot read inside Docker. Mount the shared parent folder into both containers, or add an slskd mapping under Settings → Download Clients → Remote Path Mappings."
+        : `Mount the same host folder into Psalter at the path slskd uses, or add an slskd mapping for ${downloadPath} under Settings → Download Clients → Remote Path Mappings.`,
     connectionLabel: "slskd API is reachable",
     extraSteps: (connection) => {
       if (connection.soulseekConnected === false) {
@@ -683,7 +683,7 @@ async function checkNzbgetSection() {
     missingPathFix:
       "Set Completed download path under Settings → Download Clients → NZBGet, or configure NZBGet's DestDir so its API reports the completed folder.",
     pathFix: () =>
-      "Mount the same host folder into Aurral and NZBGet, or add an NZBGet mapping under Settings → Download Clients → Remote Path Mappings.",
+      "Mount the same host folder into Psalter and NZBGet, or add an NZBGet mapping under Settings → Download Clients → Remote Path Mappings.",
   });
 }
 
@@ -697,9 +697,9 @@ async function checkSabnzbdSection() {
     resolveCompletedPath: (_config, connection) =>
       String(connection.downloadPath || connection.directories?.destDir || "").trim(),
     missingPathFix:
-      "Configure SABnzbd's Completed Download Folder, then make that reported path readable and writable by Aurral through a shared mount or a SABnzbd remote path mapping.",
+      "Configure SABnzbd's Completed Download Folder, then make that reported path readable and writable by Psalter through a shared mount or a SABnzbd remote path mapping.",
     pathFix: () =>
-      "Mount the same host folder into Aurral and SABnzbd, or add a SABnzbd mapping under Settings → Download Clients → Remote Path Mappings.",
+      "Mount the same host folder into Psalter and SABnzbd, or add a SABnzbd mapping under Settings → Download Clients → Remote Path Mappings.",
   });
 }
 
@@ -760,7 +760,7 @@ async function checkNavidromeSection() {
   if (librariesListed && libraryList.length === 0) {
     steps.push(
       healthStep("libraries", "warn", "Navidrome music libraries are configured", {
-        fix: "Add the Aurral playlist folder and any reused Lidarr library folders as Navidrome music libraries, then scan them.",
+        fix: "Add the Psalter playlist folder and any reused Lidarr library folders as Navidrome music libraries, then scan them.",
       }),
     );
   } else if (libraryList.length > 0) {
@@ -788,14 +788,14 @@ async function checkNavidromeSection() {
 
   if (relevantLibraries.length > 0 && unreadableLibraries.length > 0) {
     steps.push(
-      healthStep("library-readable", "fail", "Relevant Navidrome libraries are readable from Aurral", {
+      healthStep("library-readable", "fail", "Relevant Navidrome libraries are readable from Psalter", {
         detail: formatLimitedList(unreadableLibraries),
-        fix: "Mount the relevant Navidrome music folders into Aurral at the same paths, or verify the corresponding Navidrome libraries separately when the apps have different filesystem views.",
+        fix: "Mount the relevant Navidrome music folders into Psalter at the same paths, or verify the corresponding Navidrome libraries separately when the apps have different filesystem views.",
       }),
     );
   } else if (relevantLibraries.length > 0) {
     steps.push(
-      healthStep("library-readable", "pass", "Relevant Navidrome libraries are readable from Aurral", {
+      healthStep("library-readable", "pass", "Relevant Navidrome libraries are readable from Psalter", {
         detail: formatLimitedList(
           relevantLibraries.map((entry) => String(entry?.path || "").trim()).filter(Boolean),
         ),
@@ -807,15 +807,15 @@ async function checkNavidromeSection() {
 
   if (playlistLibrary) {
     steps.push(
-      healthStep("aurral-library", "pass", "Navidrome scans the Aurral playlist folder", {
+      healthStep("aurral-library", "pass", "Navidrome scans the Psalter playlist folder", {
         detail: playlistLibrary.path,
       }),
     );
   } else {
     steps.push(
-      healthStep("aurral-library", "warn", "Navidrome scans the Aurral playlist folder", {
+      healthStep("aurral-library", "warn", "Navidrome scans the Psalter playlist folder", {
         detail: formatLimitedList(expectedLibraryCandidates),
-        fix: "Save Navidrome settings, then create or update a playlist or flow so Aurral can create the playlist library. Add that folder as a music library in Navidrome and scan it.",
+        fix: "Save Navidrome settings, then create or update a playlist or flow so Psalter can create the playlist library. Add that folder as a music library in Navidrome and scan it.",
       }),
     );
   }
@@ -826,7 +826,7 @@ async function checkNavidromeSection() {
 async function checkNativePlaybackSection() {
   const trackCount = getCanonicalTrackCount({ availableOnly: true });
   if (trackCount === 0) {
-    return buildSection("native-playback", "Aurral-native playback", [
+    return buildSection("native-playback", "Psalter-native playback", [
       healthStep("indexed", "warn", "Canonical media is ready for native playback", {
         fix: "Connect Lidarr, let the library index refresh, then run Storage Health again.",
       }),
@@ -853,16 +853,16 @@ async function checkNativePlaybackSection() {
 
   const detail = `${trackCount} canonical track${trackCount === 1 ? "" : "s"} indexed`;
   if (missing.length > 0) {
-    return buildSection("native-playback", "Aurral-native playback", [
-      healthStep("indexed", "fail", "Aurral-native playback can read indexed media", {
+    return buildSection("native-playback", "Psalter-native playback", [
+      healthStep("indexed", "fail", "Psalter-native playback can read indexed media", {
         detail: `${missing.length} sampled track${missing.length === 1 ? " is" : "s are"} missing or unreadable`,
         fix: "Restore the media mount or rescan the library so stale files become unavailable.",
       }),
     ]);
   }
 
-  return buildSection("native-playback", "Aurral-native playback", [
-    healthStep("indexed", "pass", "Aurral-native playback can read indexed media", {
+  return buildSection("native-playback", "Psalter-native playback", [
+    healthStep("indexed", "pass", "Psalter-native playback can read indexed media", {
       detail,
     }),
   ]);
@@ -928,15 +928,15 @@ async function checkPlexSection() {
   const coveringLocation = locations.find((location) => pathCoversPrefix(location, expectedPath));
   if (coveringLocation) {
     steps.push(
-      healthStep("aurral-library", "pass", "Plex scans the Aurral download folder", {
+      healthStep("aurral-library", "pass", "Plex scans the Psalter download folder", {
         detail: `${expectedPath} (library: ${coveringLocation})`,
       }),
     );
   } else {
     steps.push(
-      healthStep("aurral-library", "warn", "Plex scans the Aurral download folder", {
+      healthStep("aurral-library", "warn", "Plex scans the Psalter download folder", {
         detail: expectedPath,
-        fix: "Confirm Plex Aurral Library path is the path the Plex server uses for Aurral's downloads, save settings, then run Sync to Plex so Aurral can create or repair its library.",
+        fix: "Confirm Plex Psalter Library path is the path the Plex server uses for Psalter's downloads, save settings, then run Sync to Plex so Psalter can create or repair its library.",
       }),
     );
   }

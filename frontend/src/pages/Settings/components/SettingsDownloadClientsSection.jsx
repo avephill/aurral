@@ -265,7 +265,7 @@ export function SettingsDownloadClientsSection({
 
       <SettingsArrFieldSet legend="Remote path mappings">
         <div className="arr-info">
-          Only needed when client and Aurral paths differ. Shared mounts need no mapping.
+          Only needed when client and Psalter paths differ. Shared mounts need no mapping.
         </div>
 
         <div className="arr-table-wrap">

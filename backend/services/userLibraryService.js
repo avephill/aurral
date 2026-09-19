@@ -37,7 +37,7 @@ export function getUserLibrariesSettings(settings = null) {
     rootPath: cleanRootPath(config.rootPath),
     // Create/assign a Navidrome library per user folder from the reconciler.
     manageNavidrome: config.manageNavidrome !== false,
-    // The libraries folder as Navidrome sees it; blank means same path as Aurral.
+    // The libraries folder as Navidrome sees it; blank means same path as Psalter.
     navidromeRootPath: cleanRootPath(config.navidromeRootPath),
   };
 }
@@ -83,7 +83,7 @@ const buildTagLabelsById = (tagsRaw) =>
       .map((tag) => [Number(tag.id), tag.label.trim().toLowerCase()]),
   );
 
-// Maps a Lidarr artist's tag ids to the Aurral usernames whose personal
+// Maps a Lidarr artist's tag ids to the Psalter usernames whose personal
 // libraries include it. Returns [labels, libraries].
 function resolveArtistLibraries(artist, tagLabelsById, userTags) {
   const labels = (Array.isArray(artist?.tags) ? artist.tags : [])
@@ -498,7 +498,7 @@ async function triggerNavidromeScan(client = getNavidromeClient()) {
 
 const normalizeLibraryPath = (value) => String(value || "").trim().replace(/[\\/]+$/, "");
 
-// Where Navidrome sees a user's folder. Same path as Aurral unless the admin
+// Where Navidrome sees a user's folder. Same path as Psalter unless the admin
 // says the libraries folder is mounted elsewhere in the Navidrome container.
 export function resolveNavidromeUserLibraryPath(userDir, config) {
   if (!config?.navidromeRootPath) return userDir;
@@ -732,7 +732,7 @@ async function normalizePlaylistsIfEnabled(config) {
     const { repairAllPlaylists } = await import("./navidromePlaylistRepair.js");
     const result = await repairAllPlaylists({
       client,
-      // Blank means Navidrome sees the folder at the same path Aurral does.
+      // Blank means Navidrome sees the folder at the same path Psalter does.
       navidromeRootPath: config.navidromeRootPath || config.rootPath,
       dryRun: false,
     });

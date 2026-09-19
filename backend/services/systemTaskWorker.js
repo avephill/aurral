@@ -125,7 +125,7 @@ export async function processSystemTask(payload = {}, job = null) {
       try {
         result = await migrateAurralDownloadFolder();
       } catch (error) {
-        console.error(`[Playlists] Aurral download folder migration failed: ${error.message}`);
+        console.error(`[Playlists] Psalter download folder migration failed: ${error.message}`);
         throw error;
       }
       const flowMigrated = result.flowMigrated || 0;

@@ -250,7 +250,7 @@ export async function getTopRatedAlbums(user, { limit = 12, minRated, minShare }
 }
 
 /**
- * Aurral favourite ids look like "song:<identityKey>" or "album:<identityKey>".
+ * Psalter favourite ids look like "song:<identityKey>" or "album:<identityKey>".
  * Resolve the song ones to canonical refs; album ones to any track on the
  * album, whose Navidrome albumId is then starred.
  */
@@ -265,8 +265,8 @@ function parseFavoriteId(value) {
 }
 
 /**
- * Mirror an Aurral favourite change into Navidrome as the user. Best effort:
- * failures are logged, never surfaced, because Aurral's own favourite already
+ * Mirror an Psalter favourite change into Navidrome as the user. Best effort:
+ * failures are logged, never surfaced, because Psalter's own favourite already
  * succeeded and the user should not see it fail for a Navidrome hiccup.
  */
 export async function mirrorFavoritesToNavidrome(user, ids = [], starred) {
@@ -319,11 +319,11 @@ export async function mirrorFavoritesToNavidrome(user, ids = [], starred) {
 }
 
 /**
- * Pull the user's Navidrome stars back in as Aurral favourites.
+ * Pull the user's Navidrome stars back in as Psalter favourites.
  *
  * Stars set on a phone or in the Navidrome web player are the same gesture as
  * a heart here, so they should end up in the same place. Only additions are
- * taken: an Aurral favourite that has no star in Navidrome may simply be a
+ * taken: an Psalter favourite that has no star in Navidrome may simply be a
  * track Navidrome does not hold, and dropping it would lose it for good.
  *
  * Songs are matched by file, through the id store, so a repeat pass costs one

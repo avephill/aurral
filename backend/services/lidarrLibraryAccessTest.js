@@ -62,11 +62,11 @@ function artistIsOutsideRoots(artist, rootPaths) {
 
 function unreadableSampleFix(samplePath, rootPaths) {
   if (rootPaths.length > 0 && !rootPaths.some((rootPath) => pathHasPrefix(samplePath, rootPath))) {
-    return `Lidarr reports this track outside its root folders (${rootPaths.join(", ")}), which usually means the artist folder was left behind by a root folder change. In Lidarr, open the artist, choose Edit, and move the files into the current root folder, or add the old location as a Lidarr root folder and mount it into Aurral.`;
+    return `Lidarr reports this track outside its root folders (${rootPaths.join(", ")}), which usually means the artist folder was left behind by a root folder change. In Lidarr, open the artist, choose Edit, and move the files into the current root folder, or add the old location as a Lidarr root folder and mount it into Psalter.`;
   }
   return looksLikeExternalOnlyPath(samplePath)
-    ? "Lidarr reports a host path Aurral cannot read inside Docker. Mount the parent folder into Aurral, then add a manual Lidarr path mapping under Settings → System → Storage."
-    : "Lidarr reports this file path, but Aurral cannot read it. Check Docker mounts and folder permissions (PUID/PGID). If Lidarr and Aurral intentionally use different container paths, add a manual Lidarr path mapping.";
+    ? "Lidarr reports a host path Psalter cannot read inside Docker. Mount the parent folder into Psalter, then add a manual Lidarr path mapping under Settings → System → Storage."
+    : "Lidarr reports this file path, but Psalter cannot read it. Check Docker mounts and folder permissions (PUID/PGID). If Lidarr and Psalter intentionally use different container paths, add a manual Lidarr path mapping.";
 }
 
 export async function findSampleTrackFile(lidarrClient, rootPaths = []) {
@@ -129,7 +129,7 @@ export async function runLidarrLibraryAccessTest(lidarrClient) {
     steps.push(
       step("api", "fail", "Connected to Lidarr", {
         detail: connection.error || "Connection failed",
-        fix: "Check the server URL and API key. From Docker, use a URL Aurral can reach (for example http://lidarr:8686), not only the address you use in a browser.",
+        fix: "Check the server URL and API key. From Docker, use a URL Psalter can reach (for example http://lidarr:8686), not only the address you use in a browser.",
       }),
     );
     return { ok: false, steps, sample: null };
@@ -188,18 +188,18 @@ export async function runLidarrLibraryAccessTest(lidarrClient) {
     const missingPath = unreadableRoots[0];
     const usesHostPaths = looksLikeExternalOnlyPath(missingPath);
     steps.push(
-      step("mount", "fail", "Aurral can see that folder in the container", {
+      step("mount", "fail", "Psalter can see that folder in the container", {
         detail: missingPath,
         fix: usesHostPaths
-          ? `Lidarr reports ${missingPath}, but Aurral cannot read that path inside Docker. Mount the shared parent folder into Aurral, then add a manual Lidarr path mapping if the container paths differ.`
-          : `Lidarr stores files at ${missingPath}, but Aurral cannot read that path. Recommended fix: mount the same host root into Aurral and Lidarr at the same container path, such as /data.`,
+          ? `Lidarr reports ${missingPath}, but Psalter cannot read that path inside Docker. Mount the shared parent folder into Psalter, then add a manual Lidarr path mapping if the container paths differ.`
+          : `Lidarr stores files at ${missingPath}, but Psalter cannot read that path. Recommended fix: mount the same host root into Psalter and Lidarr at the same container path, such as /data.`,
       }),
     );
     return { ok: false, steps, sample, rootPaths };
   }
 
   steps.push(
-    step("mount", "pass", "Aurral can see that folder in the container", {
+    step("mount", "pass", "Psalter can see that folder in the container", {
       detail:
         rootPaths.length === 1
           ? formatPathAccessDetail(rootPaths[0], await pathIsReadable(rootPaths[0]))
@@ -232,7 +232,7 @@ export async function runLidarrLibraryAccessTest(lidarrClient) {
   const readableSamplePath = await pathIsReadable(sample.path);
   if (!readableSamplePath) {
     steps.push(
-      step("file", "fail", "Sample Lidarr track file is readable from Aurral", {
+      step("file", "fail", "Sample Lidarr track file is readable from Psalter", {
         detail: sample.path,
         fix: unreadableSampleFix(sample.path, rootPaths),
       }),
@@ -242,7 +242,7 @@ export async function runLidarrLibraryAccessTest(lidarrClient) {
 
   const resolvedSamplePath = readableSamplePath || (await pathIsReadable(sample.path));
   steps.push(
-    step("file", "pass", "Sample Lidarr track file is readable from Aurral", {
+    step("file", "pass", "Sample Lidarr track file is readable from Psalter", {
       detail: resolvedSamplePath || sample.path,
     }),
   );
@@ -251,7 +251,7 @@ export async function runLidarrLibraryAccessTest(lidarrClient) {
     steps.push(
       step("track-path", "warn", "Lidarr track path differs from root folder", {
         detail: `${rootPaths.join(", ")} -> ${sample.path}`,
-        fix: "Aurral reuses the actual track file path Lidarr reports. If that path is readable, reuse can still work, but matching container paths are easier to support.",
+        fix: "Psalter reuses the actual track file path Lidarr reports. If that path is readable, reuse can still work, but matching container paths are easier to support.",
       }),
     );
   }

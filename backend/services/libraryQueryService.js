@@ -2484,7 +2484,7 @@ export function getCanonicalMediaFilesByPaths(paths = []) {
 
 /**
  * One available media file whose path ends with the given suffix, used once
- * to discover where Aurral's copy of a Navidrome library is mounted.
+ * to discover where Psalter's copy of a Navidrome library is mounted.
  */
 export function findCanonicalMediaFilePathBySuffix(suffix) {
   const value = String(suffix || "").trim();

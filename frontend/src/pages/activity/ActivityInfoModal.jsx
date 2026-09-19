@@ -23,7 +23,7 @@ const formatTimestamp = (value) => {
 const formatSource = (item) => {
   const source = text(item.downloadSource || item.downloadClient || item.source);
   if (!source) return "";
-  return source === "lidarr" ? "Lidarr" : source === "aurral" ? "Aurral" : source;
+  return source === "lidarr" ? "Lidarr" : source === "aurral" ? "Psalter" : source;
 };
 
 const formatKind = (kind) => {

@@ -44,7 +44,7 @@ const entries = await fs.readdir(LIBRARY_ROOT, { withFileTypes: true });
 const folders = entries.filter((entry) => entry.isDirectory() || entry.isSymbolicLink()).map((e) => e.name);
 
 // Straight from Lidarr, because Lidarr is the only authority on what Lidarr
-// manages. Reading Aurral's cached copy instead made this report lie: the
+// manages. Reading Psalter's cached copy instead made this report lie: the
 // index sat 107 artists behind, and every artist added since was reported as
 // an orphaned folder even though Lidarr held it at exactly that path.
 const artists = (await lidarrClient.listArtists({ forceRefresh: true })).map((artist) => ({
@@ -147,11 +147,11 @@ const say = (text) => {
 
 say(`Library root: ${LIBRARY_ROOT}`);
 say(`Folders on disk: ${folders.length}   Lidarr artists: ${artists.length}\n`);
-// The folders Lidarr has track files for still come from Aurral's index, so an
+// The folders Lidarr has track files for still come from Psalter's index, so an
 // index that is behind can still turn a managed folder into an orphan here.
 // Say so rather than let the number be read as fact.
 if (indexLag > 0) {
-  say(`WARNING: Aurral's library index holds ${indexedArtists} artists, ${indexLag} fewer than Lidarr.`);
+  say(`WARNING: Psalter's library index holds ${indexedArtists} artists, ${indexLag} fewer than Lidarr.`);
   say("Run a library scan and repeat this audit; some orphans below are only missing from the index.\n");
 }
 say(`ORPHANED FOLDERS (not in Lidarr at all): ${orphaned.length} folders, ${orphanedTracks} audio files`);

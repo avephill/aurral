@@ -275,7 +275,7 @@ export function listTags({ owner, includeImported = true } = {}) {
     for (const tag of parse(row.tags)) albums.set(tag, (albums.get(tag) || 0) + 1);
   }
   for (const [tag, count] of albums) {
-    // A record can be tagged before Aurral knows any of its songs, and the
+    // A record can be tagged before Psalter knows any of its songs, and the
     // tag is still real - it should not vanish from the list until it goes.
     const row = counts.get(tag) || { tag, songs: 0, own: 0, album: 0, imported: 0 };
     counts.set(tag, { ...row, albums: count });

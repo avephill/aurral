@@ -49,18 +49,18 @@ export const isPlaylistNormalizeEnabled = () =>
   process.env.AURRAL_PLAYLIST_NORMALIZE_ENABLED === "true";
 
 // AURRAL_AUTOMATIC_PLAYLISTS_ENABLED=false keeps hand-made playlists but turns
-// off everything Aurral generates on its own: flows (scheduled discovery
+// off everything Psalter generates on its own: flows (scheduled discovery
 // playlists) and the discovery playlist builders. The accessFlow permission
 // stays, so people can still make and edit their own lists; the Flows page
 // and Discover playlists disappear.
 export const isAutomaticPlaylistsEnabled = () =>
   isPlaylistsEnabled() && process.env.AURRAL_AUTOMATIC_PLAYLISTS_ENABLED !== "false";
 
-// AURRAL_NAVIDROME_USER_AUTH=reverse-proxy makes Aurral talk to Navidrome as
-// the signed-in Aurral user, by sending Navidrome the same trusted username
-// header a reverse-proxy SSO setup sends. Navidrome has to list Aurral's
+// AURRAL_NAVIDROME_USER_AUTH=reverse-proxy makes Psalter talk to Navidrome as
+// the signed-in Psalter user, by sending Navidrome the same trusted username
+// header a reverse-proxy SSO setup sends. Navidrome has to list Psalter's
 // address in its trusted sources for this to be honoured. With it on,
-// hand-made playlists live in Navidrome and Aurral reads and edits them there,
+// hand-made playlists live in Navidrome and Psalter reads and edits them there,
 // so the two never need syncing; ratings and stars go the same way.
 export const NAVIDROME_USER_AUTH_MODES = ["off", "reverse-proxy"];
 export const getNavidromeUserAuthMode = () => {
@@ -74,13 +74,13 @@ export const isNavidromeUserAuthEnabled = () => getNavidromeUserAuthMode() !== "
 export const getNavidromeUserHeader = () =>
   String(process.env.AURRAL_NAVIDROME_USER_HEADER || "Remote-User").trim() || "Remote-User";
 
-// Aurral and Navidrome index the same files under different roots: Aurral
+// Psalter and Navidrome index the same files under different roots: Psalter
 // holds absolute paths, Navidrome holds paths relative to each library root.
-// Left unset, the first successful lookup teaches Aurral the mapping by
+// Left unset, the first successful lookup teaches Psalter the mapping by
 // comparing one file's two paths. Setting it states the mapping outright,
 // which removes the guesswork and the title search that seeds it.
 //
-//   AURRAL_NAVIDROME_MUSIC_ROOT   absolute path, as Aurral sees it, of the
+//   AURRAL_NAVIDROME_MUSIC_ROOT   absolute path, as Psalter sees it, of the
 //                                 folder Navidrome's main library indexes
 //   AURRAL_NAVIDROME_PATH_PREFIX  prefix Navidrome puts in front of the shared
 //                                 tail, if any (usually empty)

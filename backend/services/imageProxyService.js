@@ -645,7 +645,7 @@ const fetchRemoteImage = async (sourceUrl) => {
         headers: {
           Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/png,image/jpeg,image/gif",
           "Accept-Encoding": "identity",
-          "User-Agent": "Aurral Local Image Cache",
+          "User-Agent": "Psalter Local Image Cache",
         },
       });
 

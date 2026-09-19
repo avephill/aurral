@@ -111,7 +111,7 @@ export function PathMappingModal({ title, initialValue, onClose, onSave }) {
             </SettingsArrFormGroup>
             <SettingsArrFormGroup
               label="Local path"
-              help="Path Aurral should use inside its container to read that remote path."
+              help="Path Psalter should use inside its container to read that remote path."
             >
               <div className="arr-path-input">
                 <SettingsInput

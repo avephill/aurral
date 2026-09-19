@@ -184,7 +184,7 @@ export function registerPlex(router) {
       const client = new PlexClient(stored.url, stored.token, stored.clientId);
       const libraries = await client.getLibraries();
       const musicLibraries = libraries.filter(
-        (lib) => lib.type === MUSIC_SECTION_TYPE && lib.title !== "Aurral",
+        (lib) => lib.type === MUSIC_SECTION_TYPE && lib.title !== "Psalter",
       );
       res.json({
         libraries: musicLibraries.map((lib) => ({ key: lib.key, title: lib.title })),

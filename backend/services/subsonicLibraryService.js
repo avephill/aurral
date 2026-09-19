@@ -381,7 +381,7 @@ export function getMusicDirectory(value) {
     const rootId = value === "1" ? "1" : "root";
     return {
       id: rootId,
-      name: "Aurral",
+      name: "Psalter",
       child: listArtists().map((artist) => ({
         id: artist.id,
         parent: rootId,

@@ -5,7 +5,7 @@ import { dbOps } from "../db/helpers/index.js";
 const PLAYLIST_SONG_BATCH_SIZE = 50;
 
 /**
- * A Navidrome client that acts as one Aurral user rather than as the admin
+ * A Navidrome client that acts as one Psalter user rather than as the admin
  * account from Settings.
  *
  * It never holds a password. Every Subsonic call carries the trusted
@@ -62,7 +62,7 @@ export class NavidromeUserClient extends NavidromeClient {
 }
 
 /**
- * Builds the per-user client for an Aurral user from the admin Navidrome
+ * Builds the per-user client for an Psalter user from the admin Navidrome
  * connection in Settings (only its URL is used). Returns null when Navidrome
  * is not configured or the user has no username to act as.
  */

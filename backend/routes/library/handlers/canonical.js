@@ -24,7 +24,7 @@ import {
 } from "../../../services/libraryScanWorker.js";
 
 // Anything named like a path is a path on this server and stays here. The one
-// exception is streamPath, which is a URL on Aurral's own API made of two ids
+// exception is streamPath, which is a URL on Psalter's own API made of two ids
 // and says nothing about the filesystem; stripping it left callers with a
 // track they could see and could not play.
 const PUBLIC_PATH_KEYS = new Set(["streampath"]);
@@ -299,7 +299,7 @@ export function registerCanonical(router) {
       return res.status(400).json({ error: "Invalid favorite target" });
     }
     // A heart here is a star in Navidrome for the same user. Best effort and
-    // off the request path: Aurral's own favourite has already been saved.
+    // off the request path: Psalter's own favourite has already been saved.
     if (isNavidromeUserAuthEnabled()) {
       mirrorFavoritesToNavidrome(req.user, ids, req.body.starred).catch(() => {});
     }

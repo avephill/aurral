@@ -152,7 +152,7 @@ export function SettingsAccountTab({
             {listenHistoryProvider === "local" ? (
               <div className="profile-settings__field">
                 <p className="settings-page__hint">
-                  Uses Aurral play events only.
+                  Uses Psalter play events only.
                 </p>
               </div>
             ) : listenHistoryProvider === "koito" ? (
@@ -170,7 +170,7 @@ export function SettingsAccountTab({
                   onChange={(e) => setListenHistoryUrl(e.target.value)}
                 />
                 <p className="settings-page__hint">
-                  Aurral reads top artists from Koito for personalized discovery.
+                  Psalter reads top artists from Koito for personalized discovery.
                 </p>
               </div>
             ) : (
@@ -191,7 +191,7 @@ export function SettingsAccountTab({
                   onChange={(e) => setListenHistoryUsername(e.target.value)}
                 />
                 <p className="settings-page__hint">
-                  Aurral uses this profile for personalized discovery. Configure API credentials in{" "}
+                  Psalter uses this profile for personalized discovery. Configure API credentials in{" "}
                   <Link to="/settings/connect" className="settings-page__link">
                     Settings → Connect
                   </Link>

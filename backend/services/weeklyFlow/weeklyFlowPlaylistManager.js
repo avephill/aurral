@@ -219,7 +219,7 @@ export class WeeklyFlowPlaylistManager {
     const flows = flowPlaylistConfig.getFlows();
     const sharedPlaylists = flowPlaylistConfig.getSharedPlaylists();
     // Preparing a playlist library on the destination is only worth doing when
-    // Aurral has something to write into it. A server with automatic playlists
+    // Psalter has something to write into it. A server with automatic playlists
     // off and hand-made playlists living in Navidrome has nothing to publish,
     // and asking the destination to register a library it cannot see failed
     // loudly at every start.

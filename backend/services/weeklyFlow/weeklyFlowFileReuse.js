@@ -445,7 +445,7 @@ async function findLidarrSource(track, options = {}) {
     const sourcePath = path.resolve(resolveLocalPath(matchedTrack.path, getPathMappings("lidarr")));
     if (!(await fileExists(sourcePath))) {
       console.warn(
-        `[WeeklyFlowReuse] Lidarr track exists but file is not accessible from Aurral: ${matchedTrack.path} (resolved to ${sourcePath})`,
+        `[WeeklyFlowReuse] Lidarr track exists but file is not accessible from Psalter: ${matchedTrack.path} (resolved to ${sourcePath})`,
       );
       continue;
     }
@@ -474,7 +474,7 @@ export async function resolveReusableTrackSource(track, options = {}) {
   if (aurralSource) return { source: aurralSource, reason: null };
   const lidarrSource = await findLidarrSource(track, options);
   if (lidarrSource) return { source: lidarrSource, reason: null };
-  return { source: null, reason: "No reusable Aurral or Lidarr file found" };
+  return { source: null, reason: "No reusable Psalter or Lidarr file found" };
 }
 
 export async function resolveRepairTrackSource(track, options = {}) {
@@ -486,7 +486,7 @@ export async function resolveRepairTrackSource(track, options = {}) {
   if (lidarrSource) return { source: lidarrSource, reason: null };
   const aurralSource = await findAurralSource(track, options);
   if (aurralSource) return { source: aurralSource, reason: null };
-  return { source: null, reason: "No reusable Aurral or Lidarr file found" };
+  return { source: null, reason: "No reusable Psalter or Lidarr file found" };
 }
 
 export async function restoreCompletedTrack(job, options = {}) {

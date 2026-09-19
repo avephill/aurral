@@ -112,7 +112,7 @@ export function QualityProfileModal({ profile, onChange, onClose }) {
   return (
     <SettingsIntegrationModal title="Quality profile" onClose={onClose} wide>
       <SettingsModalIntro>
-        Rank qualities from best to worst. Aurral accepts allowed qualities and upgrades tracks until they reach the cutoff.
+        Rank qualities from best to worst. Psalter accepts allowed qualities and upgrades tracks until they reach the cutoff.
       </SettingsModalIntro>
       <SettingsModalSection title="Qualities">
         <DndContext

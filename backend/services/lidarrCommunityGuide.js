@@ -157,7 +157,7 @@ export async function applyLidarrCommunityGuide(lidarrClient) {
     }
 
     const releaseProfilePayload = {
-      name: "Aurral - Single Track Rip Filter",
+      name: "Psalter - Single Track Rip Filter",
       enabled: true,
       required: [],
       ignored: ["CUE", "FLAC/CUE"],
@@ -212,7 +212,7 @@ export async function applyLidarrCommunityGuide(lidarrClient) {
 
   const metadataProfiles = await lidarrClient.getMetadataProfiles();
   const aurralMetadataProfile = metadataProfiles.find(
-    (profile) => profile.name === "Aurral - Standard",
+    (profile) => profile.name === "Psalter - Standard",
   );
   const standardProfile = metadataProfiles.find((profile) => profile.name === "Standard");
   const baseMetadataProfile = aurralMetadataProfile || standardProfile || metadataProfiles[0];
@@ -241,7 +241,7 @@ export async function applyLidarrCommunityGuide(lidarrClient) {
 
   const metadataProfilePayload = {
     ...baseMetadataProfile,
-    name: "Aurral - Standard",
+    name: "Psalter - Standard",
     primaryAlbumTypes: applyTypeSelection(
       baseMetadataProfile.primaryAlbumTypes,
       desiredPrimaryTypes,
@@ -287,7 +287,7 @@ export async function applyLidarrCommunityGuide(lidarrClient) {
   results.namingConfig = updatedNamingConfig;
 
   const existingProfiles = await lidarrClient.getQualityProfiles();
-  let aurralProfile = existingProfiles.find((profile) => profile.name === "Aurral - HQ");
+  let aurralProfile = existingProfiles.find((profile) => profile.name === "Psalter - HQ");
   const baseProfile = aurralProfile || existingProfiles[0];
 
   if (!baseProfile) {
@@ -367,7 +367,7 @@ export async function applyLidarrCommunityGuide(lidarrClient) {
 
   const profileData = {
     ...baseProfile,
-    name: "Aurral - HQ",
+    name: "Psalter - HQ",
     upgradeAllowed: true,
     cutoff: flacQualityId ?? baseProfile.cutoff,
     items: profileItems,

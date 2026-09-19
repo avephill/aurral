@@ -72,7 +72,7 @@ function MissingJobRow({ job, playlist, actionState, onAction, onInfo }) {
   const isMissing = isMissingAurralJob(job);
   const isWorking = actionState === "working";
   const isQueued = actionState === "queued";
-  const operationLabel = playlist?.name || "Aurral operation";
+  const operationLabel = playlist?.name || "Psalter operation";
   const meta = [job.artistName, job.albumName].filter(Boolean).join(" · ") || operationLabel;
   const hint = isWorking
     ? isMissing ? "Adding re-search to Queue" : "Adding upgrade search to Queue"
@@ -424,8 +424,8 @@ export default function ActivityMissingPage() {
             {hasFilter
               ? `${showingCutoff ? "No cutoff-unmet" : "No missing"} tracks match your filter.`
               : showingCutoff
-                ? "Every Aurral-owned file currently meets the configured quality cutoff."
-                : "Every Aurral operation currently has a track available or in progress."}
+                ? "Every Psalter-owned file currently meets the configured quality cutoff."
+                : "Every Psalter operation currently has a track available or in progress."}
           </p>
         </div>
       ) : null}

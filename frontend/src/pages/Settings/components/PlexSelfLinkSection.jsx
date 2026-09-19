@@ -161,11 +161,11 @@ export function PlexSelfLinkSection({ showSuccess, showError, className = "" }) 
               status.globalAccount?.configured ? (
                 status.globalAccount.plexUsername ? (
                   <>
-                    Your flow and shared playlists sync through Aurral&apos;s global Plex
+                    Your flow and shared playlists sync through Psalter&apos;s global Plex
                     connection: <strong>{status.globalAccount.plexUsername}</strong>.
                   </>
                 ) : (
-                  "Your flow and shared playlists sync through Aurral’s global Plex connection."
+                  "Your flow and shared playlists sync through Psalter’s global Plex connection."
                 )
               ) : (
                 "Plex is not configured yet. Your flow and shared playlists won’t sync to Plex until it’s configured as a playback source."

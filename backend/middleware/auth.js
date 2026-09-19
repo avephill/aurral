@@ -338,7 +338,7 @@ export function getUnauthorizedDetails(req) {
 
 export function sendUnauthorizedResponse(req, res, { challenge = false, ...overrides } = {}) {
   if (challenge) {
-    res.setHeader("WWW-Authenticate", 'Basic realm="Aurral"');
+    res.setHeader("WWW-Authenticate", 'Basic realm="Psalter"');
   }
   return res.status(401).json({
     error: "Unauthorized",

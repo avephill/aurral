@@ -559,7 +559,7 @@ export function SettingsConnectTab({
       {activeModal === "lastfm" && (
         <SettingsIntegrationModal title="Last.fm" onClose={() => setActiveModal(null)}>
           <SettingsModalIntro>
-            Aurral uses the API key for recommendations and discovery data. The API secret is also
+            Psalter uses the API key for recommendations and discovery data. The API secret is also
             required to connect a Last.fm account for scrobbling in Playback.
           </SettingsModalIntro>
           <SettingsModalSection title="API">

@@ -242,7 +242,7 @@ function AppContent() {
                     <div className="app-status-banner app-status-banner--warning">
                       <AlertTriangle className="app-status-banner__icon app-status-banner__icon--warning" />
                       <p className="app-status-banner__text app-status-banner__text--warning">
-                        Aurral is responding slowly. Lidarr may be busy — try again in a minute.
+                        Psalter is responding slowly. Lidarr may be busy — try again in a minute.
                       </p>
                     </div>
                   )}
@@ -251,7 +251,7 @@ function AppContent() {
                     <div className="app-status-banner app-status-banner--error">
                       <XCircle className="app-status-banner__icon app-status-banner__icon--error" />
                       <p className="app-status-banner__text app-status-banner__text--error">
-                        Unable to connect to the Aurral backend. Please check your configuration.
+                        Unable to connect to the Psalter backend. Please check your configuration.
                       </p>
                     </div>
                   )}
@@ -291,7 +291,7 @@ function AppContent() {
                       {/* When playlists live in Navidrome they are the
                           person's own lists, read and written as them, so
                           accessFlow has nothing to say about them; it gates
-                          what Aurral generates. Keep the gate only for the
+                          what Psalter generates. Keep the gate only for the
                           Flow-backed page. */}
                       <Route
                         path="/library/playlists"

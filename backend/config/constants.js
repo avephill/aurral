@@ -11,7 +11,7 @@ export const MUSICBRAINZ_API = "https://musicbrainz.org/ws/2";
 export const DEFAULT_METADATA_BASE_URL = "https://lidarrapi.brainzmash.cc";
 export const LASTFM_API = "https://ws.audioscrobbler.com/2.0/";
 export const LISTENBRAINZ_API = "https://api.listenbrainz.org";
-export const APP_NAME = "Aurral";
+export const APP_NAME = "Psalter";
 export const APP_VERSION = resolveAppVersion({
   envValue: process.env.APP_VERSION,
   cwd: process.cwd(),

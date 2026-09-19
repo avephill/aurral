@@ -194,7 +194,7 @@ function TasksHealthSummary({ summary, loading, clearing = false, onClearStale }
           {staleCount > 0 ? (
             <p className="arr-info__help">
               These are usually leftover job records from an earlier run, not active workers. Clear
-              them to reset the queue. Aurral will re-enqueue normal startup work if needed.
+              them to reset the queue. Psalter will re-enqueue normal startup work if needed.
             </p>
           ) : null}
         </>

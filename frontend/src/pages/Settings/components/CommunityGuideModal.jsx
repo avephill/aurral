@@ -30,7 +30,7 @@ export function CommunityGuideModal({ show, onClose, onApply }) {
           <li>Add custom formats (Preferred Groups, CD, WEB, Lossless, Vinyl)</li>
           <li>Update naming scheme</li>
           <li>
-            Create <strong>&quot;Aurral - HQ&quot;</strong> quality profile (FLAC + MP3-320)
+            Create <strong>&quot;Psalter - HQ&quot;</strong> quality profile (FLAC + MP3-320)
           </li>
         </ul>
         <p className="settings-page__modal-footnote">

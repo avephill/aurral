@@ -64,7 +64,7 @@ export const listenbrainzSubmit = async ({ token, baseUrl = LISTENBRAINZ_API, ev
         track_name: event.title,
         ...(event.album ? { release_name: event.album } : {}),
         additional_info: {
-          submission_client: "Aurral",
+          submission_client: "Psalter",
           duration_ms: event.durationMs || undefined,
           recording_mbid: event.trackMbid || undefined,
           release_mbid: event.albumMbid || undefined,

@@ -29,11 +29,11 @@ import {
 import { logger } from "./logger.js";
 
 /**
- * Translates between Aurral's canonical tracks and Navidrome's songs.
+ * Translates between Psalter's canonical tracks and Navidrome's songs.
  *
- * Both index the same files, so the file path is the identity. Aurral keeps
+ * Both index the same files, so the file path is the identity. Psalter keeps
  * absolute paths under its own mount; Navidrome keeps paths relative to each
- * library root. The first successful match teaches us Aurral's root for that
+ * library root. The first successful match teaches us Psalter's root for that
  * library (see navidromePathMapping) and after that every lookup is an exact
  * path query on either side.
  *
@@ -166,7 +166,7 @@ function setRoots(roots) {
   state.navidromeRoot = roots.navidromeRoot;
   logger.info(
     "library",
-    `[Navidrome] Library roots: Aurral ${roots.aurralRoot} ↔ Navidrome ${roots.navidromeRoot || "(relative)"}`,
+    `[Navidrome] Library roots: Psalter ${roots.aurralRoot} ↔ Navidrome ${roots.navidromeRoot || "(relative)"}`,
   );
 }
 
@@ -184,7 +184,7 @@ function applyConfiguredRoots() {
   state.rootsConfigured = true;
   logger.info(
     "library",
-    `[Navidrome] Library roots from configuration: Aurral ${state.aurralRoot} ↔ Navidrome ${state.navidromeRoot || "(relative)"}`,
+    `[Navidrome] Library roots from configuration: Psalter ${state.aurralRoot} ↔ Navidrome ${state.navidromeRoot || "(relative)"}`,
   );
   return true;
 }
@@ -193,7 +193,7 @@ applyConfiguredRoots();
 
 /**
  * Learn the roots from one pair of paths for the same file, but only when the
- * result checks out: the Aurral path rebuilt from the derived root must be a
+ * result checks out: the Psalter path rebuilt from the derived root must be a
  * file we actually index. Guards against a same-named file under another
  * artist teaching us a wrong root.
  */
@@ -208,7 +208,7 @@ function learnRoots(aurralPath, navidromePath) {
 
 /**
  * Learn the roots from Navidrome-side paths alone, by finding one of them in
- * Aurral's index by its album-and-file suffix.
+ * Psalter's index by its album-and-file suffix.
  */
 function learnRootsFromNavidromePaths(paths) {
   if (state.rootsConfigured) return { aurralRoot: state.aurralRoot, navidromeRoot: state.navidromeRoot };
@@ -358,7 +358,7 @@ export async function resolveNavidromeSongId(track, options = {}) {
  * Every Navidrome copy of one canonical track, the main-library copy first.
  * A file symlinked into personal libraries is a separate song in each, and
  * annotations (ratings, stars) attach to a copy, so a rating set through
- * Aurral goes on all of them to read the same in every library view.
+ * Psalter goes on all of them to read the same in every library view.
  */
 export async function resolveNavidromeSongCopies(track, { client = getAdminNavidromeClient() } = {}) {
   const primary = await resolveNavidromeSongId(track, { client });
@@ -467,7 +467,7 @@ async function realPathsForPlaylist(playlistId, client) {
 }
 
 /**
- * Absolute Aurral paths for Navidrome song ids, as a Map keyed by song id.
+ * Absolute Psalter paths for Navidrome song ids, as a Map keyed by song id.
  *
  * Ids already in the store cost nothing. The rest are read one at a time
  * through the admin connection, which is the only place real paths come from,

@@ -14,7 +14,7 @@ export const LIBRARY_VIEWS = [
   // now fetches one page of playable tracks rather than building the whole list.
   { id: "tracks", label: "Tracks", path: "/library/tracks" },
   // Not gated on accessFlow: with Navidrome-backed playlists these are the
-  // person's own lists, read and written as them. accessFlow gates what Aurral
+  // person's own lists, read and written as them. accessFlow gates what Psalter
   // generates, which is a different thing.
   { id: "playlists", label: "Playlists", path: "/library/playlists" },
   { id: "genres", label: "Genres", path: "/library/genres" },

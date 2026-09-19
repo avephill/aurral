@@ -1,5 +1,5 @@
 /**
- * Pure helpers for lining up Aurral's file paths with Navidrome's.
+ * Pure helpers for lining up Psalter's file paths with Navidrome's.
  *
  * The two see the same music tree under different mount points, and Navidrome
  * may report a song path either relative to its library root or absolute,
@@ -36,7 +36,7 @@ export function sharedSuffixLength(first, second) {
 }
 
 /**
- * Given Aurral's absolute path and Navidrome's path for the same file, work
+ * Given Psalter's absolute path and Navidrome's path for the same file, work
  * out both roots and the library-relative path. Needs at least the album and
  * file segments to agree; a bare filename match could be a coincidence.
  *

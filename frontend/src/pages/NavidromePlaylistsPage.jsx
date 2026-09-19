@@ -158,7 +158,7 @@ export default function NavidromePlaylistsPage() {
   const others = playlists.filter((playlist) => !playlist.owned);
   const folders = Array.isArray(list.data?.folders) ? list.data.folders : [];
 
-  // Folders live in Aurral, so the tree is built here from the folder each
+  // Folders live in Psalter, so the tree is built here from the folder each
   // playlist carries. A folder with nothing in it cannot exist.
   const tree = useMemo(() => {
     const root = { path: "", name: "", children: new Map(), playlists: [] };
@@ -674,7 +674,7 @@ export default function NavidromePlaylistsPage() {
           {user?.role === "admin" ? (
             <span>
               {" "}
-              Navidrome must trust Aurral&apos;s address for the username header, and Navidrome
+              Navidrome must trust Psalter&apos;s address for the username header, and Navidrome
               must be connected under Settings → Playback.
             </span>
           ) : null}
@@ -1060,7 +1060,7 @@ export default function NavidromePlaylistsPage() {
       <ModalShell
         open={moveOpen}
         title="Put this playlist in a folder"
-        description="Folders are Aurral's own. Navidrome and your phone still show one flat list."
+        description="Folders are Psalter's own. Navidrome and your phone still show one flat list."
         onClose={() => setMoveOpen(false)}
         disableClose={busy === "move"}
         footer={(

@@ -160,7 +160,7 @@ function Layout({ children, headerActions }) {
       { path: "/library", label: "Library", icon: Library },
       { path: "/discover", label: "Discover", icon: Sparkles },
       // Not gated on accessFlow: these are the person's own Navidrome
-      // playlists, not the ones Aurral generates.
+      // playlists, not the ones Psalter generates.
       { path: "/playlists", label: "Playlists", icon: AudioWaveform },
     ];
     return items.filter((item) => !item.permission || hasPermission(item.permission));

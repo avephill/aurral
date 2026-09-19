@@ -113,7 +113,7 @@ export const recordPlayEvent = (userId, input = {}) => {
 /**
  * Pass the play on to Navidrome as that person, so its play counts, recently
  * played and listening history include what they play here. Navidrome owns
- * those numbers, and nothing else writes them for Aurral's own player.
+ * those numbers, and nothing else writes them for Psalter's own player.
  *
  * Never blocks recording the play: a Navidrome that is down or does not know
  * the track is logged and forgotten.

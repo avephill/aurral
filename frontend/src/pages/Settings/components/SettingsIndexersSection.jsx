@@ -295,7 +295,7 @@ export function SettingsIndexersSection({
             return (
               <>
                 <SettingsModalToggle
-                  label="Enable in Aurral"
+                  label="Enable in Psalter"
                   checked={state.aurralEnabled}
                   onChange={(event) =>
                     updateProwlarrIndexer(activeIndexer.id, {

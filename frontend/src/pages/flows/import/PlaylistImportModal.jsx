@@ -559,7 +559,7 @@ export function PlaylistImportModal({
             ? "Pick a playlist to queue downloads. Weekly playlists use the latest week."
             : source === "lastfm"
               ? "Pick a Last.fm station to queue downloads and optionally sync it."
-            : "Import a JSON tracklist from Aurral or another tool."
+            : "Import a JSON tracklist from Psalter or another tool."
       }
       onClose={onClose}
       disableClose={importing}
@@ -664,7 +664,7 @@ export function PlaylistImportModal({
                 <div>
                   <p className="playlist-import__empty-title">Enter your Last.fm username</p>
                   <p className="playlist-import__empty-copy">
-                    Aurral will load your Library, Mix, and Recommended stations.
+                    Psalter will load your Library, Mix, and Recommended stations.
                   </p>
                 </div>
                 <div className="playlist-modal__fields">
@@ -808,7 +808,7 @@ export function PlaylistImportModal({
                     <div className="playlist-import__config-fields">
                       <div className="playlist-modal__fields">
                         <label className="playlist-import__field-label" htmlFor="playlist-import-name">
-                          Name in Aurral
+                          Name in Psalter
                         </label>
                         <input
                           id="playlist-import-name"
@@ -853,7 +853,7 @@ export function PlaylistImportModal({
                           Keep removed tracks in library
                         </span>
                         <span className="playlist-import__retention-help">
-                          {externalSource} removals leave the downloaded file available in Aurral.
+                          {externalSource} removals leave the downloaded file available in Psalter.
                         </span>
                       </span>
                     </label>
@@ -879,10 +879,10 @@ export function PlaylistImportModal({
                           {previewSkipped > 0 ? (
                             <p className="playlist-import__summary-copy">
                               {externalSource === "Spotify"
-                                ? "Spotify also lists unavailable entries, podcast episodes, and duplicates Aurral cannot download."
+                                ? "Spotify also lists unavailable entries, podcast episodes, and duplicates Psalter cannot download."
                                 : externalSource === "Last.fm"
-                                  ? "Some Last.fm entries are missing the artist or track data Aurral needs."
-                                  : "Some ListenBrainz entries are missing the artist or track data Aurral needs."}
+                                  ? "Some Last.fm entries are missing the artist or track data Psalter needs."
+                                  : "Some ListenBrainz entries are missing the artist or track data Psalter needs."}
                             </p>
                           ) : null}
                           {previewTracks.length > 0 ? (
@@ -909,7 +909,7 @@ export function PlaylistImportModal({
               <label className="playlist-import__dropzone">
                 <FileJson className="playlist-import__dropzone-icon" aria-hidden="true" />
                 <span className="playlist-import__dropzone-title">Select JSON file</span>
-                <span className="playlist-import__dropzone-copy">Aurral exports and compatible tracklists</span>
+                <span className="playlist-import__dropzone-copy">Psalter exports and compatible tracklists</span>
                 <input
                   type="file"
                   accept="application/json,.json"

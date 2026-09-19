@@ -211,8 +211,8 @@ export async function sendGotifyTest(url, token) {
   const response = await axios.post(
     endpoint,
     {
-      title: "Aurral – Test",
-      message: "This is a test notification from Aurral.",
+      title: "Psalter – Test",
+      message: "This is a test notification from Psalter.",
       priority: 5,
     },
     { timeout: 10000, headers: { "Content-Type": "application/json" } },
@@ -226,12 +226,12 @@ export async function notifyDiscoveryUpdated() {
   const tasks = [];
   if (gotify.notifyDiscoveryUpdated) {
     tasks.push(
-      queueGotify("Aurral – Discover", "Daily Discover recommendations have been updated.", 5),
+      queueGotify("Psalter – Discover", "Daily Discover recommendations have been updated.", 5),
     );
   }
   tasks.push(
     queueWebhooks(settings.integrations, "notifyDiscoveryUpdated", {
-      flowName: "Aurral – Discover",
+      flowName: "Psalter – Discover",
     }),
   );
   await Promise.all(tasks);
@@ -247,7 +247,7 @@ export async function notifyWeeklyFlowDone(playlistType, stats = {}, flowPath = 
   if (gotify.notifyWeeklyFlowDone) {
     tasks.push(
       queueGotify(
-        "Aurral – Weekly Flow",
+        "Psalter – Weekly Flow",
         `Weekly flow "${displayName}" finished processing.${completed > 0 || failed > 0 ? ` Completed: ${completed}, Failed: ${failed}` : ""}`,
         5,
       ),
@@ -270,7 +270,7 @@ export async function notifyRequestMade({ albumName, artistName, user = null } =
   const tasks = [];
   if (gotify.notifyRequestMade) {
     const byUser = actor.username ? ` (${actor.username})` : "";
-    tasks.push(queueGotify("Aurral – Request", `Album requested: ${subject}${byUser}`, 5));
+    tasks.push(queueGotify("Psalter – Request", `Album requested: ${subject}${byUser}`, 5));
   }
   tasks.push(
     queueWebhooks(settings.integrations, "notifyRequestMade", {
@@ -290,7 +290,7 @@ export async function notifyRequestAvailable({ albumName, artistName, user = nul
   const tasks = [];
   if (gotify.notifyRequestAvailable) {
     const byUser = actor.username ? ` requested by ${actor.username}` : "";
-    tasks.push(queueGotify("Aurral – Request", `Album available: ${subject}${byUser}`, 5));
+    tasks.push(queueGotify("Psalter – Request", `Album available: ${subject}${byUser}`, 5));
   }
   tasks.push(
     queueWebhooks(settings.integrations, "notifyRequestAvailable", {

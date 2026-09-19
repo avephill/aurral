@@ -38,7 +38,7 @@ export function resolvePersonalLibraryId(libraries, username, navidromeRootPath)
   if (!wanted) return null;
   const folder = wanted.replace(/[^\p{L}\p{N}._ -]/gu, "_").replace(/^\.+/, "").trim();
   // With a known root, personal libraries are the ones under it. Without one
-  // (Navidrome mounts the folder at the same path Aurral does, so nothing was
+  // (Navidrome mounts the folder at the same path Psalter does, so nothing was
   // configured), anything but the main library is a candidate.
   const { personal } = classifyLibraries(libraries, navidromeRootPath);
   const canonical = resolveCanonicalLibraryId(libraries, navidromeRootPath);
