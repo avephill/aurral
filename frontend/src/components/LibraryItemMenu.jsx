@@ -180,15 +180,22 @@ export const LibraryItemMenu = forwardRef(function LibraryItemMenu(
       if (event.key === "Escape") closeMenu();
     };
     const closeOnViewportChange = () => closeMenu(false);
+    // The page moving under the menu invalidates where it is pointing, so it
+    // closes - but the listener is a capturing one, and a submenu scrolling
+    // its own list of playlists is not the page moving.
+    const closeOnScroll = (event) => {
+      if (menuRootRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) return;
+      closeMenu(false);
+    };
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleEscape);
     window.addEventListener("resize", closeOnViewportChange);
-    window.addEventListener("scroll", closeOnViewportChange, true);
+    window.addEventListener("scroll", closeOnScroll, true);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
       window.removeEventListener("resize", closeOnViewportChange);
-      window.removeEventListener("scroll", closeOnViewportChange, true);
+      window.removeEventListener("scroll", closeOnScroll, true);
     };
   }, [closeMenu, open]);
 

@@ -338,13 +338,18 @@ export const TrackPlaylistMenu = forwardRef(function TrackPlaylistMenu(
       setOpenSubmenu(false);
       onOpenChange?.(false);
     };
+    // Scrolling the list of playlists inside the menu is not the page moving.
+    const handleScroll = (event) => {
+      if (menuRef.current?.contains(event.target)) return;
+      handleViewportChange();
+    };
     document.addEventListener("pointerdown", handlePointerDown);
     window.addEventListener("resize", handleViewportChange);
-    window.addEventListener("scroll", handleViewportChange, true);
+    window.addEventListener("scroll", handleScroll, true);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("resize", handleViewportChange);
-      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener("scroll", handleScroll, true);
     };
   }, [onOpenChange, open]);
 
