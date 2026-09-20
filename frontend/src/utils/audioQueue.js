@@ -157,3 +157,14 @@ export function insertTracksNext({ queue = [], playbackOrder = [], currentIndex 
   order.splice(currentIndex + 1, 0, ...added.map((_, offset) => firstIndex + offset));
   return { queue: [...queue, ...added], playbackOrder: order };
 }
+
+// "Add to queue": the same append, but it waits its turn at the end.
+export function appendTracksToQueue({ queue = [], playbackOrder = [] }, tracks = []) {
+  const added = Array.isArray(tracks) ? tracks : [tracks];
+  if (added.length === 0) return { queue, playbackOrder };
+  const firstIndex = queue.length;
+  return {
+    queue: [...queue, ...added],
+    playbackOrder: [...playbackOrder, ...added.map((_, offset) => firstIndex + offset)],
+  };
+}

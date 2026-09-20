@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  appendTracksToQueue,
   insertTracksNext,
   normalizeFlowTrack,
   shouldRecordListen,
@@ -69,4 +70,15 @@ test("play next appends when nothing has played yet", () => {
   );
 
   assert.deepEqual(next.playbackOrder, [1, 0]);
+});
+
+test("add to queue waits at the end of what is already there", () => {
+  const state = { queue: [{ id: "a" }, { id: "b" }], playbackOrder: [1, 0], currentIndex: 0 };
+
+  const next = appendTracksToQueue(state, [{ id: "c" }]);
+
+  assert.deepEqual(next.playbackOrder, [1, 0, 2]);
+  assert.equal(next.queue[next.playbackOrder.at(-1)].id, "c");
+  // The song playing keeps its place, as with play next.
+  assert.equal(next.queue[next.playbackOrder[state.currentIndex]].id, "b");
 });

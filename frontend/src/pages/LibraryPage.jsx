@@ -15,6 +15,7 @@ import {
   List,
   Library,
   ListFilter,
+  ListEnd,
   ListPlus,
   Pause,
   Play,
@@ -547,6 +548,7 @@ function LibraryPage() {
   const {
     playQueue,
     queueNext,
+    queueLast,
     currentTrack,
     isPlaying,
     isLoading,
@@ -1791,6 +1793,19 @@ function LibraryPage() {
     [buildPlayableTrack, librarySource, queueNext, showError, showSuccess],
   );
 
+  const addTrackToQueue = useCallback(
+    (track) => {
+      const playable = buildPlayableTrack(track);
+      if (!playable.src) {
+        showError("No playable file is available for this song.");
+        return;
+      }
+      queueLast(playable, { source: librarySource });
+      showSuccess(`${track.title || "Track"} added to the queue`);
+    },
+    [buildPlayableTrack, librarySource, queueLast, showError, showSuccess],
+  );
+
   const handleArtistOpen = (artist) => {
     if (!artist?.id) return;
     navigate("/library/artist/" + encodeURIComponent(artist.id) + previewQuery);
@@ -2047,6 +2062,13 @@ function LibraryPage() {
               disabled: !file,
             },
             {
+              id: "queue",
+              label: "Add to queue",
+              icon: ListEnd,
+              onSelect: () => addTrackToQueue(track),
+              disabled: !file,
+            },
+            {
               id: "info",
               label: "View info",
               icon: Info,
@@ -2229,7 +2251,7 @@ function LibraryPage() {
             <LibraryItemMenu
               label={track.title || "Track"}
               items={trackMenuItems}
-              additionalItemsAfter="play-next"
+              additionalItemsAfter="queue"
               onMenuOpen={loadSharedPlaylists}
               renderAdditionalItems={({ closeMenu }) => (
                 <>

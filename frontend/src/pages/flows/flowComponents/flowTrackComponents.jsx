@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo, useState, useCallback } from "react";
 import {
   ExternalLink,
   Heart,
+  ListEnd,
   ListMusic,
   ListPlus,
   Play,
@@ -187,6 +188,7 @@ function FlowTrackKebabMenu({
   isPlaying = false,
   onPlay,
   onPlayNext,
+  onAddToQueue,
   onAddToLibrary,
   isAddingToLibrary = false,
   isFavorite = false,
@@ -223,6 +225,15 @@ function FlowTrackKebabMenu({
           icon: ListPlus,
           disabled: !canPlay,
           onSelect: () => onPlayNext(track),
+        }
+      : null,
+    onAddToQueue
+      ? {
+          id: "queue",
+          label: "Add to queue",
+          icon: ListEnd,
+          disabled: !canPlay,
+          onSelect: () => onAddToQueue(track),
         }
       : null,
     onAddToLibrary
@@ -475,6 +486,7 @@ export function FlowTracksPanel({
     playQueue,
     playTrack,
     queueNext,
+    queueLast,
     togglePlayPause,
     isShuffleEnabled,
     matchesSource,
@@ -587,6 +599,11 @@ export function FlowTracksPanel({
   const handlePlayTrackNext = (track) => {
     if (!track?.streamUrl) return;
     queueNext(normalizeFlowTrack(track, { recordHistory }), { source: playbackSource });
+  };
+
+  const handleAddTrackToQueue = (track) => {
+    if (!track?.streamUrl) return;
+    queueLast(normalizeFlowTrack(track, { recordHistory }), { source: playbackSource });
   };
 
   return (
@@ -1006,6 +1023,7 @@ export function FlowTracksPanel({
                                 isPlaying={isCurrent}
                                 onPlay={handlePlayTrack}
                                 onPlayNext={handlePlayTrackNext}
+                                onAddToQueue={handleAddTrackToQueue}
                                 onAddToLibrary={onAddTrackToLibrary}
                                 isAddingToLibrary={libraryTrackSavingKey === String(track.id)}
                                 isFavorite={favoriteTrackIds.has(trackFavoriteId)}

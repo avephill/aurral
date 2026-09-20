@@ -75,8 +75,19 @@ export {
   setPlaylistStoreMode,
 } from "../playlistProviders.js";
 
+const isCanceled = (error) => error?.name === "CanceledError" || error?.code === "ERR_CANCELED";
+
 const fetchPlaylistStatus = async (signal) => {
-  const status = await getData("/playlists/status", { signal });
+  // What Psalter generates is behind the accessFlow permission, and someone
+  // who does not have it still has playlists of their own in Navidrome. So a
+  // refusal here is not a refusal to list them: it only means there is no
+  // flow to report, and the menus go on to ask Navidrome as usual.
+  let status = {};
+  try {
+    status = await getData("/playlists/status", { signal });
+  } catch (error) {
+    if (isCanceled(error) || !isNavidromePlaylistStore()) throw error;
+  }
   if (!isNavidromePlaylistStore()) return status;
   // Psalter's own shared playlists are not in use; show the Navidrome ones in
   // their place so the menus that read status.sharedPlaylists keep working.
@@ -84,7 +95,7 @@ const fetchPlaylistStatus = async (signal) => {
     const { playlists } = await getNavidromePlaylists({ signal });
     return { ...status, sharedPlaylists: Array.isArray(playlists) ? playlists : [] };
   } catch (error) {
-    if (error?.name === "CanceledError" || error?.code === "ERR_CANCELED") throw error;
+    if (isCanceled(error)) throw error;
     return { ...status, sharedPlaylists: [], navidromePlaylistsError: error?.response?.data?.message || error?.message || "" };
   }
 };

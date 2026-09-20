@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useAudioPlayerContext } from "react-use-audio-player";
 import {
+  appendTracksToQueue,
   getFormatLoadAttempts,
   getHowlerFormat,
   insertTracksNext,
@@ -105,6 +106,8 @@ function queueReducer(state, action) {
     // reloads and the current playback position is untouched.
     case "QUEUE_NEXT":
       return { ...state, ...insertTracksNext(state, action.tracks) };
+    case "QUEUE_LAST":
+      return { ...state, ...appendTracksToQueue(state, action.tracks) };
     case "SET_CURRENT_INDEX":
       return { ...state, currentIndex: action.index, error: null };
     case "SET_QUEUE_REVISION":
@@ -351,6 +354,24 @@ export function AudioQueueProvider({ children }) {
     return true;
   }, [playQueue]);
 
+  // "Add to queue": the same, at the end of whatever is already waiting.
+  const queueLast = useCallback((tracks, { source: nextSource = null } = {}) => {
+    const normalized = (Array.isArray(tracks) ? tracks : [tracks])
+      .map((track) => normalizeQueueTrack(track))
+      .filter((track) => track.src);
+    if (normalized.length === 0) return false;
+    const s = stateRef.current;
+    if (s.queue.length === 0 || s.currentIndex < 0) {
+      return playQueue(normalized, {
+        source: nextSource ?? s.source,
+        shuffle: false,
+        updateShufflePreference: false,
+      });
+    }
+    dispatch({ type: "QUEUE_LAST", tracks: normalized });
+    return true;
+  }, [playQueue]);
+
   const playTrack = useCallback((track, options = {}) => {
     const normalized = normalizeQueueTrack(track);
     if (!normalized.src) return false;
@@ -592,6 +613,7 @@ export function AudioQueueProvider({ children }) {
       playQueue,
       playTrack,
       queueNext,
+      queueLast,
       togglePlayPause,
       playNext,
       playPrevious,
@@ -609,6 +631,7 @@ export function AudioQueueProvider({ children }) {
       playQueue,
       playTrack,
       player.duration,
+      queueLast,
       queueNext,
       player.getPosition,
       player.isLoading,
