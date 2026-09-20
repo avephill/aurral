@@ -5,7 +5,15 @@ import { DotLoader } from "../../../components/DotLoader";
 import SearchLibraryCheck from "../../../components/SearchLibraryCheck";
 import AddActionButton from "../../../components/AddActionButton";
 import { navigateToReleaseGroup } from "../../../utils/searchNavigation";
-import { getReleaseGroupCoverUrl, getReleaseMetric, getReleaseYear } from "../utils";
+import PillToggle from "../../../components/PillToggle";
+import { matchesReleaseGroupTab } from "../releaseFilters";
+import {
+  getReleaseGroupCoverUrl,
+  getReleaseMetric,
+  getReleaseYear,
+  readStudioReleasesOnly,
+  writeStudioReleasesOnly,
+} from "../utils";
 import { getAlbumAddButtonLabel } from "../../../utils/albumAddAction";
 
 const viewModes = [
@@ -18,36 +26,17 @@ const viewModes = [
 // and made the years impossible to follow.
 const LIST_LIMIT = 40;
 
-const isCompilation = (releaseGroup) =>
-  releaseGroup?.["primary-type"] === "Compilation" ||
-  (releaseGroup?.["secondary-types"] || []).includes("Compilation");
-
-const isSingleOrEp = (releaseGroup) =>
-  releaseGroup?.["primary-type"] === "Single" || releaseGroup?.["primary-type"] === "EP";
-
 const sortLatest = (items) =>
   [...items].sort((a, b) =>
     String(b["first-release-date"] || "").localeCompare(String(a["first-release-date"] || "")),
   );
 
-const getVisibleReleases = (releaseGroups, viewMode, limit) => {
-  if (viewMode === "albums") {
-    return sortLatest(
-      releaseGroups.filter(
-        (releaseGroup) =>
-          releaseGroup?.["primary-type"] === "Album" && !isCompilation(releaseGroup),
-      ),
-    ).slice(0, limit);
-  }
-  if (viewMode === "singles") {
-    return sortLatest(
-      releaseGroups.filter(
-        (releaseGroup) => isSingleOrEp(releaseGroup) && !isCompilation(releaseGroup),
-      ),
-    ).slice(0, limit);
-  }
-  return sortLatest(releaseGroups.filter(isCompilation)).slice(0, limit);
-};
+const getVisibleReleases = (releaseGroups, viewMode, limit, studioOnly) =>
+  sortLatest(
+    releaseGroups.filter((releaseGroup) =>
+      matchesReleaseGroupTab(releaseGroup, viewMode, studioOnly),
+    ),
+  ).slice(0, limit);
 
 export function ArtistDetailsReleaseGroups({
   artist,
@@ -65,12 +54,18 @@ export function ArtistDetailsReleaseGroups({
 }) {
   const navigate = useDiscoverNavigation();
   const [viewMode, setViewMode] = useState("albums");
+  const [studioOnly, setStudioOnly] = useState(readStudioReleasesOnly);
   const releaseGridRef = useRef(null);
   const releaseGroups = useMemo(() => artist["release-groups"] || [], [artist]);
   const visibleReleaseGroups = useMemo(
-    () => getVisibleReleases(releaseGroups, viewMode, LIST_LIMIT),
-    [releaseGroups, viewMode],
+    () => getVisibleReleases(releaseGroups, viewMode, LIST_LIMIT, studioOnly),
+    [releaseGroups, studioOnly, viewMode],
   );
+
+  const handleStudioOnlyChange = (next) => {
+    setStudioOnly(next);
+    writeStudioReleasesOnly(next);
+  };
 
   useEffect(() => {
     onVisibleCoverIdsChange?.(visibleReleaseGroups.map((item) => item.id).filter(Boolean));
@@ -99,17 +94,29 @@ export function ArtistDetailsReleaseGroups({
             <h2 className="artist-section-title">Discography</h2>
             {loadingReleases && <DotLoader size="sm" label={null} />}
           </div>
-          <div className="artist-tabs">
-            {viewModes.map((mode) => (
-              <button
-                key={mode.value}
-                type="button"
-                onClick={() => setViewMode(mode.value)}
-                className={`artist-tab${viewMode === mode.value ? " is-active" : ""}`}
-              >
-                {mode.label}
-              </button>
-            ))}
+          <div className="artist-release-page__filters">
+            <div className="artist-tabs">
+              {viewModes.map((mode) => (
+                <button
+                  key={mode.value}
+                  type="button"
+                  onClick={() => setViewMode(mode.value)}
+                  className={`artist-tab${viewMode === mode.value ? " is-active" : ""}`}
+                >
+                  {mode.label}
+                </button>
+              ))}
+            </div>
+            {viewMode === "compilations" ? null : (
+              <div className="artist-release-page__type-toggle">
+                <span>Studio only</span>
+                <PillToggle
+                  checked={studioOnly}
+                  onChange={(event) => handleStudioOnlyChange(event.target.checked)}
+                  aria-label="Show studio releases only"
+                />
+              </div>
+            )}
           </div>
         </div>
         <button type="button" onClick={onViewAll} className="artist-link-button">

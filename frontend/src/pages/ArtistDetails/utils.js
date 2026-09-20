@@ -1,5 +1,6 @@
 import {
   RELEASE_LIST_VIEW_MODE_KEY,
+  RELEASE_STUDIO_ONLY_KEY,
 } from "./constants";
 import { TAG_COLORS } from "../discoverUtils";
 import { shouldTriggerAlbumSearch } from "../../utils/albumAddAction.js";
@@ -20,6 +21,24 @@ export const writeReleaseListViewMode = (mode) => {
   if (mode !== "grid" && mode !== "list") return;
   try {
     window.localStorage.setItem(RELEASE_LIST_VIEW_MODE_KEY, mode);
+  } catch {}
+};
+
+// Studio-only is the default: most of the time a discography is being read to
+// find the records, and an artist with taped shows has far more of those.
+export const readStudioReleasesOnly = () => {
+  if (typeof window === "undefined") return true;
+  try {
+    return window.localStorage.getItem(RELEASE_STUDIO_ONLY_KEY) !== "false";
+  } catch {
+    return true;
+  }
+};
+
+export const writeStudioReleasesOnly = (studioOnly) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(RELEASE_STUDIO_ONLY_KEY, studioOnly ? "true" : "false");
   } catch {}
 };
 

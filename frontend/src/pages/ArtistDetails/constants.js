@@ -26,4 +26,7 @@ export const emptyArtistShape = {
 };
 
 export const RELEASE_LIST_VIEW_MODE_KEY = "aurralReleaseListViewMode";
+// Remembered across artists: someone who wants records rather than bootlegs
+// wants that on the next artist too.
+export const RELEASE_STUDIO_ONLY_KEY = "psalterStudioReleasesOnly";
 export const ARTIST_DETAILS_APPEARS_ON_LIMIT = 24;

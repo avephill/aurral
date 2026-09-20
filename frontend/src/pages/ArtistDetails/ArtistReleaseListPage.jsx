@@ -30,7 +30,9 @@ import {
   getReleaseMetric,
   getReleaseYear,
   readReleaseListViewMode,
+  readStudioReleasesOnly,
   writeReleaseListViewMode,
+  writeStudioReleasesOnly,
 } from "./utils";
 import {
   matchesReleaseGroupSearch,
@@ -90,7 +92,7 @@ function ArtistReleaseListPage({ mode = "releases" }) {
   const { showSuccess, showError } = useToast();
   const { hasPermission } = useAuth();
   const [selectedTab, setSelectedTab] = useState("all");
-  const [showLiveAlbums, setShowLiveAlbums] = useState(true);
+  const [studioOnly, setStudioOnly] = useState(readStudioReleasesOnly);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortKey, setSortKey] = useState("date");
   const [sortDirection, setSortDirection] = useState("desc");
@@ -165,13 +167,13 @@ function ArtistReleaseListPage({ mode = "releases" }) {
       sortReleaseGroups(
         releaseGroups.filter(
           (releaseGroup) =>
-            matchesReleaseGroupTab(releaseGroup, selectedTab, showLiveAlbums) &&
+            matchesReleaseGroupTab(releaseGroup, selectedTab, studioOnly) &&
             matchesReleaseGroupSearch(releaseGroup, searchTerm),
         ),
         sortKey,
         sortDirection,
       ),
-    [releaseGroups, searchTerm, selectedTab, showLiveAlbums, sortDirection, sortKey],
+    [releaseGroups, searchTerm, selectedTab, sortDirection, sortKey, studioOnly],
   );
   const renderedReleaseGroups = useMemo(
     () => filteredReleaseGroups.slice(0, visibleReleaseCount),
@@ -252,7 +254,7 @@ function ArtistReleaseListPage({ mode = "releases" }) {
 
   useEffect(() => {
     setVisibleReleaseCount(RELEASE_PAGE_SIZE);
-  }, [searchTerm, selectedTab, showLiveAlbums]);
+  }, [searchTerm, selectedTab, studioOnly]);
 
   useEffect(() => {
     setVisibleReleaseCount(RELEASE_PAGE_SIZE);
@@ -653,14 +655,19 @@ function ArtistReleaseListPage({ mode = "releases" }) {
               );
             })}
           </div>
-          <div className="artist-release-page__live-toggle">
-            <span>Live albums</span>
-            <PillToggle
-              checked={showLiveAlbums}
-              onChange={(event) => setShowLiveAlbums(event.target.checked)}
-              aria-label="Show live albums"
-            />
-          </div>
+          {selectedTab === "compilations" ? null : (
+            <div className="artist-release-page__type-toggle">
+              <span>Studio only</span>
+              <PillToggle
+                checked={studioOnly}
+                onChange={(event) => {
+                  setStudioOnly(event.target.checked);
+                  writeStudioReleasesOnly(event.target.checked);
+                }}
+                aria-label="Show studio releases only"
+              />
+            </div>
+          )}
         </div>
       </div>
 

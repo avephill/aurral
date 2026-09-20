@@ -144,3 +144,16 @@ export function shouldRecordListen({ heardSeconds, totalSeconds } = {}) {
   if (!total || total < MIN_TRACK_SECONDS_TO_RECORD) return false;
   return heard >= Math.min(total / 2, PLAY_THRESHOLD_SECONDS);
 }
+
+// Where a "play next" song lands. The queue holds the tracks and the playback
+// order holds indexes into it, so appending leaves every index already in the
+// order pointing at the same track - including the one playing, which must not
+// be disturbed - and only the order has to be spliced.
+export function insertTracksNext({ queue = [], playbackOrder = [], currentIndex = -1 }, tracks = []) {
+  const added = Array.isArray(tracks) ? tracks : [tracks];
+  if (added.length === 0) return { queue, playbackOrder };
+  const firstIndex = queue.length;
+  const order = [...playbackOrder];
+  order.splice(currentIndex + 1, 0, ...added.map((_, offset) => firstIndex + offset));
+  return { queue: [...queue, ...added], playbackOrder: order };
+}

@@ -3,6 +3,7 @@ import {
   ExternalLink,
   Heart,
   ListMusic,
+  ListPlus,
   Play,
   Pause,
   Shuffle,
@@ -185,6 +186,7 @@ function FlowTrackKebabMenu({
   canPlay = false,
   isPlaying = false,
   onPlay,
+  onPlayNext,
   onAddToLibrary,
   isAddingToLibrary = false,
   isFavorite = false,
@@ -212,6 +214,15 @@ function FlowTrackKebabMenu({
           icon: isPlaying ? Pause : Play,
           disabled: !canPlay,
           onSelect: () => onPlay(track),
+        }
+      : null,
+    onPlayNext
+      ? {
+          id: "play-next",
+          label: "Play next",
+          icon: ListPlus,
+          disabled: !canPlay,
+          onSelect: () => onPlayNext(track),
         }
       : null,
     onAddToLibrary
@@ -463,6 +474,7 @@ export function FlowTracksPanel({
   const {
     playQueue,
     playTrack,
+    queueNext,
     togglePlayPause,
     isShuffleEnabled,
     matchesSource,
@@ -570,6 +582,11 @@ export function FlowTracksPanel({
       ),
       shuffle: isShuffleEnabled,
     });
+  };
+
+  const handlePlayTrackNext = (track) => {
+    if (!track?.streamUrl) return;
+    queueNext(normalizeFlowTrack(track, { recordHistory }), { source: playbackSource });
   };
 
   return (
@@ -988,6 +1005,7 @@ export function FlowTracksPanel({
                                 canPlay={canPlay}
                                 isPlaying={isCurrent}
                                 onPlay={handlePlayTrack}
+                                onPlayNext={handlePlayTrackNext}
                                 onAddToLibrary={onAddTrackToLibrary}
                                 isAddingToLibrary={libraryTrackSavingKey === String(track.id)}
                                 isFavorite={favoriteTrackIds.has(trackFavoriteId)}

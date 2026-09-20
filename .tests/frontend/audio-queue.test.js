@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeFlowTrack, shouldRecordListen } from "../../frontend/src/utils/audioQueue.js";
+import {
+  insertTracksNext,
+  normalizeFlowTrack,
+  shouldRecordListen,
+} from "../../frontend/src/utils/audioQueue.js";
 
 const track = {
   id: "flow-track",
@@ -40,4 +44,29 @@ test("a listen counts at half the track, or four minutes of a long one", () => {
   // Nothing known about the track yet.
   assert.equal(listen(10, 0), false);
   assert.equal(shouldRecordListen(), false);
+});
+
+test("play next lands behind the current song without moving it", () => {
+  const state = {
+    queue: [{ id: "a" }, { id: "b" }, { id: "c" }],
+    playbackOrder: [2, 0, 1],
+    currentIndex: 1,
+  };
+
+  const next = insertTracksNext(state, [{ id: "d" }, { id: "e" }]);
+
+  assert.deepEqual(next.playbackOrder, [2, 0, 3, 4, 1]);
+  // The playing song is still where the order said it was.
+  assert.equal(next.queue[next.playbackOrder[state.currentIndex]].id, "a");
+  assert.equal(next.queue[next.playbackOrder[2]].id, "d");
+  assert.equal(next.queue[next.playbackOrder[3]].id, "e");
+});
+
+test("play next appends when nothing has played yet", () => {
+  const next = insertTracksNext(
+    { queue: [{ id: "a" }], playbackOrder: [0], currentIndex: -1 },
+    [{ id: "b" }],
+  );
+
+  assert.deepEqual(next.playbackOrder, [1, 0]);
 });

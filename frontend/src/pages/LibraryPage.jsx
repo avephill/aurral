@@ -15,6 +15,7 @@ import {
   List,
   Library,
   ListFilter,
+  ListPlus,
   Pause,
   Play,
   Plus,
@@ -543,8 +544,15 @@ function LibraryPage() {
     setPlaylistsError,
     loadSharedPlaylists,
   } = useSharedPlaylists();
-  const { playQueue, currentTrack, isPlaying, isLoading, togglePlayPause, matchesSource } =
-    useAudioQueue();
+  const {
+    playQueue,
+    queueNext,
+    currentTrack,
+    isPlaying,
+    isLoading,
+    togglePlayPause,
+    matchesSource,
+  } = useAudioQueue();
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState("name");
   const [sortDirection, setSortDirection] = useState("asc");
@@ -1768,6 +1776,21 @@ function LibraryPage() {
     ],
   );
 
+  // Queued behind whatever is playing rather than replacing it, so building a
+  // run of songs does not interrupt the current one.
+  const playTrackNext = useCallback(
+    (track) => {
+      const playable = buildPlayableTrack(track);
+      if (!playable.src) {
+        showError("No playable file is available for this song.");
+        return;
+      }
+      queueNext(playable, { source: librarySource });
+      showSuccess(`${track.title || "Track"} plays next`);
+    },
+    [buildPlayableTrack, librarySource, queueNext, showError, showSuccess],
+  );
+
   const handleArtistOpen = (artist) => {
     if (!artist?.id) return;
     navigate("/library/artist/" + encodeURIComponent(artist.id) + previewQuery);
@@ -2017,6 +2040,13 @@ function LibraryPage() {
               disabled: !file || (active && isLoading),
             },
             {
+              id: "play-next",
+              label: "Play next",
+              icon: ListPlus,
+              onSelect: () => playTrackNext(track),
+              disabled: !file,
+            },
+            {
               id: "info",
               label: "View info",
               icon: Info,
@@ -2199,7 +2229,7 @@ function LibraryPage() {
             <LibraryItemMenu
               label={track.title || "Track"}
               items={trackMenuItems}
-              additionalItemsAfter="play"
+              additionalItemsAfter="play-next"
               onMenuOpen={loadSharedPlaylists}
               renderAdditionalItems={({ closeMenu }) => (
                 <>

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useAudioPlayerContext } from "react-use-audio-player";
-import { getFormatLoadAttempts, getHowlerFormat, normalizeQueueTrack, shouldRecordListen } from "../utils/audioQueue";
+import {
+  getFormatLoadAttempts,
+  getHowlerFormat,
+  insertTracksNext,
+  normalizeQueueTrack,
+  shouldRecordListen,
+} from "../utils/audioQueue";
 import { AudioQueueContext } from "./audioQueueContext";
 import { recordPlayEvent } from "../utils/api/endpoints/auth";
 
@@ -94,6 +100,11 @@ function queueReducer(state, action) {
         isShuffleEnabled: updateShufflePreference ? shuffle : state.isShuffleEnabled,
       };
     }
+    // Appended to the queue and spliced into the playback order right after
+    // whatever is playing. The running track keeps its queue index, so nothing
+    // reloads and the current playback position is untouched.
+    case "QUEUE_NEXT":
+      return { ...state, ...insertTracksNext(state, action.tracks) };
     case "SET_CURRENT_INDEX":
       return { ...state, currentIndex: action.index, error: null };
     case "SET_QUEUE_REVISION":
@@ -319,6 +330,26 @@ export function AudioQueueProvider({ children }) {
     });
     return true;
   }, []);
+
+  // "Play next": the song jumps the rest of the queue without interrupting the
+  // one playing. With nothing playing there is no queue to insert into, so it
+  // simply starts.
+  const queueNext = useCallback((tracks, { source: nextSource = null } = {}) => {
+    const normalized = (Array.isArray(tracks) ? tracks : [tracks])
+      .map((track) => normalizeQueueTrack(track))
+      .filter((track) => track.src);
+    if (normalized.length === 0) return false;
+    const s = stateRef.current;
+    if (s.queue.length === 0 || s.currentIndex < 0) {
+      return playQueue(normalized, {
+        source: nextSource ?? s.source,
+        shuffle: false,
+        updateShufflePreference: false,
+      });
+    }
+    dispatch({ type: "QUEUE_NEXT", tracks: normalized });
+    return true;
+  }, [playQueue]);
 
   const playTrack = useCallback((track, options = {}) => {
     const normalized = normalizeQueueTrack(track);
@@ -560,6 +591,7 @@ export function AudioQueueProvider({ children }) {
       toggleRepeat,
       playQueue,
       playTrack,
+      queueNext,
       togglePlayPause,
       playNext,
       playPrevious,
@@ -577,6 +609,7 @@ export function AudioQueueProvider({ children }) {
       playQueue,
       playTrack,
       player.duration,
+      queueNext,
       player.getPosition,
       player.isLoading,
       player.isPaused,
