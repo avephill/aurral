@@ -20,8 +20,14 @@ import { logger } from "./logger.js";
  * back up the day Lidarr imports it, even when MusicBrainz renamed it.
  */
 
-const SOURCE = "itunes";
-const BUNDLE_FORMAT = "psalter-itunes-library";
+// Where a person's old library came from. The shape of a record is the same
+// either way; the name is what the pages call it, and it keeps one person's
+// iPod from colliding with another's iTunes in (owner, source, source_key).
+const SOURCES = {
+  "psalter-itunes-library": "itunes",
+  "psalter-ipod-library": "ipod",
+};
+const BUNDLE_FORMATS = Object.keys(SOURCES);
 // Links the matcher may replace. An admin's confirm or reject is final.
 const TRUSTED = new Set(["linked", "confirmed", "review"]);
 
@@ -76,8 +82,11 @@ const upsertRecordStmt = () => db.prepare(`
  * playlist's switch and Navidrome playlist survive.
  */
 export function importSongRecordBundle(bundle) {
-  if (bundle?.format !== BUNDLE_FORMAT || !Array.isArray(bundle.records)) {
-    throw new SongRecordImportError("This is not a Psalter iTunes library bundle");
+  const source = SOURCES[bundle?.format];
+  if (!source || !Array.isArray(bundle.records)) {
+    throw new SongRecordImportError(
+      `This is not a Psalter library bundle (expected one of: ${BUNDLE_FORMATS.join(", ")})`,
+    );
   }
   const owner = clean(bundle.owner);
   if (!owner) throw new SongRecordImportError("The bundle does not say whose library it is");
@@ -103,7 +112,7 @@ export function importSongRecordBundle(bundle) {
       if (!sourceKey) continue;
       const { id } = upsertRecord.get({
         owner,
-        source: SOURCE,
+        source,
         sourceKey,
         title: clean(entry.title),
         artist: clean(entry.artist),
@@ -178,7 +187,7 @@ export function importSongRecordBundle(bundle) {
   ).get(owner).count;
   logger.info("library", `[SongRecords] Imported ${idByKey.size} song(s) for ${owner}; ${seeded} linked`);
   const relinked = relinkSongRecords({ owner });
-  return { owner, records: idByKey.size, linked: seeded + relinked.linked, review: relinked.review };
+  return { owner, source, records: idByKey.size, linked: seeded + relinked.linked, review: relinked.review };
 }
 
 /**
@@ -333,6 +342,7 @@ export function hasSongRecords(owner) {
 export function listSongRecordOwners() {
   return db.prepare(`
     SELECT record.owner AS owner,
+           MIN(record.source) AS source,
            COUNT(*) AS records,
            SUM(CASE WHEN link.status IN ('linked', 'confirmed') THEN 1 ELSE 0 END) AS linked,
            SUM(CASE WHEN link.status = 'review' THEN 1 ELSE 0 END) AS review,

@@ -283,7 +283,7 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
           { path: "/requests", label: "Requests", icon: Inbox },
           // Someone's old iTunes library: what still needs finding, and the
           // smart playlists rebuilt from their tags.
-          { path: "/itunes-library", label: "iTunes Library", icon: ListMusic },
+          { path: "/itunes-library", label: "Old Library", icon: ListMusic },
         ]
         : []),
       { path: "/blocklist", label: "Blocklist", icon: Ban, adminOnly: true },

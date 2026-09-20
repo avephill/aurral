@@ -298,3 +298,32 @@ test("a shape that covers little of the album on the server is not a match", () 
   );
   assert.equal(links.size, 0);
 });
+
+// An iPod is the same shape of library under a different name, and the source
+// keeps one person's iPod from colliding with another's iTunes.
+test("an iPod bundle imports under its own source", () => {
+  addAlbum({ artist: "Goldmund", album: "Corduroy Road", tracks: [["In a Notebook", 153]] });
+  const result = records.importSongRecordBundle({
+    format: "psalter-ipod-library",
+    owner: "dunshill",
+    records: [
+      { key: "ipod-1", title: "In A Notebook", artist: "Goldmund", album: "Corduroy Road",
+        durationMs: 153_000, playCount: 153 },
+    ],
+    playlists: [{ name: "Lounge Act (iPod)", kind: "manual", keys: ["ipod-1"] }],
+  });
+  assert.equal(result.source, "ipod");
+  assert.equal(result.records, 1);
+  const row = db.prepare("SELECT source, play_count AS playCount FROM song_records WHERE source_key = 'ipod-1'").get();
+  assert.deepEqual(row, { source: "ipod", playCount: 153 });
+  assert.ok(records.listSongRecordOwners().some((owner) => owner.owner === "dunshill"));
+  // The comment field carries no tags, so nothing reaches the tag layer.
+  assert.equal(db.prepare("SELECT comment FROM song_records WHERE source_key = 'ipod-1'").get().comment, null);
+});
+
+test("a bundle in no known format is refused", () => {
+  assert.throws(
+    () => records.importSongRecordBundle({ format: "psalter-minidisc-library", owner: "dunshill", records: [] }),
+    /not a Psalter library bundle/,
+  );
+});

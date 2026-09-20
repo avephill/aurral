@@ -624,6 +624,7 @@ function ImportTab({ onImported }) {
     <section className="itunes-library__panel">
       <p className="itunes-library__lede">
         Build the bundle from an iTunes library export with <code>scripts/itunes-migrate/export_psalter_library.py</code>,
+        or from an iPod backup with <code>scripts/ipod-migrate/export_psalter_bundle.py</code>,
         then upload it here, or put it in the data folder&apos;s <code>imports</code> directory and Psalter
         imports it on its next start. Importing again updates the songs in place and keeps every decision made on this page.
       </p>
@@ -638,8 +639,13 @@ function ImportTab({ onImported }) {
   );
 }
 
+// What the person's old library was, so the page calls it by its own name
+// rather than calling everyone's iTunes.
+const SOURCE_NAMES = { itunes: "iTunes", ipod: "iPod" };
+const sourceName = (source) => SOURCE_NAMES[source] || "Old";
+
 export default function ItunesLibraryPage() {
-  useDocumentTitle("iTunes Library");
+  useDocumentTitle("Old Library");
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState("missing");
@@ -656,6 +662,7 @@ export default function ItunesLibraryPage() {
 
   if (user && user.role !== "admin") return <Navigate to="/library" replace />;
   const current = list.find((entry) => entry.owner === owner);
+  const libraryName = sourceName(current?.source);
   const counts = { missing: current?.unlinked, review: current?.review };
   const showTab = list.length ? tab : "import";
 
@@ -663,9 +670,9 @@ export default function ItunesLibraryPage() {
     <div className="itunes-library">
       <header className="itunes-library__header">
         <div>
-          <h1 className="page-title">iTunes Library</h1>
+          <h1 className="page-title">{libraryName} Library</h1>
           <p className="page-subtitle">
-            A person&apos;s old iTunes library, kept song by song with the ratings, comments and playlists they
+            A person&apos;s old music library, kept song by song with the ratings, comments and playlists they
             gave it, whether or not the music is on the server yet.
           </p>
         </div>
@@ -681,7 +688,7 @@ export default function ItunesLibraryPage() {
           {current.unlinked} not found · {current.rated} rated
         </p>
       ) : null}
-      <div className="itunes-library__tabs" role="tablist" aria-label="iTunes library">
+      <div className="itunes-library__tabs" role="tablist" aria-label="Old library">
         {TABS.map((option) => (
           <button
             key={option.id}
