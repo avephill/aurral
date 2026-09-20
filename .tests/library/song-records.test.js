@@ -224,3 +224,77 @@ test("a duplicate of a linked song is not reported as missing", () => {
   const shown = records.getMissingSongsReport({ owner: "dunshill", includeDuplicates: true });
   assert.ok(shown.items.some((album) => album.songs.some((entry) => entry.title === "Track 01")));
 });
+
+// Two albums sat in the missing list with every title and every length right,
+// because the credit was wrong: a compilation iTunes filed under the album's
+// own name against the server's "Various Artists", and a rip whose artist and
+// album both came back from CDDB as "StellarStar" for "stellastarr*".
+test("an album is placed by its shape when the credit disagrees", () => {
+  const compilation = matching.buildCandidateIndex([
+    { trackId: 1, title: "God Rest Ye Merry Gentlemen", artistName: "Various Artists", albumTitle: "Celtic Christmas", albumId: 5, durationMs: 124_906 },
+    { trackId: 2, title: "The First Noel", artistName: "Various Artists", albumTitle: "Celtic Christmas", albumId: 5, durationMs: 140_293 },
+    { trackId: 3, title: "Ding Dong Merrily On High", artistName: "Various Artists", albumTitle: "Celtic Christmas", albumId: 5, durationMs: 120_746 },
+    { trackId: 4, title: "Noel Breton", artistName: "Various Artists", albumTitle: "Celtic Christmas", albumId: 5, durationMs: 102_600 },
+    // A second record of that name, which is why matching by album name alone
+    // gives up: it cannot tell which "Celtic Christmas" he owned.
+    { trackId: 5, title: "Sweet Little Jesus Boy", artistName: "Eden's Bridge", albumTitle: "Celtic Christmas", albumId: 6, durationMs: 210_000 },
+    { trackId: 6, title: "Coventry Carol", artistName: "Eden's Bridge", albumTitle: "Celtic Christmas", albumId: 6, durationMs: 190_000 },
+  ]);
+  const carols = matching.matchRecords(
+    [
+      { id: 1, title: "God Rest Ye Merry Gentlemen", artist: "Celtic Christmas", albumArtist: "Celtic Christmas", album: "Celtic Christmas", durationMs: 122_958 },
+      { id: 2, title: "The First Noel", artist: "Celtic Christmas", albumArtist: "Celtic Christmas", album: "Celtic Christmas", durationMs: 138_344 },
+      { id: 3, title: "Ding Dong Merrily On High", artist: "Celtic Christmas", albumArtist: "Celtic Christmas", album: "Celtic Christmas", durationMs: 118_804 },
+    ],
+    compilation,
+  );
+  assert.deepEqual([...carols].map(([id, link]) => [id, link.trackId, link.method]).sort(), [
+    [1, 1, "album shape"],
+    [2, 2, "album shape"],
+    [3, 3, "album shape"],
+  ]);
+
+  // The misspelling reaches the album name too, so nothing but the songs
+  // themselves identifies the record.
+  const band = matching.buildCandidateIndex([
+    { trackId: 11, title: "In the Walls", artistName: "stellastarr*", albumTitle: "stellastarr*", albumId: 9, durationMs: 229_413 },
+    { trackId: 12, title: "Jenny", artistName: "stellastarr*", albumTitle: "stellastarr*", albumId: 9, durationMs: 256_800 },
+    { trackId: 13, title: "My Coco", artistName: "stellastarr*", albumTitle: "stellastarr*", albumId: 9, durationMs: 305_866 },
+    { trackId: 14, title: "Moongirl", artistName: "stellastarr*", albumTitle: "stellastarr*", albumId: 9, durationMs: 330_253 },
+  ]);
+  const links = matching.matchRecords(
+    [
+      { id: 21, title: "In the Walls", artist: "StellarStar", album: "StellarStar", durationMs: 229_388 },
+      { id: 22, title: "Jenny", artist: "StellarStar", album: "StellarStar", durationMs: 256_764 },
+      { id: 23, title: "My Coco", artist: "StellarStar", album: "StellarStar", durationMs: 305_828 },
+    ],
+    band,
+  );
+  assert.deepEqual([...links].map(([id, link]) => [id, link.trackId]), [[21, 11], [22, 12], [23, 13]]);
+});
+
+// A carol turns up on forty Christmas records. The agreement has to fill the
+// album on the server, or one shared title would carry a whole record across.
+test("a shape that covers little of the album on the server is not a match", () => {
+  const index = matching.buildCandidateIndex(
+    ["Silent Night", "Away in a Manger", "O Holy Night", "Joy to the World", "The First Noel",
+     "Jingle Bells", "White Christmas", "Deck the Halls", "Good King Wenceslas", "O Come All Ye Faithful"]
+      .map((title, position) => ({
+        trackId: 100 + position,
+        title,
+        artistName: "Bing Crosby",
+        albumTitle: "White Christmas",
+        albumId: 42,
+        durationMs: 180_000 + position * 1000,
+      })),
+  );
+  const links = matching.matchRecords(
+    [
+      { id: 31, title: "Silent Night", artist: "A Village Choir", album: "Carols", durationMs: 180_000 },
+      { id: 32, title: "Away in a Manger", artist: "A Village Choir", album: "Carols", durationMs: 181_000 },
+      { id: 33, title: "Hark the Herald", artist: "A Village Choir", album: "Carols", durationMs: 200_000 },
+    ],
+    index,
+  );
+  assert.equal(links.size, 0);
+});

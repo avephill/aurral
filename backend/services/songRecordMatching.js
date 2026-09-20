@@ -172,10 +172,16 @@ export function buildCandidateIndex(tracks = []) {
     byArtistAlbum: new Map(),
     byArtist: new Map(),
     byAlbum: new Map(),
+    byTitle: new Map(),
+    byBareTitle: new Map(),
+    byAlbumId: new Map(),
     byTrackId: new Map(),
   };
   for (const row of rows) {
     index.byTrackId.set(row.trackId, row);
+    push(index.byTitle, row.nTitle, row);
+    if (row.bTitle !== row.nTitle) push(index.byBareTitle, row.bTitle, row);
+    if (row.albumId != null) push(index.byAlbumId, row.albumId, row);
     for (const artist of new Set(artistKeys(row.artistName, row.albumArtist))) {
       push(index.byArtistTitle, `${artist}\n${row.nTitle}`, row);
       push(index.byArtistLoose, `${artist}\n${row.lTitle}`, row);
@@ -321,6 +327,78 @@ function claimByAlbumAndLength(pending, index, claimed, links) {
   }
 }
 
+// An album recognised by its shape needs most of the server's copy accounted
+// for, by several songs, and no second album with a comparable claim.
+const SHAPE_MIN_SONGS = 3;
+const SHAPE_MIN_SHARE = 0.6;
+const SHAPE_TITLE = 0.85;
+
+/** Records that name the same title at the same length as this file. */
+function titleAgreement(key, row) {
+  if (Math.abs(row.duration - key.duration) > DURATION_TOLERANCE) return 0;
+  if (key.nTitle && key.nTitle === row.nTitle) return 1;
+  if (key.bTitle && key.bTitle === row.bTitle) return 0.95;
+  if (!key.bTitle || !row.bTitle) return 0;
+  const score = similarity(key.bTitle, row.bTitle);
+  return score >= SHAPE_TITLE ? score : 0;
+}
+
+/**
+ * An album placed by its shape rather than its credit: most of one album on
+ * the server carries the same titles at the same lengths as the songs of one
+ * album in his library.
+ *
+ * This is what reaches a record whose credit is simply wrong, where no amount
+ * of comparing artists can help. A compilation iTunes filed under its own name
+ * - every song by "Celtic Christmas" - against the server's "Various Artists".
+ * A rip whose artist came back from CDDB as "StellarStar" when the band is
+ * "stellastarr*", album and all. Both had every title and every length right.
+ *
+ * The agreement has to fill the server's album, not just appear in it, so a
+ * carol that turns up on forty Christmas records cannot carry one on its own,
+ * and a second album with a comparable claim calls the whole thing off.
+ */
+function claimByAlbumShape(pending, index, claimed, links, linkedAlbums) {
+  const groups = new Map();
+  for (const entry of pending) {
+    if (links.has(entry.record.id) || !entry.key.nAlbum) continue;
+    push(groups, entry.key.nAlbum, entry);
+  }
+  for (const entries of groups.values()) {
+    if (entries.length < SHAPE_MIN_SONGS) continue;
+    // Which album on the server holds these songs, and which file is each one.
+    const votes = new Map();
+    for (const entry of entries) {
+      const { key } = entry;
+      const seen = new Set();
+      for (const row of [...lookup(index.byTitle, key.nTitle), ...lookup(index.byBareTitle, key.bTitle)]) {
+        if (row.albumId == null || seen.has(row.trackId)) continue;
+        seen.add(row.trackId);
+        const score = titleAgreement(key, row);
+        if (!score) continue;
+        let album = votes.get(row.albumId);
+        if (!album) votes.set(row.albumId, (album = new Map()));
+        const held = album.get(entry.record.id);
+        if (!held || score > held.score) album.set(entry.record.id, { entry, row, score });
+      }
+    }
+    const ranked = [...votes].sort((a, b) => b[1].size - a[1].size);
+    const [best, runnerUp] = ranked;
+    if (!best) continue;
+    const [albumId, chosen] = best;
+    const albumTracks = (index.byAlbumId.get(albumId) || []).length;
+    if (chosen.size < SHAPE_MIN_SONGS || chosen.size < albumTracks * SHAPE_MIN_SHARE) continue;
+    if (runnerUp && chosen.size < runnerUp[1].size * 2) continue;
+    for (const { entry, row, score } of chosen.values()) {
+      if (claimed.has(row.trackId) || links.has(entry.record.id)) continue;
+      claimed.add(row.trackId);
+      links.set(entry.record.id, { method: "album shape", trackId: row.trackId, ambiguous: score < 0.95 });
+      const albumKey = `${normArtist(entry.record.albumArtist || entry.record.artist)}\n${entry.key.nAlbum}`;
+      if (!linkedAlbums.has(albumKey)) linkedAlbums.set(albumKey, albumId);
+    }
+  }
+}
+
 /**
  * Stragglers on an album most of which already matched: the few free tracks of
  * that album are the only candidates, so a typo or a dropped article becomes
@@ -376,6 +454,10 @@ export function matchRecords(records = [], index, { claimedTrackIds = new Set(),
     links.set(record.id, found);
   }
   claimByAlbumAndLength(pending, index, claimed, links);
-  claimLeftovers(pending, index, claimed, links, linkedAlbums);
+  // The shape pass can name an album the earlier tiers never placed, so the
+  // leftovers pass runs after it with that album in hand.
+  const albums = new Map(linkedAlbums);
+  claimByAlbumShape(pending, index, claimed, links, albums);
+  claimLeftovers(pending, index, claimed, links, albums);
   return links;
 }
