@@ -107,6 +107,27 @@ export function sharesWith(a, b) {
   `).get(a, b));
 }
 
+/**
+ * A new account joins every congregation anyone may join. The assigned ones
+ * stay an admin's decision, so a new person can still land in none at all -
+ * which leaves them unable to reach anyone, and no one able to reach them.
+ * Settings says who is in that position.
+ */
+export function enrollNewMember(username) {
+  const name = String(username || "").trim();
+  if (!name) return [];
+  const rows = db.prepare("SELECT id FROM congregations WHERE enrollment = 'open'").all();
+  if (!rows.length) return [];
+  const at = Date.now();
+  const insert = db.prepare(
+    "INSERT OR IGNORE INTO congregation_members (congregation_id, username, joined_at) VALUES (?, ?, ?)",
+  );
+  db.transaction(() => {
+    for (const row of rows) insert.run(row.id, name, at);
+  })();
+  return rows.map((row) => row.id);
+}
+
 export function createCongregation({ name, description = "", enrollment = "assigned", members = [] }) {
   const cleanName = normalizeName(name);
   if (!cleanName) throw new CongregationError("A congregation needs a name");

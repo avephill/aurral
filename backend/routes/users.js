@@ -1,4 +1,5 @@
 import express from "express";
+import { enrollNewMember } from "../services/congregationService.js";
 import { getDefaultDiscoverLayout } from "../config/discoverLayoutDefaults.js";
 import { userOps, dbOps } from "../db/helpers/index.js";
 import { hashPassword, verifyPassword } from "../middleware/passwordHash.js";
@@ -198,6 +199,8 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
     if (!created) {
       return res.status(500).json({ error: "Failed to create user" });
     }
+    // Otherwise they can share with nobody and nobody can share with them.
+    enrollNewMember(created.username);
     reconcileLocalBypassAfterUserMutation();
     res.status(201).json({
       id: created.id,

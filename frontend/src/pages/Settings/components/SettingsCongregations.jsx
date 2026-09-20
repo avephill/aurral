@@ -31,6 +31,10 @@ export function SettingsCongregations({ usersList = [] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const usernames = usersList.map((user) => user.username).filter(Boolean);
+  // Someone in no congregation reaches nobody and nobody reaches them, which
+  // is silent everywhere else: they simply do not appear in anyone's list.
+  const placed = new Set((rows || []).flatMap((row) => row.members || []));
+  const unplaced = rows === null ? [] : usernames.filter((username) => !placed.has(username));
 
   const read = () =>
     getCongregations()
@@ -108,6 +112,13 @@ export function SettingsCongregations({ usersList = [] }) {
         someone has been playing reach everyone in every congregation that person is in, and nobody
         else. The music on the server stays the same for everybody.
       </p>
+
+      {unplaced.length ? (
+        <p className="arr-form-help arr-form-help--warning">
+          In no congregation, so they can neither share nor be shared with:{" "}
+          <strong>{unplaced.join(", ")}</strong>. Put them in one below.
+        </p>
+      ) : null}
 
       {rows === null ? (
         <DotLoader size="sm" label="Reading congregations" />

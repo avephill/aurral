@@ -119,3 +119,32 @@ test("an admin can manage them from Settings, and only an admin", () => {
   );
   assert.match(settings, /<SettingsCongregations usersList=\{usersList\} \/>/, "under Settings with the users");
 });
+
+// A new account joined nothing, so it could reach nobody and appeared in
+// nobody's list - silently, because being in no congregation looks exactly
+// like being in one with no one else in it.
+test("a new account joins the congregations anyone may join", () => {
+  const open = congregations.createCongregation({ name: "Anyone", enrollment: "open", members: ["avery"] });
+  const shut = congregations.createCongregation({ name: "Shut", enrollment: "assigned", members: ["avery"] });
+  userOps.createUser("helen", "hash");
+
+  const joined = congregations.enrollNewMember("helen");
+
+  const names = congregations.congregationsFor("helen").map((entry) => entry.name);
+  assert.ok(joined.includes(open.id));
+  assert.ok(!joined.includes(shut.id), "an assigned congregation still takes an admin");
+  assert.ok(names.includes("Anyone"));
+  assert.ok(!names.includes("Shut"));
+  // Which puts her in reach of the people already there, and only those.
+  assert.ok(congregations.sharesWith("helen", "avery"));
+  assert.ok(!congregations.sharesWith("helen", "flatmate"));
+});
+
+test("enrolling nobody, or someone twice, changes nothing", () => {
+  assert.deepEqual(congregations.enrollNewMember(""), []);
+  userOps.createUser("twice", "hash");
+  congregations.enrollNewMember("twice");
+  const first = congregations.congregationsFor("twice").map((entry) => entry.id);
+  congregations.enrollNewMember("twice");
+  assert.deepEqual(congregations.congregationsFor("twice").map((entry) => entry.id), first);
+});
