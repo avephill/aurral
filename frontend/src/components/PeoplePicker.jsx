@@ -4,6 +4,10 @@ import { X } from "lucide-react";
 // Choosing who to tell. A row of checkboxes is fine for three people and
 // hopeless for twenty, so this takes a name at a time: type, pick, repeat.
 // Empty still means everyone, which the caller says out loud.
+//
+// Do not wrap this in a <label>. A label sends every click inside it to the
+// control it labels - here the text box - and the names are buttons, so they
+// stop being clickable. Pass `labelId` instead and caption it with a span.
 
 export default function PeoplePicker({
   people = [],
@@ -12,6 +16,7 @@ export default function PeoplePicker({
   disabled = false,
   placeholder = "Type a name",
   emptyHint = "",
+  labelId = "",
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -95,7 +100,8 @@ export default function PeoplePicker({
           onBlur={() => window.setTimeout(() => setOpen(false), 120)}
           onKeyDown={onKeyDown}
           disabled={disabled}
-          aria-label="Who to send this to"
+          aria-label={labelId ? undefined : "Who to send this to"}
+          aria-labelledby={labelId || undefined}
           autoComplete="off"
         />
       </div>

@@ -14,6 +14,7 @@ const MAX_NOTE = 500;
 
 export default function RecommendModal({ target, onClose }) {
   const titleId = useId();
+  const sendToId = useId();
   const { showError, showSuccess } = useToast();
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -108,8 +109,8 @@ export default function RecommendModal({ target, onClose }) {
         {loading ? (
           <DotLoader label="Loading people" />
         ) : people.length ? (
-          <label className="recommend-modal__field">
-            <span>Send to</span>
+          <div className="recommend-modal__field">
+            <span id={sendToId}>Send to</span>
             <PeoplePicker
               people={people}
               value={recipients}
@@ -117,8 +118,9 @@ export default function RecommendModal({ target, onClose }) {
               disabled={sending}
               placeholder="Type a name, or leave empty for everyone"
               emptyHint="Nobody chosen, so this goes to everyone."
+              labelId={sendToId}
             />
-          </label>
+          </div>
         ) : (
           <p className="recommend-modal__hint">
             Nobody else has an account yet, so this would go to everyone.
