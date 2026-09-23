@@ -20,7 +20,8 @@ const [isolatedState, { db }, { dbOps, userOps }, { NavidromeClient }, userClien
     "backend/services/navidromeUserClient.js",
   );
 
-const router = (await import("../../backend/routes/navidromePlaylists.js")).default;
+const routes = await import("../../backend/routes/navidromePlaylists.js");
+const router = routes.default;
 
 const subsonicOk = (payload = {}) =>
   JSON.stringify({ "subsonic-response": { status: "ok", version: "1.16.1", ...payload } });
@@ -249,4 +250,14 @@ test("the client move helper targets the right playlist row", async () => {
   const move = fake.state.requests.findLast((request) => request.kind === "move");
   assert.equal(move.rowId, "2");
   assert.deepEqual(move.body, { insert_before: "1" });
+});
+
+test("adding songs chosen from an album leaves out the ones already in the playlist", () => {
+  const playlist = { entry: [{ id: "song-a" }, { id: "song-c" }] };
+  assert.deepEqual(
+    routes.withoutSongsAlreadyIn(playlist, ["song-a", "song-b", "song-c", "song-d", "song-b"]),
+    ["song-b", "song-d"],
+    "in order, each once, none already there",
+  );
+  assert.deepEqual(routes.withoutSongsAlreadyIn(null, ["song-a"]), ["song-a"], "an unreadable playlist holds nothing");
 });

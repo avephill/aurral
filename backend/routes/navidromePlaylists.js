@@ -141,6 +141,23 @@ function sendNavidromeError(res, error, fallback) {
   });
 }
 
+/**
+ * The song ids not already in a playlist, in order and each once. Adding a
+ * whole album's worth to a playlist that has some of it should not put those
+ * songs in twice; one song added on its own is the person's call, so this is
+ * only used when the caller asks for it.
+ */
+export function withoutSongsAlreadyIn(playlist, songIds) {
+  const present = new Set((Array.isArray(playlist?.entry) ? playlist.entry : []).map((entry) => String(entry?.id)));
+  const seen = new Set();
+  return songIds.filter((id) => {
+    const key = String(id);
+    if (present.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function normalizeTrackPayloads(body) {
   const tracks = Array.isArray(body?.tracks) ? body.tracks : [];
   return tracks
@@ -386,11 +403,20 @@ router.post("/:id/tracks", noCache, async (req, res) => {
         unresolved: unresolved.map((track) => ({ trackName: track.trackName, artistName: track.artistName })),
       });
     }
-    await client.appendPlaylistSongs(req.params.id, resolved.map((entry) => entry.songId));
+    let songIds = resolved.map((entry) => entry.songId);
+    let alreadyThere = 0;
+    if (req.body?.skipExisting === true) {
+      const before = await client.getSubsonicPlaylist(req.params.id);
+      const fresh = withoutSongsAlreadyIn(before, songIds);
+      alreadyThere = songIds.length - fresh.length;
+      songIds = fresh;
+    }
+    if (songIds.length) await client.appendPlaylistSongs(req.params.id, songIds);
     const playlist = await client.getSubsonicPlaylist(req.params.id);
     return res.json({
       playlist: playlist ? toPlaylistSummary(playlist, client.user) : null,
-      added: resolved.length,
+      added: songIds.length,
+      alreadyThere,
       sharedCopies: resolved.filter((entry) => entry.outsidePreferredLibrary).length,
       unresolved: unresolved.map((track) => ({ trackName: track.trackName, artistName: track.artistName })),
     });
