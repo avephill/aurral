@@ -536,6 +536,37 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_playlist_shares_recipient
     ON playlist_shares (recipient, updated_at DESC);
 
+  -- A playlist its owner shows to one or more of their congregations, for
+  -- anyone there to take a copy of or not. Taking one is an ordinary share
+  -- (playlist_shares.listing_id says where it came from), so the copy follows
+  -- the owner's playlist the same way.
+  CREATE TABLE IF NOT EXISTS congregation_playlists (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner TEXT NOT NULL,
+    source_playlist_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS congregation_playlist_audience (
+    listing_id INTEGER NOT NULL,
+    congregation_id INTEGER NOT NULL,
+    PRIMARY KEY (listing_id, congregation_id)
+  );
+
+  -- Single albums in someone's personal library, alongside the whole artists
+  -- Lidarr tags put there. Taking a shared playlist is the usual reason: a
+  -- holiday playlist wants one Christmas album, not everything under Various
+  -- Artists. folder is the album's path in the main library, "Artist/Album".
+  CREATE TABLE IF NOT EXISTS user_library_albums (
+    username TEXT NOT NULL,
+    folder TEXT NOT NULL,
+    added_for TEXT,
+    added_at INTEGER NOT NULL,
+    PRIMARY KEY (username, folder)
+  );
+
   -- A playlist several people build together. Navidrome has one owner per
   -- playlist and no way for anyone else to edit it, so the real list lives
   -- here and every member gets their own copy of it. What they do to their
@@ -747,6 +778,16 @@ tryAddColumn("ALTER TABLE album_requests ADD COLUMN dismissed_at INTEGER");
 // it was last copied, so an unchanged playlist costs nothing to check.
 tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN dropped_at INTEGER");
 tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN source_updated_at TEXT");
+// A share waits until the person it is for adds it, because adding it can put
+// albums into their library. Shares from before that step were written at
+// once, and a pending one never has a copy, so any share with a copy was in
+// effect accepted.
+tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN accepted_at INTEGER");
+tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN listing_id INTEGER");
+db.exec(`
+  UPDATE playlist_shares SET accepted_at = created_at
+  WHERE accepted_at IS NULL AND mirror_playlist_id IS NOT NULL
+`);
 
 function hasUniqueIndex(columns) {
   return db.prepare("PRAGMA index_list(library_media_files)").all().some((index) => {

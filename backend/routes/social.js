@@ -2,6 +2,7 @@ import express from "express";
 import { noCache } from "../middleware/cache.js";
 import { requireAuth } from "../middleware/requirePermission.js";
 import {
+  acceptShare,
   createRecommendation,
   dismissRecommendation,
   getListeningHighlights,
@@ -11,6 +12,7 @@ import {
   listSharesByOwner,
   listSharesForRecipient,
   markRecommendationsRead,
+  previewShare,
   removeShare,
   setShareListening,
   sharePlaylist,
@@ -18,13 +20,24 @@ import {
   withdrawRecommendation,
 } from "../services/socialService.js";
 import {
+  addCollabAlbums,
   addCollabMember,
   createCollabPlaylist,
   deleteCollabPlaylist,
   listCollabPlaylistsFor,
+  previewCollabAlbums,
   removeCollabMember,
   syncCollabPlaylist,
 } from "../services/collabPlaylistService.js";
+import {
+  listPlaylist,
+  listingsBy,
+  listingsFor,
+  previewListing,
+  takeListing,
+  unlistPlaylist,
+} from "../services/congregationPlaylistService.js";
+import { congregationsFor } from "../services/congregationService.js";
 import { db } from "../config/db-sqlite.js";
 
 // The Social page: playlists shared with you, albums and songs people point
@@ -47,6 +60,8 @@ router.get("/overview", noCache, (req, res) => {
       people: listPeople({ exclude: username }),
       settings: getSocialSettings(username),
       shares: { received: listSharesForRecipient(username), sent: listSharesByOwner(username) },
+      listings: { visible: listingsFor(username), mine: listingsBy(username) },
+      congregations: congregationsFor(username).map(({ id, name }) => ({ id, name })),
       recommendations: listRecommendationsFor(username),
       collabs: listCollabPlaylistsFor(username),
     });
@@ -76,6 +91,66 @@ router.post("/playlists/:id/share", async (req, res) => {
   }
 });
 
+// What adding a shared playlist would put into your library, asked before
+// anything is added.
+router.get("/shares/:id/preview", noCache, async (req, res) => {
+  try {
+    res.json(await previewShare({ id: req.params.id, requester: me(req) }));
+  } catch (error) {
+    fail(res, error, "Could not work out what that playlist needs");
+  }
+});
+
+// Answers once the copy is written with what can be played now; the albums
+// added for the rest arrive after Navidrome scans them, without holding this up.
+router.post("/shares/:id/accept", async (req, res) => {
+  try {
+    const { ready: _ready, ...result } = await acceptShare({ id: req.params.id, requester: me(req) });
+    res.json(result);
+  } catch (error) {
+    fail(res, error, "Could not add the playlist");
+  }
+});
+
+// ---------------------------------------------------------------- shown to a congregation
+
+router.post("/playlists/:id/list", async (req, res) => {
+  try {
+    res.json(await listPlaylist({
+      owner: me(req),
+      playlistId: req.params.id,
+      congregationIds: Array.isArray(req.body?.congregationIds) ? req.body.congregationIds : [],
+    }));
+  } catch (error) {
+    fail(res, error, "Could not show the playlist to your congregation");
+  }
+});
+
+router.delete("/listings/:id", (req, res) => {
+  try {
+    res.json(unlistPlaylist({ id: req.params.id, requester: me(req) }));
+  } catch (error) {
+    fail(res, error, "Could not take the playlist off the list");
+  }
+});
+
+router.get("/listings/:id/preview", noCache, async (req, res) => {
+  try {
+    res.json(await previewListing({ id: req.params.id, requester: me(req) }));
+  } catch (error) {
+    fail(res, error, "Could not work out what that playlist needs");
+  }
+});
+
+router.post("/listings/:id/take", async (req, res) => {
+  try {
+    const { ready: _ready, ...result } = await takeListing({ id: req.params.id, requester: me(req) });
+    res.json(result);
+  } catch (error) {
+    fail(res, error, "Could not add the playlist");
+  }
+});
+
 router.post("/shares/:id/sync", async (req, res) => {
   const share = db.prepare("SELECT * FROM playlist_shares WHERE id = ?").get(Number(req.params.id));
   if (!share) return res.status(404).json({ error: "No such share" });
@@ -83,7 +158,10 @@ router.post("/shares/:id/sync", async (req, res) => {
     return res.status(403).json({ error: "That share is not yours" });
   }
   try {
-    return res.json(await syncShare(share));
+    const result = await syncShare(share);
+    // The sharer learns nothing from the answer about what the other person
+    // did with it - added, turned down, or thrown away.
+    return res.json(share.recipient === me(req) ? result : { sent: true });
   } catch (error) {
     return fail(res, error, "Could not refresh the shared playlist");
   }
@@ -121,6 +199,23 @@ router.post("/collabs/:id/sync", async (req, res) => {
     res.json(await syncCollabPlaylist(req.params.id));
   } catch (error) {
     fail(res, error, "Could not bring that playlist up to date");
+  }
+});
+
+router.get("/collabs/:id/albums", noCache, async (req, res) => {
+  try {
+    res.json(await previewCollabAlbums({ id: req.params.id, requester: me(req) }));
+  } catch (error) {
+    fail(res, error, "Could not work out what that playlist needs");
+  }
+});
+
+router.post("/collabs/:id/albums", async (req, res) => {
+  try {
+    const { ready: _ready, ...result } = await addCollabAlbums({ id: req.params.id, requester: me(req) });
+    res.json(result);
+  } catch (error) {
+    fail(res, error, "Could not add those albums");
   }
 });
 

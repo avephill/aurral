@@ -5,6 +5,7 @@ import { Disc3, Plus, RefreshCw, Send, Users, X } from "lucide-react";
 import { DotLoader } from "../components/DotLoader";
 import PeoplePicker from "../components/PeoplePicker";
 import CongregationPicker from "../components/CongregationPicker";
+import AddSharedPlaylistModal from "../components/AddSharedPlaylistModal";
 import { describeRecommendationFrom } from "../utils/audience.js";
 import { useUserLibrary } from "../hooks/useUserLibrary";
 import { addArtistToMyLibrary } from "../utils/api/endpoints/userLibrary.js";
@@ -24,8 +25,16 @@ import {
   stopSharing,
   syncShare,
   withdrawRecommendation,
+  acceptShare,
+  addCollabAlbums,
   addCollabMember,
   createCollabPlaylist,
+  previewCollabAlbums,
+  previewListing,
+  previewShare,
+  showPlaylistTo,
+  stopShowingPlaylist,
+  takeListing,
   endCollabPlaylist,
   leaveCollabPlaylist,
   syncCollabPlaylist,
@@ -218,10 +227,7 @@ function SharePlaylistForm({ people, onShared }) {
   const share = useMutation({
     mutationFn: () => sharePlaylistWith(playlistId, recipients),
     onSuccess: (result) => {
-      const missing = result.shared.reduce((sum, entry) => sum + (entry.missing || 0), 0);
-      showSuccess(missing
-        ? `Shared. ${missing} song(s) left out because they are not in their library.`
-        : "Shared.");
+      showSuccess(`Shared with ${result.shared.map((entry) => entry.recipient).join(", ")}.`);
       setRecipients([]);
       onShared();
     },
@@ -253,6 +259,95 @@ function SharePlaylistForm({ people, onShared }) {
       >
         {share.isPending ? <DotLoader size="sm" label={null} /> : null}
         Share playlist
+      </button>
+    </div>
+  );
+}
+
+// What the album dialog is asked to do for each way a playlist reaches you.
+const shareRequest = (share) => ({
+  heading: share.acceptedAt ? `Add the missing songs from "${share.name}"?` : `Add "${share.name}" from ${share.owner}?`,
+  load: (options) => previewShare(share.id, options),
+  confirm: () => acceptShare(share.id),
+  done: `Added "${share.name}" to your playlists.`,
+});
+
+const listingRequest = (listing) => ({
+  eyebrow: "From your congregation",
+  heading: listing.taken
+    ? `Add the missing songs from "${listing.name}"?`
+    : `Add "${listing.name}" from ${listing.owner}?`,
+  load: (options) => previewListing(listing.id, options),
+  confirm: () => takeListing(listing.id),
+  done: `Added "${listing.name}" to your playlists.`,
+});
+
+const collabRequest = (collab) => ({
+  eyebrow: "Built together",
+  heading: `Add the missing songs from "${collab.name}"?`,
+  load: (options) => previewCollabAlbums(collab.id, options),
+  confirm: () => addCollabAlbums(collab.id),
+  done: "Nothing needed adding.",
+});
+
+// Put one of your playlists on the list of some of your congregations, for
+// anyone there to add or not. You are not told who does.
+function ShowToCongregationForm({ playlists, congregations, onShown }) {
+  const { showError, showSuccess } = useToast();
+  const [playlistId, setPlaylistId] = useState("");
+  const [chosen, setChosen] = useState(() => new Set());
+  // With only one congregation there is nothing to choose.
+  const picked = congregations.length === 1 ? new Set([congregations[0].id]) : chosen;
+
+  const show = useMutation({
+    mutationFn: () => showPlaylistTo(playlistId, [...picked]),
+    onSuccess: (result) => {
+      showSuccess(`"${result.name}" is on the list for ${result.congregations.map((entry) => entry.name).join(", ")}.`);
+      setPlaylistId("");
+      onShown();
+    },
+    onError: (error) => showError(errorText(error, "Could not show that playlist")),
+  });
+
+  if (!congregations.length) {
+    return <p className="social__muted">You are not in a congregation yet, so there is nobody to show it to.</p>;
+  }
+
+  const toggle = (id) => setChosen((current) => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
+  return (
+    <div className="social__form">
+      <div className="social__row">
+        <select className="input input-sm" value={playlistId} onChange={(event) => setPlaylistId(event.target.value)}>
+          <option value="">Choose one of your playlists…</option>
+          {playlists.map((playlist) => (
+            <option key={playlist.id} value={playlist.id}>{playlist.name} ({playlist.trackCount || 0})</option>
+          ))}
+        </select>
+      </div>
+      {congregations.length > 1 ? (
+        <div className="social__people" role="group" aria-label="Show it to">
+          {congregations.map((entry) => (
+            <label key={entry.id} className="social__person">
+              <input type="checkbox" checked={chosen.has(entry.id)} onChange={() => toggle(entry.id)} />
+              {entry.name}
+            </label>
+          ))}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        disabled={!playlistId || !picked.size || show.isPending}
+        onClick={() => show.mutate()}
+      >
+        {show.isPending ? <DotLoader size="sm" label={null} /> : null}
+        {congregations.length === 1 ? `Show to ${congregations[0].name}` : "Show to them"}
       </button>
     </div>
   );
@@ -393,6 +488,13 @@ export default function SocialPage() {
     onSuccess: refresh,
     onError: (error) => showError(errorText(error, "Could not stop sharing")),
   });
+  // What the album dialog is open for, if anything.
+  const [taking, setTaking] = useState(null);
+  const unshow = useMutation({
+    mutationFn: (id) => stopShowingPlaylist(id),
+    onSuccess: refresh,
+    onError: (error) => showError(errorText(error, "Could not take that off the list")),
+  });
   const collabSync = useMutation({
     mutationFn: (id) => syncCollabPlaylist(id),
     onSuccess: () => {
@@ -430,6 +532,9 @@ export default function SocialPage() {
   const collabs = data?.collabs || [];
   const myPlaylists = (myPlaylistsQuery.data?.playlists || []).filter((playlist) => playlist.owned);
   const sent = data?.shares?.sent || [];
+  const visibleListings = data?.listings?.visible || [];
+  const myListings = data?.listings?.mine || [];
+  const congregations = data?.congregations || [];
 
   if (overview.isLoading) {
     return <div className="social"><div className="social__state"><DotLoader size="sm" label="Loading" /></div></div>;
@@ -461,7 +566,7 @@ export default function SocialPage() {
             replaced next time they change the original - keep it and it stops following theirs.
           </p>
           <ul className="social__list">
-            {received.map((share) => (
+            {received.map((share) => (share.acceptedAt ? (
               <li key={share.id} className="social__card">
                 <div>
                   <div className="social__title">
@@ -477,6 +582,16 @@ export default function SocialPage() {
                   {share.error ? <div className="social__warning">{share.error}</div> : null}
                 </div>
                 <div className="social__actions">
+                  {share.missing ? (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-xs"
+                      title="See which albums they need, then add them to your library"
+                      onClick={() => setTaking(shareRequest(share))}
+                    >
+                      Add the missing songs
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"
@@ -497,11 +612,93 @@ export default function SocialPage() {
                   </button>
                 </div>
               </li>
-            ))}
+            ) : (
+              <li key={share.id} className="social__card social__card--waiting">
+                <div>
+                  <div className="social__title">{share.name}</div>
+                  <div className="social__muted">from {share.owner} · waiting for you to add it</div>
+                </div>
+                <div className="social__actions">
+                  <button type="button" className="btn btn-primary btn-xs" onClick={() => setTaking(shareRequest(share))}>
+                    <Plus className="social__icon" aria-hidden="true" /> Add
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    title={`Turn it down; ${share.owner} can share it again later`}
+                    onClick={() => unshare.mutate(share.id)}
+                    disabled={unshare.isPending}
+                  >
+                    No thanks
+                  </button>
+                </div>
+              </li>
+            )))}
           </ul>
           </>
         )}
       </section>
+      <section className="social__panel">
+        <h2>From your congregation</h2>
+        {visibleListings.length === 0 ? (
+          <p className="social__muted">
+            Nothing yet. A playlist someone shows to a congregation you are in appears here, for you to add or not.
+          </p>
+        ) : (
+          <ul className="social__list">
+            {visibleListings.map((listing) => (
+              <li key={listing.id} className="social__card">
+                <div>
+                  <div className="social__title">
+                    {listing.taken?.playlistId ? (
+                      <Link to={`/library/playlists?id=${encodeURIComponent(listing.taken.playlistId)}`}>{listing.name}</Link>
+                    ) : listing.name}
+                  </div>
+                  <div className="social__muted">
+                    from {listing.owner} · {listing.congregations.map((entry) => entry.name).join(", ")}
+                    {listing.taken ? ` · in your playlists, ${listing.taken.songCount} songs` : ""}
+                    {listing.taken?.missing ? ` · ${listing.taken.missing} not in your library` : ""}
+                  </div>
+                  {listing.taken?.error ? <div className="social__warning">{listing.taken.error}</div> : null}
+                </div>
+                <div className="social__actions">
+                  {listing.taken ? (
+                    <>
+                      {listing.taken.missing ? (
+                        <button type="button" className="btn btn-ghost btn-xs" onClick={() => setTaking(listingRequest(listing))}>
+                          Add the missing songs
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs"
+                        title="The playlist stays in your account and stops following theirs"
+                        onClick={() => unshare.mutate(listing.taken.shareId)}
+                        disabled={unshare.isPending}
+                      >
+                        Keep it, stop updating
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="btn btn-primary btn-xs" onClick={() => setTaking(listingRequest(listing))}>
+                      <Plus className="social__icon" aria-hidden="true" /> Add
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <AddSharedPlaylistModal
+        request={taking}
+        onClose={() => setTaking(null)}
+        onAdded={() => {
+          refresh();
+          queryClient.invalidateQueries({ queryKey: ["user-library"] });
+        }}
+      />
 
       <section className="social__panel">
         <h2>Recommendations</h2>
@@ -571,6 +768,11 @@ export default function SocialPage() {
                   {collab.error ? <div className="social__warning">{collab.error}</div> : null}
                 </div>
                 <div className="social__actions">
+                  {collab.missing ? (
+                    <button type="button" className="btn btn-ghost btn-xs" onClick={() => setTaking(collabRequest(collab))}>
+                      Add the missing songs
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"
@@ -625,9 +827,11 @@ export default function SocialPage() {
       </section>
 
       <section className="social__panel">
-        <h2>Share a playlist</h2>
+        <h2>Share your playlists</h2>
+        <h3>With someone</h3>
         <p className="social__muted">
-          They get their own private copy, kept in step with yours. Songs their library does not hold are left out.
+          Just for them. They are asked whether to add it, and then get their own private copy, kept in step
+          with yours. Adding it can put the albums its songs come from into their library; they are asked first.
         </p>
         <SharePlaylistForm people={people} onShared={refresh} />
         {sent.length ? (
@@ -636,17 +840,7 @@ export default function SocialPage() {
               <li key={share.id} className="social__card">
                 <div>
                   <div className="social__title">{share.name}</div>
-                  <div className="social__muted">
-                    shared with {share.recipient}
-                    {share.missing ? ` · ${share.missing} left out` : ""}
-                    {share.syncedAt ? ` · updated ${when(share.syncedAt)}` : ""}
-                  </div>
-                  {share.droppedAt ? (
-                    <div className="social__muted">
-                      {share.recipient} removed their copy. Share it again to send them a new one.
-                    </div>
-                  ) : null}
-                  {share.error ? <div className="social__warning">{share.error}</div> : null}
+                  <div className="social__muted">shared with {share.recipient}</div>
                 </div>
                 <div className="social__actions">
                   <button
@@ -666,6 +860,38 @@ export default function SocialPage() {
                     disabled={unshare.isPending}
                   >
                     Stop sharing
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <h3>With a congregation</h3>
+        <p className="social__muted">
+          Listed for everyone in the congregations you choose, to add or not. Whoever adds it gets a copy kept in
+          step with yours. You are not told who does.
+        </p>
+        <ShowToCongregationForm playlists={myPlaylists} congregations={congregations} onShown={refresh} />
+        {myListings.length ? (
+          <ul className="social__list">
+            {myListings.map((listing) => (
+              <li key={listing.id} className="social__card">
+                <div>
+                  <div className="social__title">{listing.name}</div>
+                  <div className="social__muted">
+                    shown to {listing.congregations.map((entry) => entry.name).join(", ") || "nobody now"}
+                  </div>
+                </div>
+                <div className="social__actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-xs"
+                    title="Everyone who added it keeps their copy; it stops following yours"
+                    onClick={() => unshow.mutate(listing.id)}
+                    disabled={unshow.isPending}
+                  >
+                    Stop showing
                   </button>
                 </div>
               </li>

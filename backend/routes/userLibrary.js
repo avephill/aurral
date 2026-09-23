@@ -8,6 +8,8 @@ import {
   setUserLibraryMembership,
   reconcileUserLibraries,
   getNewToServer,
+  listUserLibraryAlbums,
+  removeUserLibraryAlbums,
 } from "../services/userLibraryService.js";
 import { logger } from "../services/logger.js";
 
@@ -93,6 +95,26 @@ router.delete("/artists/:mbid", requireAuth, async (req, res) => {
     res.json({ success: true, changed: result.changed });
   } catch (error) {
     handleError(res, error, "Failed to remove artist from user library");
+  }
+});
+
+// Single albums, put in someone's library without the rest of the artist -
+// usually for a playlist shared with them.
+router.get("/albums", requireAuth, noCache, (req, res) => {
+  try {
+    res.json({ albums: listUserLibraryAlbums(req.user.username) });
+  } catch (error) {
+    handleError(res, error, "Failed to load your albums");
+  }
+});
+
+router.post("/albums/remove", requireAuth, (req, res) => {
+  const folders = Array.isArray(req.body?.folders) ? req.body.folders.map(String) : [];
+  if (!folders.length) return res.status(400).json({ error: "No albums given" });
+  try {
+    return res.json({ success: true, removed: removeUserLibraryAlbums(req.user.username, folders) });
+  } catch (error) {
+    return handleError(res, error, "Failed to remove albums from your library");
   }
 });
 

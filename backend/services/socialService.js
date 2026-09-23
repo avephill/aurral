@@ -2,7 +2,19 @@ import { db } from "../config/db-sqlite.js";
 import { peopleSharingWith, sharesWith } from "./congregationService.js";
 import { createNavidromeUserClient } from "./navidromeUserClient.js";
 import { normalizePath } from "./navidromePathMapping.js";
-import { getAdminNavidromeClient, getPersonalLibraryIdForUser } from "./navidromeTrackResolver.js";
+import {
+  getAdminNavidromeClient,
+  getCanonicalLibraryId,
+  getPersonalLibraryIdForUser,
+} from "./navidromeTrackResolver.js";
+import {
+  addUserLibraryAlbums,
+  albumFolderOf,
+  getUserLibrariesSettings,
+  getUserLibraryDir,
+  reconcileUserLibrariesAndWait,
+} from "./userLibraryService.js";
+import { getNavidromeRootMapping } from "../config/featureFlags.js";
 import { logger } from "./logger.js";
 import { buildImageProxyUrl } from "./imageProxyService.js";
 
@@ -82,7 +94,16 @@ export const defaultSocialDeps = {
   adminClient: () => getAdminNavidromeClient(),
   userClient: (username) => createNavidromeUserClient({ username }),
   personalLibraryId: (username) => getPersonalLibraryIdForUser(username),
+  canonicalLibraryId: () => getCanonicalLibraryId(),
   songsByPath: (path) => getAdminNavidromeClient().findSongsByPath(path),
+  // Albums can be put into someone's library one at a time only when
+  // personal libraries are on, they have one, and Psalter knows where the
+  // main library's folders are to link to.
+  canAddAlbums: (username) => getUserLibrariesSettings().enabled
+    && Boolean(getNavidromeRootMapping())
+    && Boolean(getUserLibraryDir(username)),
+  addAlbums: (username, folders, addedFor) => addUserLibraryAlbums(username, folders, addedFor),
+  libraryReady: () => reconcileUserLibrariesAndWait(),
 };
 
 const libraryCache = new Map();
@@ -115,7 +136,10 @@ export function resetSocialCaches() {
   libraryCache.clear();
 }
 
-/** Share one of your playlists with people, and write their copies now. */
+/**
+ * Share one of your playlists with people. Someone new to it is asked first;
+ * someone who already has it gets their copy brought up to date.
+ */
 export async function sharePlaylist({ owner, playlistId, recipients = [], deps = defaultSocialDeps } = {}) {
   const id = clean(playlistId);
   if (!id) throw new SocialError("playlistId is required");
@@ -149,13 +173,22 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
         -- Sharing it again is asking again, so a copy they threw away comes
         -- back - as a new one, since the old id points at nothing.
         dropped_at = NULL, last_error = NULL,
+        -- Sent to them by name now, whatever list they first took it from.
+        listing_id = NULL,
+        accepted_at = CASE WHEN playlist_shares.dropped_at IS NOT NULL
+          THEN NULL ELSE playlist_shares.accepted_at END,
         mirror_playlist_id = CASE WHEN playlist_shares.dropped_at IS NOT NULL
           THEN NULL ELSE playlist_shares.mirror_playlist_id END,
         last_song_ids_json = CASE WHEN playlist_shares.dropped_at IS NOT NULL
           THEN NULL ELSE playlist_shares.last_song_ids_json END
     `).run(owner, recipient, id, name, at, at);
     const share = db.prepare("SELECT * FROM playlist_shares WHERE source_playlist_id = ? AND recipient = ?").get(id, recipient);
-    results.push(await syncShare(share, deps));
+    // Nothing is written until they add it: adding it may put albums into
+    // their library, and that is theirs to agree to.
+    if (share.accepted_at) await syncShare(share, deps);
+    // Only who it went to: whether they had already added it is not the
+    // sharer's to learn from the answer either.
+    results.push({ recipient });
   }
   return { playlistId: id, name, shared: results };
 }
@@ -170,7 +203,14 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
  */
 export async function resolveCopiesForUser({ username, paths = [], preferSongIds = new Map(), deps = defaultSocialDeps } = {}) {
   const preferLibraryId = await deps.personalLibraryId(username).catch(() => null);
+  const canonicalLibraryId = deps.canonicalLibraryId
+    ? await deps.canonicalLibraryId().catch(() => null)
+    : null;
   const allowed = await librariesFor(username, deps);
+  // After their own library, the main one. An admin can reach everyone's
+  // personal library too, and a copy pointed at someone else's goes when they
+  // drop the album, and carries ratings nobody sees in the main library.
+  const canReachCanonical = canonicalLibraryId !== null && allowed.has(Number(canonicalLibraryId));
   const resolved = new Map();
   for (const path of paths) {
     if (resolved.has(path)) continue;
@@ -178,6 +218,7 @@ export async function resolveCopiesForUser({ username, paths = [], preferSongIds
     const exact = (Array.isArray(copies) ? copies : [])
       .filter((song) => song?.id && normalizePath(song?.path) === path);
     const pick = exact.find((song) => Number(song.libraryId) === Number(preferLibraryId))
+      || (canReachCanonical && exact.find((song) => Number(song.libraryId) === Number(canonicalLibraryId)))
       || exact.find((song) => allowed.size && allowed.has(Number(song.libraryId)))
       // Their libraries are unknown, so leave the copy the sender had rather
       // than guess at one they may not be able to play.
@@ -201,6 +242,7 @@ export async function syncShare(share, deps = defaultSocialDeps) {
   // Thrown away by the person it was for. Writing it again every quarter of an
   // hour is not sharing, it is pestering.
   if (share.dropped_at) return { recipient: share.recipient, status: "dropped" };
+  if (!share.accepted_at) return { recipient: share.recipient, status: "waiting" };
   try {
     const admin = deps.adminClient();
 
@@ -309,8 +351,11 @@ export function listSharesForRecipient(username) {
   return db.prepare(`
     SELECT id, owner, name, mirror_playlist_id AS playlistId, missing_count AS missing,
            last_synced_at AS syncedAt, last_error AS error, last_song_ids_json AS songIds,
-           dropped_at AS droppedAt
-    FROM playlist_shares WHERE recipient = ? AND dropped_at IS NULL ORDER BY updated_at DESC
+           dropped_at AS droppedAt, accepted_at AS acceptedAt
+    FROM playlist_shares
+    -- Copies taken from a congregation's list are shown with that list.
+    WHERE recipient = ? AND dropped_at IS NULL AND listing_id IS NULL
+    ORDER BY updated_at DESC
   `).all(username).map((row) => ({
     ...row,
     songIds: undefined,
@@ -318,23 +363,160 @@ export function listSharesForRecipient(username) {
   }));
 }
 
+/**
+ * What someone has shared, and with whom - and nothing about what the other
+ * person did with it. Whether they added it, turned it down, or threw their
+ * copy away is theirs, so none of it is read out here.
+ */
 export function listSharesByOwner(username) {
   return db.prepare(`
-    SELECT id, recipient, name, source_playlist_id AS sourcePlaylistId, missing_count AS missing,
-           last_synced_at AS syncedAt, last_error AS error, dropped_at AS droppedAt
-    FROM playlist_shares WHERE owner = ? ORDER BY updated_at DESC
+    SELECT id, recipient, name, source_playlist_id AS sourcePlaylistId
+    FROM playlist_shares
+    -- Who took a playlist from a congregation's list is theirs to know, not
+    -- the owner's.
+    WHERE owner = ? AND listing_id IS NULL
+    ORDER BY updated_at DESC
   `).all(username);
+}
+
+function shareForRecipient(id, requester) {
+  const share = db.prepare("SELECT * FROM playlist_shares WHERE id = ?").get(Number(id));
+  if (!share || share.dropped_at) throw new SocialError("No such share", 404);
+  if (share.recipient !== requester) throw new SocialError("That share is not for you", 403);
+  return share;
+}
+
+/**
+ * What taking a playlist into someone's account would need: which of these
+ * songs they can already play, and the album folders that would go into their
+ * library for the rest. Songs are counted once however often a list repeats one.
+ */
+export async function planAlbumsForPaths({ username, paths: given = [], deps = defaultSocialDeps } = {}) {
+  const paths = [...new Set(given.map((path) => normalizePath(path)).filter(Boolean))];
+  const reachable = await resolveCopiesForUser({ username, paths, deps });
+  const missing = paths.filter((path) => !reachable.get(path));
+
+  const canAdd = missing.length > 0 && deps.canAddAlbums(username);
+  const albums = new Map();
+  let unavailable = 0;
+  for (const path of missing) {
+    const folder = canAdd ? albumFolderOf(path) : null;
+    if (!folder) {
+      unavailable += 1;
+      continue;
+    }
+    const entry = albums.get(folder) || { folder, artist: folder.split("/")[0], album: folder.split("/")[1], songs: 0 };
+    entry.songs += 1;
+    albums.set(folder, entry);
+  }
+  const list = [...albums.values()].sort((a, b) => a.folder.localeCompare(b.folder, undefined, { sensitivity: "base" }));
+  return {
+    songs: paths.length,
+    have: paths.length - missing.length,
+    missing: missing.length,
+    albums: list,
+    artists: new Set(list.map((album) => album.artist)).size,
+    // Songs that cannot be added: personal libraries are off for them, or the
+    // song does not sit in an album folder that could be linked.
+    unavailable,
+  };
+}
+
+/** The same, for a playlist in someone else's Navidrome account. */
+export async function planShare(share, deps = defaultSocialDeps) {
+  const admin = deps.adminClient();
+  if (!admin?.isConfigured?.()) throw new SocialError("Navidrome admin connection not configured", 503);
+  const rows = await admin.getPlaylistTracks(share.source_playlist_id);
+  const plan = await planAlbumsForPaths({
+    username: share.recipient,
+    paths: rows.map((row) => row?.path ?? row?.mediaFile?.path ?? ""),
+    deps,
+  });
+  return { shareId: share.id ?? null, name: share.name, owner: share.owner, ...plan };
+}
+
+/**
+ * Put the albums a plan names into someone's library. The promise it returns
+ * settles once Navidrome has scanned them, so the caller can write the copy
+ * again then; it never rejects.
+ */
+export function addPlannedAlbums({ username, plan, addedFor, deps = defaultSocialDeps, then = null } = {}) {
+  const folders = plan.albums.map((album) => album.folder);
+  const added = folders.length ? deps.addAlbums(username, folders, addedFor) : 0;
+  const ready = added
+    ? Promise.resolve()
+      .then(() => deps.libraryReady())
+      .then(() => (then ? then() : null))
+      .catch((error) => {
+        logger.warn("library", `[Social] Albums for "${addedFor}" were added but the copy was not refreshed: ${error.message}`);
+        return null;
+      })
+    : Promise.resolve(null);
+  return { added, ready };
+}
+
+/** For the question asked before a shared playlist is added. */
+export async function previewShare({ id, requester, deps = defaultSocialDeps } = {}) {
+  return planShare(shareForRecipient(id, requester), deps);
+}
+
+/**
+ * Add a shared playlist, putting into the recipient's library the albums its
+ * songs need. Asked again after the owner adds songs from albums they lack,
+ * it adds those, so it serves both the first yes and every later one.
+ *
+ * Their copy is written at once with what they can already play, and again
+ * once Navidrome has scanned the new albums. `ready` settles then; the route
+ * does not wait for it.
+ */
+export async function acceptShare({ id, requester, deps = defaultSocialDeps } = {}) {
+  return takeShare(shareForRecipient(id, requester), deps);
+}
+
+/** Say yes to a share row: add what it needs, mark it taken, write the copy. */
+export async function takeShare(share, deps = defaultSocialDeps) {
+  const plan = await planShare(share, deps);
+  const current = () => db.prepare("SELECT * FROM playlist_shares WHERE id = ?").get(share.id);
+
+  // Written first with what they can play already, so the playlist is there
+  // at once; the albums fill it in once they are scanned.
+  const at = now();
+  db.prepare("UPDATE playlist_shares SET accepted_at = COALESCE(accepted_at, ?), updated_at = ? WHERE id = ?")
+    .run(at, at, share.id);
+  const result = await syncShare(current(), deps);
+  const { added, ready } = addPlannedAlbums({
+    username: share.recipient,
+    plan,
+    addedFor: `${share.name} (from ${share.owner})`,
+    deps,
+    then: () => {
+      const row = current();
+      return row ? syncShare(row, deps) : null;
+    },
+  });
+  return { ...result, shareId: share.id, albumsAdded: added, albums: plan.albums.length, ready };
 }
 
 /**
  * Stop sharing. The recipient's copy is theirs, so it is left in place unless
  * the person who shared it asks for it to go.
+ *
+ * The recipient saying no, or keeping their copy and letting it stop
+ * following, only takes it off their own page: the row stays, so nothing
+ * changes on the page of the person who shared it.
  */
 export async function removeShare({ id, requester, deleteCopy = false, deps = defaultSocialDeps } = {}) {
   const share = db.prepare("SELECT * FROM playlist_shares WHERE id = ?").get(Number(id));
   if (!share) throw new SocialError("No such share", 404);
   if (share.owner !== requester && share.recipient !== requester) {
     throw new SocialError("That share is not yours", 403);
+  }
+  if (share.recipient === requester) {
+    const at = now();
+    db.prepare(`
+      UPDATE playlist_shares SET dropped_at = ?, mirror_playlist_id = NULL, updated_at = ? WHERE id = ?
+    `).run(at, at, share.id);
+    return { removed: true, copyDeleted: false };
   }
   if (deleteCopy && share.mirror_playlist_id) {
     const client = deps.userClient(share.recipient);

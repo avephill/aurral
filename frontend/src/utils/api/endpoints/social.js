@@ -47,3 +47,29 @@ export const leaveCollabPlaylist = (id, username) =>
   deleteData(`/social/collabs/${encodeURIComponent(id)}/members/${encodeURIComponent(username)}`);
 
 export const endCollabPlaylist = (id) => deleteData(`/social/collabs/${encodeURIComponent(id)}`);
+
+// What adding a shared playlist would put into your library, and adding it.
+export const previewShare = (id, { signal } = {}) =>
+  getData(`/social/shares/${encodeURIComponent(id)}/preview`, { signal, timeout: SLOW_TIMEOUT_MS });
+
+export const acceptShare = (id) =>
+  postData(`/social/shares/${encodeURIComponent(id)}/accept`, {}, { timeout: SLOW_TIMEOUT_MS });
+
+// Playlists shown to a congregation, for anyone there to take a copy of.
+export const showPlaylistTo = (playlistId, congregationIds) =>
+  postData(`/social/playlists/${encodeURIComponent(playlistId)}/list`, { congregationIds }, { timeout: SLOW_TIMEOUT_MS });
+
+export const stopShowingPlaylist = (id) => deleteData(`/social/listings/${encodeURIComponent(id)}`);
+
+export const previewListing = (id, { signal } = {}) =>
+  getData(`/social/listings/${encodeURIComponent(id)}/preview`, { signal, timeout: SLOW_TIMEOUT_MS });
+
+export const takeListing = (id) =>
+  postData(`/social/listings/${encodeURIComponent(id)}/take`, {}, { timeout: SLOW_TIMEOUT_MS });
+
+// The albums a collaborative playlist's songs need, for a member missing some.
+export const previewCollabAlbums = (id, { signal } = {}) =>
+  getData(`/social/collabs/${encodeURIComponent(id)}/albums`, { signal, timeout: SLOW_TIMEOUT_MS });
+
+export const addCollabAlbums = (id) =>
+  postData(`/social/collabs/${encodeURIComponent(id)}/albums`, {}, { timeout: SLOW_TIMEOUT_MS });

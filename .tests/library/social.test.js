@@ -88,13 +88,23 @@ function fakeDeps() {
       return [{ id: 1 }, { id: 5 }];
     },
   };
+  const albumsAdded = [];
   return {
     playlists,
     calls,
     source,
+    copies,
+    albumsAdded,
     adminClient: () => admin,
     songsByPath: async (path) => copies[path] || [],
     personalLibraryId: async () => 5,
+    // Personal libraries are off unless a test turns them on.
+    canAddAlbums: () => false,
+    addAlbums: (username, folders, addedFor) => {
+      albumsAdded.push({ username, folders, addedFor });
+      return folders.length;
+    },
+    libraryReady: async () => {},
     userClient: (username) => ({
       user: username,
       async getSubsonicPlaylist(id) {
@@ -121,12 +131,36 @@ function fakeDeps() {
   };
 }
 
-test("a shared playlist is written into the recipient's own account", async () => {
+const shareRow = (recipient = "dunshill") =>
+  db.prepare("SELECT * FROM playlist_shares WHERE recipient = ?").get(recipient);
+
+// Share it with him and have him add it, as most of these tests need.
+async function shareAndAdd(deps) {
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  return social.acceptShare({ id: shareRow().id, requester: "dunshill", deps });
+}
+
+test("a shared playlist waits for the recipient to add it", async () => {
   const deps = fakeDeps();
   const result = await social.sharePlaylist({
     owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps,
   });
-  assert.deepEqual(result.shared, [{ recipient: "dunshill", songs: 2, missing: 1, status: "written" }]);
+  assert.deepEqual(result.shared, [{ recipient: "dunshill" }]);
+  assert.equal(deps.calls.length, 0, "nothing written into his account yet");
+  const [waiting] = social.listSharesForRecipient("dunshill");
+  assert.equal(waiting.acceptedAt, null);
+  // The quarter-hourly pass leaves it alone too.
+  assert.equal((await social.syncShare(shareRow(), deps)).status, "waiting");
+  assert.equal(deps.calls.length, 0);
+  db.prepare("DELETE FROM playlist_shares").run();
+});
+
+test("a shared playlist is written into the recipient's own account", async () => {
+  const deps = fakeDeps();
+  const result = await shareAndAdd(deps);
+  assert.equal(result.status, "written");
+  assert.equal(result.songs, 2);
+  assert.equal(result.missing, 1);
 
   // His copy holds only the song he can reach, and says who it came from.
   const [created] = deps.calls;
@@ -151,7 +185,7 @@ test("an unchanged playlist is not written again", async () => {
   // otherwise the copy an earlier test made looks like one deleted since.
   db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
-  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  await shareAndAdd(deps);
   const before = deps.calls.length;
   const share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
   const again = await social.syncShare(share, deps);
@@ -175,7 +209,7 @@ test("only the owner can share a playlist, and only with people who exist", asyn
 test("stopping a share leaves their copy unless asked to remove it", async () => {
   db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
-  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  await shareAndAdd(deps);
   const share = db.prepare("SELECT * FROM playlist_shares WHERE recipient = 'dunshill'").get();
   const result = await social.removeShare({ id: share.id, requester: "avery", deleteCopy: true, deps });
   assert.equal(result.removed, true);
@@ -184,10 +218,22 @@ test("stopping a share leaves their copy unless asked to remove it", async () =>
   assert.ok(deps.calls.some((call) => call.verb === "delete"));
 });
 
-test("a copy the recipient throws away is not put back", async () => {
+test("turning a share down changes nothing the sharer can see", async () => {
   db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
   await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  const before = social.listSharesByOwner("avery");
+  await social.removeShare({ id: shareRow().id, requester: "dunshill", deps });
+
+  assert.deepEqual(social.listSharesForRecipient("dunshill"), [], "gone from his page");
+  assert.deepEqual(social.listSharesByOwner("avery"), before, "and hers reads exactly as it did");
+  assert.deepEqual(Object.keys(before[0]).sort(), ["id", "name", "recipient", "sourcePlaylistId"]);
+});
+
+test("a copy the recipient throws away is not put back", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
+  const deps = fakeDeps();
+  await shareAndAdd(deps);
   const mirrorId = [...deps.playlists.keys()][0];
 
   // He deletes it in his own client, as anyone may with a playlist of theirs.
@@ -202,8 +248,11 @@ test("a copy the recipient throws away is not put back", async () => {
   assert.equal(deps.playlists.size, 0);
   assert.deepEqual(social.listSharesForRecipient("dunshill"), [], "and off his page");
 
-  // Sharing it again is asking again, so he gets a fresh copy.
+  // Sharing it again is asking again: nothing until he says yes, then a fresh copy.
   await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  assert.equal(deps.playlists.size, 0);
+  assert.equal(social.listSharesForRecipient("dunshill")[0].acceptedAt, null);
+  await social.acceptShare({ id: shareRow().id, requester: "dunshill", deps });
   assert.equal(deps.playlists.size, 1);
   assert.equal(social.listSharesForRecipient("dunshill").length, 1);
 });
@@ -211,7 +260,7 @@ test("a copy the recipient throws away is not put back", async () => {
 test("renaming your playlist renames their copy", async () => {
   db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
-  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  await shareAndAdd(deps);
 
   deps.source.name = "Long drive";
   deps.source.updatedAt = "2026-09-18T00:00:00Z";
@@ -226,7 +275,7 @@ test("renaming your playlist renames their copy", async () => {
 test("a playlist nobody has touched is not worked out again", async () => {
   db.prepare("DELETE FROM playlist_shares").run();
   const deps = fakeDeps();
-  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  await shareAndAdd(deps);
 
   // One song was missing from his library, so it is still looked at each pass:
   // what he was missing may have arrived.
@@ -243,6 +292,88 @@ test("a playlist nobody has touched is not worked out again", async () => {
   lookups.length = 0;
   assert.equal((await social.syncShare(share, watched)).status, "unchanged");
   assert.equal(lookups.length, 0, "no per-song lookups at all");
+});
+
+test("adding a shared playlist asks for the albums its songs need, not whole artists", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
+  const deps = { ...fakeDeps(), canAddAlbums: () => true };
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  const { id } = shareRow();
+
+  // Only the person it is for can look, or say yes.
+  await assert.rejects(() => social.previewShare({ id, requester: "avery", deps }), /not for you/);
+  await assert.rejects(() => social.acceptShare({ id, requester: "kitty", deps }), /not for you/);
+
+  // He can play two of the three songs; the third is in Avery's library
+  // only, and its album folder is what would be added.
+  const plan = await social.previewShare({ id, requester: "dunshill", deps });
+  assert.equal(plan.songs, 3);
+  assert.equal(plan.have, 2);
+  assert.equal(plan.missing, 1);
+  assert.deepEqual(plan.albums, [{ folder: "Neko Case/Blacklisted", artist: "Neko Case", album: "Blacklisted", songs: 1 }]);
+  assert.equal(plan.artists, 1);
+  assert.equal(plan.unavailable, 0);
+  assert.deepEqual(deps.albumsAdded, [], "looking adds nothing");
+  assert.equal(deps.calls.length, 0);
+
+  // Saying yes records the album for him, writes his copy with what he can
+  // play now, and writes it again once the library has caught up.
+  let ready = false;
+  deps.libraryReady = async () => {
+    ready = true;
+    // The scan has put the album in his library.
+    deps.copies[REL.averyOnly].push({ id: "song-outside-his", path: REL.averyOnly, libraryId: 5 });
+  };
+  const result = await social.acceptShare({ id, requester: "dunshill", deps });
+  assert.equal(result.albumsAdded, 1);
+  assert.deepEqual(deps.albumsAdded, [{
+    username: "dunshill", folders: ["Neko Case/Blacklisted"], addedFor: "Road trip (from avery)",
+  }]);
+  assert.equal(result.missing, 1, "first written with what he can play already");
+  await result.ready;
+  assert.equal(ready, true);
+  const mirror = [...deps.playlists.values()][0];
+  assert.deepEqual(mirror.songIds, ["song-shared-his", "song-outside-his", "song-unindexed-main"]);
+  assert.equal(shareRow().missing_count, 0);
+});
+
+test("without a personal library to add to, the missing songs are only counted", async () => {
+  db.prepare("DELETE FROM playlist_shares").run();
+  const deps = fakeDeps();
+  await social.sharePlaylist({ owner: "avery", playlistId: "pl-1", recipients: ["dunshill"], deps });
+  const plan = await social.previewShare({ id: shareRow().id, requester: "dunshill", deps });
+  assert.deepEqual(plan.albums, []);
+  assert.equal(plan.unavailable, 1);
+  const result = await social.acceptShare({ id: shareRow().id, requester: "dunshill", deps });
+  assert.equal(result.albumsAdded, 0);
+  assert.equal(result.status, "written");
+  assert.deepEqual(deps.albumsAdded, []);
+});
+
+test("after their own library, a copy comes from the main library, not someone else's", async () => {
+  // An admin can reach every library, Dad's included. Avery's copy of his
+  // playlist must not point into it when the main library has the song.
+  social.resetSocialCaches();
+  const deps = fakeDeps();
+  const copies = [
+    { id: "in-dads", path: REL.his, libraryId: 5 },
+    { id: "in-main", path: REL.his, libraryId: 1 },
+  ];
+  const resolved = await social.resolveCopiesForUser({
+    username: "avery",
+    paths: [REL.his],
+    deps: {
+      ...deps,
+      personalLibraryId: async () => 4,
+      canonicalLibraryId: async () => 1,
+      songsByPath: async () => copies,
+      adminClient: () => ({
+        getUsers: async () => [{ id: "nd-avery", userName: "avery" }],
+        getUserLibraries: async () => [{ id: 1 }, { id: 4 }, { id: 5 }],
+      }),
+    },
+  });
+  assert.equal(resolved.get(REL.his), "in-main");
 });
 
 test("a recommendation reaches named people, or everyone", () => {

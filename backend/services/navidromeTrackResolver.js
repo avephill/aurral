@@ -134,7 +134,7 @@ export function getAdminNavidromeClient(settings = dbOps.getSettings()) {
   return state.adminClient;
 }
 
-async function getCanonicalLibraryId(client) {
+export async function getCanonicalLibraryId(client = getAdminNavidromeClient()) {
   if (state.canonicalLibraryId !== null) return state.canonicalLibraryId;
   if (!state.canonicalLibraryPromise) {
     state.canonicalLibraryPromise = (async () => {

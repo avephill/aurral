@@ -75,7 +75,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
     staleTime: 60_000,
     refetchInterval: 5 * 60_000,
   });
-  const hasSocialAlert = (social.data?.recommendations?.unread || 0) > 0;
+  const hasSocialAlert = (social.data?.recommendations?.unread || 0) > 0
+    || (social.data?.shares?.received || []).some((share) => !share.acceptedAt);
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true,
   );
