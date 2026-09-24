@@ -171,3 +171,8 @@ export const completeWalkthrough = () => patchData("/users/me/walkthrough", { co
 // Admins only: let someone have the tour again, after setting their account up.
 export const resetWalkthroughFor = (userId) =>
   postData(`/users/${encodeURIComponent(userId)}/walkthrough/reset`, {});
+
+// How many albums a person may ask for in a day. Null follows the default;
+// -1 is no limit. Admin only, like the quality above.
+export const setUserAlbumRequestLimit = (id, albumRequestLimit) =>
+  patchData(`/users/${encodeURIComponent(id)}/request-limit`, { albumRequestLimit });

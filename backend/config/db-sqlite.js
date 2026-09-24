@@ -970,6 +970,11 @@ if (!userColumns.includes("discover_layout")) {
 if (!userColumns.includes("listen_history_url")) {
   tryAddColumn("ALTER TABLE users ADD COLUMN listen_history_url TEXT");
 }
+// How many albums a person may ask for in a day. Null is the default, set in
+// albumRequestService; -1 is no limit.
+if (!userColumns.includes("album_request_limit")) {
+  tryAddColumn("ALTER TABLE users ADD COLUMN album_request_limit INTEGER");
+}
 
 db.exec(`
   UPDATE users
@@ -1018,6 +1023,25 @@ db.exec(`
      AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'theme:itunesForEveryone:v1');
 
   INSERT OR IGNORE INTO settings (key, value) VALUES ('theme:itunesForEveryone:v1', 'true');
+`);
+
+// "Add artist" put everything an artist ever released into Lidarr, which is
+// not what anyone asking for a record means; asking for a release now brings
+// in just its artist to hang it on. So the whole-artist add is taken from
+// everyone but admins, once. An admin can hand it back in Settings -> Users,
+// and that stays.
+db.exec(`
+  UPDATE users
+     SET permissions = json_set(
+           CASE WHEN json_valid(permissions) THEN permissions
+                -- Never set means the defaults, spelled out so the others
+                -- are not read as off.
+                ELSE '{"accessFlow":false,"addAlbum":true,"changeMonitoring":false,"deleteArtist":false,"deleteAlbum":false,"deleteTrack":false}' END,
+           '$.addArtist', json('false'))
+   WHERE role != 'admin'
+     AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'permissions:noWholeArtists:v1');
+
+  INSERT OR IGNORE INTO settings (key, value) VALUES ('permissions:noWholeArtists:v1', 'true');
 `);
 
 export const dbHelpers = {

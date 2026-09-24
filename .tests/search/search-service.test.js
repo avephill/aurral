@@ -287,7 +287,7 @@ test("requestAlbumFromSearch preserves an addAlbum conflict status", async () =>
   }
 });
 
-test("requestAlbumFromSearch rejects when artist must be created without addArtist permission", async () => {
+test("requestAlbumFromSearch refuses someone who may not ask for albums", async () => {
   const originalIsConfigured = lidarrClient.isConfigured;
   const originalGetArtist = libraryManager.getArtist;
 
@@ -304,18 +304,56 @@ test("requestAlbumFromSearch rejects when artist must be created without addArti
           artistName: "Various Artists",
           user: {
             role: "user",
-            permissions: { addAlbum: true, addArtist: false },
+            permissions: { addAlbum: false, addArtist: false },
           },
         }),
       (error) => {
         assert.equal(error.statusCode, 403);
-        assert.match(error.message, /Permission required: addArtist/);
+        assert.match(error.message, /Permission required: addAlbum/);
         return true;
       },
     );
   } finally {
     lidarrClient.isConfigured = originalIsConfigured;
     libraryManager.getArtist = originalGetArtist;
+  }
+});
+
+test("requestAlbumFromSearch brings in a new artist for one release without addArtist", async () => {
+  // Asking for a release by an artist Lidarr lacks adds that artist only to
+  // hang the release on, so it is part of asking for an album.
+  const originalIsConfigured = lidarrClient.isConfigured;
+  const originalGetArtist = libraryManager.getArtist;
+  const originalResolve = libraryManager.resolveArtistAddOptions;
+
+  lidarrClient.isConfigured = () => true;
+  libraryManager.getArtist = async () => null;
+  let reached = false;
+  libraryManager.resolveArtistAddOptions = async () => {
+    reached = true;
+    return { error: "stopped here" };
+  };
+
+  try {
+    await assert.rejects(
+      () =>
+        libraryManager.requestAlbumFromSearch({
+          albumMbid: "album-mbid",
+          albumName: "Chrono Trigger",
+          artistMbid: "artist-mbid",
+          artistName: "Various Artists",
+          user: {
+            role: "user",
+            permissions: { addAlbum: true, addArtist: false },
+          },
+        }),
+      /stopped here/,
+    );
+    assert.equal(reached, true, "past the permission check");
+  } finally {
+    lidarrClient.isConfigured = originalIsConfigured;
+    libraryManager.getArtist = originalGetArtist;
+    libraryManager.resolveArtistAddOptions = originalResolve;
   }
 });
 

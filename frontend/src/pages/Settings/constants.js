@@ -13,7 +13,7 @@ export const allReleaseTypes = [
 
 export const GRANULAR_PERMISSIONS = {
   accessFlow: false,
-  addArtist: true,
+  addArtist: false,
   addAlbum: true,
   changeMonitoring: false,
   deleteArtist: false,
@@ -23,8 +23,8 @@ export const GRANULAR_PERMISSIONS = {
 
 export const granularPerms = [
   { key: "accessFlow", label: "Access playlists and downloads" },
-  { key: "addArtist", label: "Add artist" },
-  { key: "addAlbum", label: "Add album" },
+  { key: "addArtist", label: "Add whole artists (everything they release)" },
+  { key: "addAlbum", label: "Ask for albums" },
   { key: "changeMonitoring", label: "Change artist monitoring" },
   { key: "deleteArtist", label: "Delete artists" },
   { key: "deleteAlbum", label: "Delete albums" },

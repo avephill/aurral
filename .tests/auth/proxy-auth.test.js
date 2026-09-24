@@ -67,7 +67,9 @@ test("proxy auth creates a persistent user for a new proxied identity", () => {
   assert.notEqual(resolved.id, -1);
   assert.equal(resolved.username, "alice@example.com");
   assert.equal(resolved.role, "user");
-  assert.equal(resolved.permissions.addArtist, true);
+  // Adding a whole artist is an admin's call now; asking for a release is not.
+  assert.equal(resolved.permissions.addArtist, false);
+  assert.equal(resolved.permissions.addAlbum, true);
   assert.equal(resolved.permissions.accessFlow, false);
   assert.equal(resolved.permissions.accessSettings, false);
 
