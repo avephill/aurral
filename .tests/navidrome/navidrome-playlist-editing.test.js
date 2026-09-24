@@ -261,3 +261,13 @@ test("adding songs chosen from an album leaves out the ones already in the playl
   );
   assert.deepEqual(routes.withoutSongsAlreadyIn(null, ["song-a"]), ["song-a"], "an unreadable playlist holds nothing");
 });
+
+test("a song dragged from another playlist falls back on its own id only when it cannot be found afresh", () => {
+  const found = { payload: { trackName: "Found" }, songId: "own-copy", libraryId: 4 };
+  const result = routes.withSongIdFallback({
+    resolved: [found],
+    unresolved: [{ trackName: "Unindexed", songId: "dragged-id" }, { trackName: "Nothing to go on", songId: null }],
+  });
+  assert.deepEqual(result.resolved.map((entry) => entry.songId), ["own-copy", "dragged-id"]);
+  assert.deepEqual(result.unresolved.map((entry) => entry.trackName), ["Nothing to go on"]);
+});

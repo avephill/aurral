@@ -31,6 +31,7 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { queryClient, queryKeys } from "../queryClient.js";
 import { buildAuthenticatedApiUrl } from "../utils/api/core.js";
 import {
+  addNavidromePlaylistTracks,
   createNavidromePlaylist,
   deleteNavidromePlaylist,
   getNavidromePlaylist,
@@ -131,6 +132,11 @@ export default function NavidromePlaylistsPage() {
   const [collapsed, setCollapsed] = useState(() => new Set());
   const [dragIndex, setDragIndex] = useState(null);
   const [dropIndex, setDropIndex] = useState(null);
+  // A song being dragged, which can be dropped on one of your playlists on the
+  // left to add it there, and the playlist it is over. Kept in a ref as well
+  // because a drag's own data cannot be read until the drop.
+  const draggedSong = useRef(null);
+  const [dropPlaylistId, setDropPlaylistId] = useState(null);
   const lastClickedIndex = useRef(null);
 
   const status = useQuery({
@@ -549,15 +555,69 @@ export default function NavidromePlaylistsPage() {
       ? status.data?.error || "Navidrome is not reachable as your user."
       : "";
 
+  // Somewhere a dragged song can go: a playlist of yours that is kept by
+  // hand, other than the one it is being dragged out of.
+  const acceptsDrop = (playlist) =>
+    playlist.owned && !playlist.smart && String(playlist.id) !== selectedId;
+
+  const addDraggedSong = async (track, playlist) => {
+    const title = track.title || "the song";
+    try {
+      // A song Psalter knows is found afresh, which gets your own library's
+      // copy of it. One it does not know goes by the id it already has here:
+      // looking it up by name could land on another recording of it.
+      const song = track.trackId
+        ? {
+            trackId: track.trackId,
+            albumId: track.albumId,
+            trackName: track.title,
+            artistName: track.artistName,
+            albumName: track.albumTitle,
+            trackMbid: track.trackMbid,
+            songId: track.navidromeId,
+          }
+        : { songId: track.navidromeId };
+      const result = await addNavidromePlaylistTracks(playlist.id, { tracks: [song], skipExisting: true });
+      showSuccess(Number(result?.added) > 0
+        ? `Added "${title}" to ${playlist.name}`
+        : `"${title}" is already in ${playlist.name}`);
+      await invalidateNavidromePlaylists();
+    } catch (requestError) {
+      showError(requestError?.response?.data?.message
+        || requestError?.response?.data?.error
+        || requestError?.message
+        || `Could not add "${title}" to ${playlist.name}`);
+    }
+  };
+
   const renderPlaylistButton = (playlist) => {
     const active = String(playlist.id) === selectedId;
+    const droppable = acceptsDrop(playlist);
     return (
       <button
         key={playlist.id}
         type="button"
-        className={`nd-playlists__item${active ? " is-active" : ""}`}
+        className={`nd-playlists__item${active ? " is-active" : ""}${dropPlaylistId === playlist.id ? " is-drop-over" : ""}`}
         aria-current={active ? "true" : undefined}
         onClick={() => select(playlist.id)}
+        onDragOver={droppable ? (event) => {
+          if (!draggedSong.current) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+          if (dropPlaylistId !== playlist.id) setDropPlaylistId(playlist.id);
+        } : undefined}
+        onDragLeave={droppable ? (event) => {
+          // Moving over the name or icon inside is not leaving.
+          if (event.currentTarget.contains(event.relatedTarget)) return;
+          setDropPlaylistId((current) => (current === playlist.id ? null : current));
+        } : undefined}
+        onDrop={droppable ? (event) => {
+          event.preventDefault();
+          const track = draggedSong.current;
+          draggedSong.current = null;
+          setDropPlaylistId(null);
+          if (track) addDraggedSong(track, playlist);
+        } : undefined}
       >
         {playlist.smart ? (
           <Sparkles className="artist-icon-sm nd-playlists__item-icon" aria-hidden="true" />
@@ -935,8 +995,16 @@ export default function NavidromePlaylistsPage() {
                           <li
                             key={`${track.index}-${track.navidromeId || track.trackId}`}
                             className={`nd-playlists__track${isCurrent ? " is-current" : ""}${track.available ? "" : " is-unavailable"}${isSelected ? " is-selected" : ""}${isDropTarget ? " is-drop-target" : ""}${dragIndex === track.index ? " is-dragging" : ""}`}
-                            draggable={canReorder}
-                            onDragStart={canReorder ? () => setDragIndex(track.index) : undefined}
+                            // Any song can be dragged onto a playlist on the
+                            // left; in your own list it also reorders.
+                            draggable={canReorder || Boolean(track.navidromeId || track.trackId)}
+                            onDragStart={(event) => {
+                              draggedSong.current = track;
+                              event.dataTransfer.effectAllowed = canReorder ? "copyMove" : "copy";
+                              // Some browsers start no drag without data.
+                              event.dataTransfer.setData("text/plain", track.title || "");
+                              if (canReorder) setDragIndex(track.index);
+                            }}
                             onDragOver={canReorder ? (event) => {
                               event.preventDefault();
                               setDropIndex(track.index);
@@ -947,10 +1015,12 @@ export default function NavidromePlaylistsPage() {
                               setDragIndex(null);
                               setDropIndex(null);
                             } : undefined}
-                            onDragEnd={canReorder ? () => {
+                            onDragEnd={() => {
+                              draggedSong.current = null;
+                              setDropPlaylistId(null);
                               setDragIndex(null);
                               setDropIndex(null);
-                            } : undefined}
+                            }}
                             onKeyDown={canReorder ? (event) => {
                               // Alt with an arrow moves the row, for anyone not
                               // dragging with a mouse.

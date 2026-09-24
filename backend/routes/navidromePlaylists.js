@@ -169,8 +169,21 @@ function normalizeTrackPayloads(body) {
       artistName: String(track?.artistName || "").trim(),
       albumName: String(track?.albumName || "").trim(),
       trackMbid: String(track?.trackMbid || "").trim() || null,
+      // A Navidrome song id the caller already holds - a song dragged out of
+      // another playlist. Used only when the song cannot be found afresh,
+      // since finding it afresh gets this person's own library's copy.
+      songId: String(track?.songId || "").trim() || null,
     }))
-    .filter((track) => track.trackId || track.trackName);
+    .filter((track) => track.trackId || track.trackName || track.songId);
+}
+
+/** Songs that could not be found afresh, but came with an id to fall back on. */
+export function withSongIdFallback({ resolved, unresolved }) {
+  const fallback = unresolved.filter((payload) => payload.songId);
+  return {
+    resolved: [...resolved, ...fallback.map((payload) => ({ payload, songId: payload.songId, libraryId: null }))],
+    unresolved: unresolved.filter((payload) => !payload.songId),
+  };
 }
 
 router.get("/status", noCache, async (req, res) => {
@@ -395,7 +408,9 @@ router.post("/:id/tracks", noCache, async (req, res) => {
   if (!payloads.length) return res.status(400).json({ error: "tracks are required" });
   try {
     const preferLibraryId = await getPersonalLibraryIdForUser(req.user.username);
-    const { resolved, unresolved } = await resolveNavidromeSongIds(payloads, { preferLibraryId });
+    const { resolved, unresolved } = withSongIdFallback(
+      await resolveNavidromeSongIds(payloads, { preferLibraryId }),
+    );
     if (!resolved.length) {
       return res.status(404).json({
         error: "Track not found in Navidrome",
