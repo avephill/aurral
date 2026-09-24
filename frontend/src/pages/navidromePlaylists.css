@@ -108,6 +108,12 @@
   transition: background-color 0.15s ease;
 }
 
+/* A song dragged over a playlist it can be dropped into. */
+.nd-playlists__item.is-drop-over {
+  background: var(--aurral-surface-hover);
+  box-shadow: inset 0 0 0 2px var(--aurral-accent);
+}
+
 .nd-playlists__item:hover {
   background: var(--aurral-surface-hover);
 }

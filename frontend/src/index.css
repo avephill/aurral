@@ -13546,6 +13546,46 @@ button.native-library-genre-row:focus-visible {
   gap: 0.25rem;
 }
 
+.my-library-page__albums {
+  display: grid;
+  gap: 0.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--aurral-border);
+}
+
+.my-library-page__albums h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.my-library-page__albums summary {
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.my-library-page__albums ul {
+  display: grid;
+  max-height: 20rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.my-library-page__album {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+}
+
+.my-library-page__album .btn {
+  flex-shrink: 0;
+}
+
 .my-library-page__header .page-title {
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -13724,6 +13764,55 @@ button.native-library-genre-row:focus-visible {
   display: flex;
   justify-content: center;
   padding: 1rem 0;
+}
+
+/* Choosing songs on an album to add to a playlist. Pinned to the bottom of
+   the window, so the count and the add button stay in reach on a long album. */
+.native-library-picking {
+  position: sticky;
+  bottom: 1rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--aurral-border-strong);
+  border-radius: var(--aurral-radius);
+  background: var(--aurral-surface-popover);
+  box-shadow: var(--aurral-shadow-popover);
+}
+
+.native-library-picking__count {
+  color: var(--aurral-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.native-library-picking__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.native-library-track__pick {
+  justify-self: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--aurral-control-on);
+  cursor: pointer;
+}
+
+.native-library-track__pick:disabled {
+  cursor: not-allowed;
+}
+
+.native-library-track.is-picked {
+  background: color-mix(in srgb, var(--aurral-control-on) 8%, transparent);
 }
 
 .my-library-page__actions {

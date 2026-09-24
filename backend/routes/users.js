@@ -487,6 +487,25 @@ router.patch("/:id/quality-profile", requireAuth, requireAdmin, async (req, res)
   }
 });
 
+// How many albums a person may ask for in a day. An admin's call, like the
+// quality above: each request sends the downloaders out and costs disk.
+router.patch("/:id/request-limit", requireAuth, requireAdmin, (req, res) => {
+  try {
+    const user = userOps.getUserById(Number(req.params.id));
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const raw = req.body?.albumRequestLimit;
+    // Null follows the default; -1 is no limit; otherwise a count, 0 for none.
+    const wanted = raw === null || raw === "" || raw === undefined ? null : Number(raw);
+    if (wanted !== null && !(Number.isSafeInteger(wanted) && wanted >= -1 && wanted <= 1000)) {
+      return res.status(400).json({ error: "albumRequestLimit must be a whole number, -1, or null", field: "albumRequestLimit" });
+    }
+    userOps.setAlbumRequestLimit(user.id, wanted);
+    return res.json({ username: user.username, albumRequestLimit: wanted });
+  } catch (e) {
+    return res.status(500).json({ error: "Failed to save", message: e.message });
+  }
+});
+
 router.get("/me/theme", requireAuth, (req, res) => {
   try {
     const user = userOps.getUserById(req.user.id);

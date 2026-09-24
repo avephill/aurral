@@ -357,10 +357,17 @@ export const TrackPlaylistMenu = forwardRef(function TrackPlaylistMenu(
     const rect = anchorEl?.getBoundingClientRect?.();
     if (!rect) return;
     const menuWidth = 256;
-    setMenuPosition({
-      top: rect.bottom + 8,
-      left: Math.max(12, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 12)),
-    });
+    // Roughly the menu at its tallest: "New playlist" and a full scroll of them.
+    const menuHeight = 340;
+    const left = Math.max(12, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 12));
+    // Near the bottom of the window - a bar pinned there, say - it opens
+    // upwards rather than off the screen.
+    const roomBelow = window.innerHeight - rect.bottom;
+    setMenuPosition(
+      roomBelow < menuHeight && rect.top > roomBelow
+        ? { bottom: window.innerHeight - rect.top + 8, left }
+        : { top: rect.bottom + 8, left },
+    );
   };
 
   const openMenu = async (anchorEl) => {
@@ -448,6 +455,7 @@ export const TrackPlaylistMenu = forwardRef(function TrackPlaylistMenu(
           className={menuClassName}
           style={{
             top: menuPosition.top,
+            bottom: menuPosition.bottom,
             left: menuPosition.left,
           }}
           onClick={(event) => event.stopPropagation()}

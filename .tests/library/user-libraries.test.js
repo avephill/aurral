@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  albumFolderOf,
   materializeUserLibrary,
   normalizeUserLibrariesSettings,
   planNavidromeLibraries,
@@ -286,4 +287,92 @@ test("materializeUserLibrary clears symlinks whose target has gone away", async 
   assert.equal(changes, 1);
   assert.equal(fs.existsSync(link), false);
   await assert.rejects(() => fsp.lstat(link), { code: "ENOENT" });
+});
+
+// Single albums: a personal library can hold one album without the rest of
+// its artist, which is what taking a shared playlist puts there.
+
+async function makeAlbumFixture() {
+  const fixture = await makeFixture();
+  for (const album of ["Various Artists/A Very Special Christmas", "Various Artists/Now 90s", "Radiohead/Kid A"]) {
+    await fsp.mkdir(path.join(fixture.mainDir, album), { recursive: true });
+  }
+  const album = (folder) => ({ folder, target: path.join(fixture.mainDir, folder) });
+  return { ...fixture, album };
+}
+
+test("albumFolderOf takes the artist and album folders, disc folders included", () => {
+  assert.equal(albumFolderOf("Various Artists/A Very Special Christmas/CD1/01.flac"), "Various Artists/A Very Special Christmas");
+  assert.equal(albumFolderOf("Radiohead/Kid A/01.flac"), "Radiohead/Kid A");
+  // Loose in an artist folder: the song is the unit, not the whole artist.
+  assert.equal(albumFolderOf("Radiohead/single.flac"), "Radiohead/single.flac");
+  assert.equal(albumFolderOf("loose.flac"), null);
+  assert.equal(albumFolderOf("../etc/passwd"), null);
+});
+
+test("materializeUserLibrary links single albums without the rest of the artist", async (t) => {
+  const { root, userDir, mainDir, album } = await makeAlbumFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const changes = await materializeUserLibrary(userDir, [], [], [album("Various Artists/A Very Special Christmas")]);
+
+  assert.equal(changes, 1);
+  const holder = path.join(userDir, "Various Artists");
+  assert.ok(!(await fsp.lstat(holder)).isSymbolicLink(), "the artist is a real folder, not the whole artist");
+  const link = path.join(holder, "A Very Special Christmas");
+  const target = await fsp.readlink(link);
+  assert.ok(!path.isAbsolute(target), "relative, so it resolves in Navidrome's container too");
+  assert.equal(path.resolve(holder, target), path.join(mainDir, "Various Artists/A Very Special Christmas"));
+  assert.equal(fs.existsSync(path.join(holder, "Now 90s")), false);
+});
+
+test("materializeUserLibrary removes albums no longer wanted, and their folder once empty", async (t) => {
+  const { root, userDir, album } = await makeAlbumFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const both = [album("Various Artists/A Very Special Christmas"), album("Various Artists/Now 90s")];
+  await materializeUserLibrary(userDir, [], [], both);
+
+  await materializeUserLibrary(userDir, [], [], [both[0]]);
+  assert.ok(fs.existsSync(path.join(userDir, "Various Artists/A Very Special Christmas")));
+  assert.equal(fs.existsSync(path.join(userDir, "Various Artists/Now 90s")), false);
+
+  await materializeUserLibrary(userDir, [], [], []);
+  assert.equal(fs.existsSync(path.join(userDir, "Various Artists")), false);
+});
+
+test("an artist added whole replaces their single albums", async (t) => {
+  const { root, userDir, mainDir, album } = await makeAlbumFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  await materializeUserLibrary(userDir, [], [], [album("Radiohead/Kid A")]);
+
+  await materializeUserLibrary(userDir, [{ path: path.join(mainDir, "Radiohead") }], [], [album("Radiohead/Kid A")]);
+  const entry = await fsp.lstat(path.join(userDir, "Radiohead"));
+  assert.ok(entry.isSymbolicLink(), "now the whole artist");
+  assert.ok(fs.existsSync(path.join(userDir, "Radiohead/Kid A")));
+
+  // And taken out again, the album they asked for singly comes back.
+  await materializeUserLibrary(userDir, [], [], [album("Radiohead/Kid A")]);
+  assert.ok(!(await fsp.lstat(path.join(userDir, "Radiohead"))).isSymbolicLink());
+  assert.ok(fs.existsSync(path.join(userDir, "Radiohead/Kid A")));
+});
+
+test("materializeUserLibrary leaves a folder it did not make alone", async (t) => {
+  const { root, userDir, album } = await makeAlbumFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const theirs = path.join(userDir, "Various Artists");
+  await fsp.mkdir(theirs, { recursive: true });
+  await fsp.writeFile(path.join(theirs, "notes.txt"), "mine");
+
+  await materializeUserLibrary(userDir, [], [], [album("Various Artists/Now 90s")]);
+  assert.equal(fs.existsSync(path.join(theirs, "Now 90s")), false, "nothing linked into it");
+  await materializeUserLibrary(userDir, [], [], []);
+  assert.ok(fs.existsSync(path.join(theirs, "notes.txt")), "and nothing taken out of it");
+});
+
+test("materializeUserLibrary leaves single albums as they are when they could not be worked out", async (t) => {
+  const { root, userDir, album } = await makeAlbumFixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  await materializeUserLibrary(userDir, [], [], [album("Various Artists/Now 90s")]);
+  await materializeUserLibrary(userDir, [], [], null);
+  assert.ok(fs.existsSync(path.join(userDir, "Various Artists/Now 90s")));
 });

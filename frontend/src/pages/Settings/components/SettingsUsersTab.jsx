@@ -7,6 +7,7 @@ import { SettingsInput } from "./SettingsField";
 import { SettingsArrFieldSet, SettingsArrFormGroup } from "./arr/SettingsArrLayout";
 import { SettingsCongregations } from "./SettingsCongregations";
 import { UserQualityProfile } from "./UserQualityProfile";
+import { UserRequestLimit } from "./UserRequestLimit";
 
 import { createPortal } from "react-dom";
 import { Compass, Lock, Trash2, UserPlus, X } from "lucide-react";
@@ -447,6 +448,7 @@ export function SettingsUsersTab({
                     <th scope="col">Username</th>
                     <th scope="col">Role</th>
                     <th scope="col">Quality</th>
+                    <th scope="col">Albums a day</th>
                     <th scope="col">Plex</th>
                     <th scope="col" className="arr-table__actions-head">
                       <span className="sr-only">Actions</span>
@@ -456,13 +458,13 @@ export function SettingsUsersTab({
                 <tbody>
                   {loadingUsers ? (
                     <tr className="arr-table__empty-row">
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <DotLoader size="sm" label={null} /> Loading users…
                       </td>
                     </tr>
                   ) : usersList.length === 0 ? (
                     <tr className="arr-table__empty-row">
-                      <td colSpan={5}>No users configured.</td>
+                      <td colSpan={6}>No users configured.</td>
                     </tr>
                   ) : (
                     usersList.map((user) => (
@@ -479,6 +481,9 @@ export function SettingsUsersTab({
                         </td>
                         <td>
                           <UserQualityProfile user={user} onSaved={refreshUsers} />
+                        </td>
+                        <td>
+                          <UserRequestLimit user={user} onSaved={refreshUsers} />
                         </td>
                         <td>
                           <span className="arr-table__path">{formatPlexLink(user)}</span>
