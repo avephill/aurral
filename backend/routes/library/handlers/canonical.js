@@ -182,6 +182,25 @@ export function registerCanonical(router) {
             .map(([trackId]) => trackId);
         }
       }
+      // Tags are the person's own: songs with all of the chosen tags, or any.
+      // With a rating filter too, a song has to pass both.
+      const tagList = kind === "tracks" && typeof req.query.tags === "string"
+        ? req.query.tags.split(",").map((tag) => tag.trim()).filter(Boolean)
+        : [];
+      if (tagList.length && req.user) {
+        const { tracksWithTags } = await import("../../../services/trackTagService.js");
+        const tagged = tracksWithTags({
+          owner: req.user.username,
+          tags: tagList,
+          match: req.query.tagMatch === "any" ? "any" : "all",
+        });
+        if (trackIds) {
+          const allowed = new Set(tagged.map(Number));
+          trackIds = trackIds.filter((id) => allowed.has(Number(id)));
+        } else {
+          trackIds = tagged;
+        }
+      }
       if (kind === "tracks" && req.query.favorites === "true") {
         trackIdentityKeys = [...(favoriteKeys || [])]
           .filter((key) => key.startsWith("song:"))

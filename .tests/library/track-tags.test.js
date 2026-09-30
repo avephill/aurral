@@ -133,7 +133,7 @@ test("the app offers tagging where the songs are", async () => {
   const routed = read("../../backend/routes/tags.js");
 
   assert.match(library, /label: "Tags\.\.\."/, "on the song's own menu");
-  assert.match(library, /<TagsModal subject=\{tagging\}/);
+  assert.match(library, /<TagsModal\s+subject=\{tagging\}/);
   assert.match(library, /kind: "album"/, "and on a whole record's menu");
   assert.match(nav, /path: "\/library\/tags"/, "and a page of its own under Library");
   assert.match(routes, /path="\/library\/tags"/);
@@ -260,4 +260,48 @@ test("renaming a record's tag is one row, not one per song", () => {
     "the songs were left alone",
   );
   assert.ok(tags.tracksWithTag({ owner: "dunshill", tag: "christmas" }).includes(trackIds.carol));
+});
+
+// Filtering the song list by several tags at once.
+
+test("songs can be found by all of some tags, or any of them", () => {
+  userOps.createUser("bspang", "hash");
+  const id = (name) => libraryStore.upsertLibraryTrack({
+    identityKey: `r:filter-${name}`, title: name, artistName: "Alvvays", metadata: {},
+  }).id;
+  const both = id("both");
+  const onlyChill = id("chill");
+  const onlyNight = id("night");
+  tags.setTrackTags({ owner: "bspang", trackId: both, tags: ["chill", "night"] });
+  tags.setTrackTags({ owner: "bspang", trackId: onlyChill, tags: ["chill"] });
+  tags.setTrackTags({ owner: "bspang", trackId: onlyNight, tags: ["Night"] });
+
+  const sorted = (ids) => ids.map(Number).sort((a, b) => a - b);
+  assert.deepEqual(sorted(tags.tracksWithTags({ owner: "bspang", tags: ["chill", "night"] })), [both], "all by default");
+  assert.deepEqual(
+    sorted(tags.tracksWithTags({ owner: "bspang", tags: ["chill", "NIGHT"], match: "any" })),
+    sorted([both, onlyChill, onlyNight]),
+    "any, however the tag is typed",
+  );
+  assert.deepEqual(tags.tracksWithTags({ owner: "bspang", tags: [] }), [], "no tags, no songs");
+  assert.deepEqual(tags.tracksWithTags({ owner: "dunshill", tags: ["chill"] }), [], "one person's tags only");
+
+  // Taking a tag off a song takes it out of the filter too.
+  tags.tagTracks({ owner: "bspang", trackIds: [both], tag: "night", remove: true });
+  assert.deepEqual(tags.tracksWithTags({ owner: "bspang", tags: ["chill", "night"] }), []);
+});
+
+test("the song list asks the server for the chosen tags", async () => {
+  const { readFileSync } = await import("node:fs");
+  const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  const canonical = read("../../backend/routes/library/handlers/canonical.js");
+  const client = read("../../frontend/src/utils/api/endpoints/library.js");
+  const page = read("../../frontend/src/pages/LibraryPage.jsx");
+  assert.match(canonical, /tracksWithTags\(\{\s*owner: req\.user\.username,/);
+  assert.match(canonical, /match: req\.query\.tagMatch === "any" \? "any" : "all"/);
+  // With a rating filter as well, a song has to pass both.
+  assert.match(canonical, /trackIds = trackIds\.filter\(\(id\) => allowed\.has\(Number\(id\)\)\)/);
+  assert.match(client, /tags: Array\.isArray\(options\.tags\) && options\.tags\.length \? options\.tags\.join\(","\)/);
+  assert.match(page, /<TagFilter\s+selected=\{selectedTags\}/);
+  assert.match(page, /\["genre", "rating", "favorites", "tags", "tagMatch"\]/, "and Clear clears them");
 });

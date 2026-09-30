@@ -87,6 +87,7 @@ import LibraryInfoModal from "./LibraryInfoModal";
 import { useUserLibrary } from "../hooks/useUserLibrary";
 import RecommendModal from "../components/RecommendModal";
 import TagsModal from "../components/TagsModal";
+import TagFilter from "../components/TagFilter";
 import {
   buildSharedPlaylistTrackPayload,
   reserveUniquePlaylistName,
@@ -696,6 +697,13 @@ function LibraryPage() {
   const selectedRating = section === "tracks" && ratingParam >= 1 && ratingParam <= 5 ? ratingParam : 0;
   const favoritesOnly = section === "tracks" && searchParams.get("favorites") === "1";
   const unratedOnly = section === "tracks" && searchParams.get("rating") === "unrated";
+  // Songs carrying the chosen tags - all of them, or any one.
+  const tagsParam = section === "tracks" ? searchParams.get("tags") || "" : "";
+  const selectedTags = useMemo(
+    () => tagsParam.split(",").map((tag) => tag.trim()).filter(Boolean),
+    [tagsParam],
+  );
+  const tagMatch = searchParams.get("tagMatch") === "any" ? "any" : "all";
   const forcePreview = import.meta.env.DEV && searchParams.get("preview") === "1";
   const previewQuery = forcePreview ? "?preview=1" : "";
   // An old /library/album-artists link lands on the artist list, so it should
@@ -715,8 +723,11 @@ function LibraryPage() {
     setViewMode(section === "tracks" || section === "genres" ? "list" : "grid");
     setTrackListSort(null);
     setSearchOpen(false);
-    setFiltersOpen(false);
+    // A link that arrives filtered by tag shows the filter, so the list is
+    // never narrowed by something out of sight.
+    setFiltersOpen(section === "tracks" && Boolean(searchParams.get("tags")));
     setPageIndex(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section]);
 
   const libraryQueryKey = useMemo(
@@ -731,6 +742,8 @@ function LibraryPage() {
       genre: selectedGenre,
       rating: unratedOnly ? "unrated" : selectedRating,
       favorites: favoritesOnly,
+      tags: tagsParam,
+      tagMatch,
       sort: sortMode,
       direction: sortDirection,
       scope: libraryScope,
@@ -745,6 +758,8 @@ function LibraryPage() {
       favoritesOnly,
       section,
       selectedGenre,
+      tagMatch,
+      tagsParam,
       selectedRating,
       sortDirection,
       sortMode,
@@ -816,6 +831,8 @@ function LibraryPage() {
                 minRating: selectedRating || undefined,
                 favorites: favoritesOnly,
                 unrated: unratedOnly,
+                tags: selectedTags,
+                tagMatch,
               }, { signal });
       const pageResults = section === "favorites"
         ? [nextData?.library || EMPTY_LIBRARY]
@@ -2009,10 +2026,20 @@ function LibraryPage() {
     setSearchParams(next);
   };
 
+  const updateTagFilter = (tags, match) => {
+    setPageIndex(1);
+    const next = new URLSearchParams(searchParams);
+    if (tags.length) next.set("tags", tags.join(","));
+    else next.delete("tags");
+    if (tags.length > 1 && match === "any") next.set("tagMatch", "any");
+    else next.delete("tagMatch");
+    setSearchParams(next);
+  };
+
   const clearFilters = () => {
     setPageIndex(1);
     const next = new URLSearchParams(searchParams);
-    ["genre", "rating", "favorites"].forEach((key) => next.delete(key));
+    ["genre", "rating", "favorites", "tags", "tagMatch"].forEach((key) => next.delete(key));
     setSearchParams(next);
   };
 
@@ -2813,14 +2840,29 @@ function LibraryPage() {
     </div>
   );
 
+  // Choosing songs on an album, every playable one ticked to start with, for
+  // a playlist or for tags.
+  const startPicking = (album, albumTracks, purpose) =>
+    setPicking({
+      albumId: album.id,
+      purpose,
+      ids: new Set(albumTracks.filter((track) => firstAvailableFile(track)).map((track) => String(track.id))),
+    });
+
   // Shown while choosing songs on an album: how many are ticked, a quick all
-  // or none, and where to put them.
+  // or none, and what to do with them.
   const renderPickingBar = (albumTracks) => {
     const available = albumTracks.filter((track) => firstAvailableFile(track));
     const chosen = available.filter((track) => pickingIds.has(String(track.id)));
     const saving = playlistSavingKey === PICKED_SONGS_KEY;
+    const forTags = picking?.purpose === "tags";
+    const songs = chosen.length === 1 ? "1 song" : `${chosen.length} songs`;
     return (
-      <div className="native-library-picking" role="region" aria-label="Songs to add to a playlist">
+      <div
+        className="native-library-picking"
+        role="region"
+        aria-label={forTags ? "Songs to tag" : "Songs to add to a playlist"}
+      >
         <span className="native-library-picking__count">
           {chosen.length} of {available.length} songs
         </span>
@@ -2846,6 +2888,23 @@ function LibraryPage() {
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPicking(null)} disabled={saving}>
             Cancel
           </button>
+          {forTags ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!chosen.length}
+              onClick={() =>
+                setTagging({
+                  kind: "tracks",
+                  ids: chosen.map((track) => track.id),
+                  title: `Tag ${songs}`,
+                  subtitle: libraryAlbum?.title || "",
+                })
+              }
+            >
+              <TagIcon aria-hidden="true" className="artist-icon-sm" /> Tag {songs}...
+            </button>
+          ) : (
           <TrackPlaylistMenu
             triggerLabel={chosen.length === 1 ? "Add 1 song to..." : `Add ${chosen.length} songs to...`}
             playlists={sharedPlaylists}
@@ -2859,6 +2918,7 @@ function LibraryPage() {
               if (await addLibraryTracksToPlaylist(chosen, target)) setPicking(null);
             }}
           />
+          )}
         </div>
       </div>
     );
@@ -2953,13 +3013,14 @@ function LibraryPage() {
                     id: "pick-songs",
                     label: "Add songs to a playlist...",
                     icon: ListPlus,
-                    onSelect: () =>
-                      setPicking({
-                        albumId: libraryAlbum.id,
-                        ids: new Set(
-                          albumTracks.filter((track) => firstAvailableFile(track)).map((track) => String(track.id)),
-                        ),
-                      }),
+                    onSelect: () => startPicking(libraryAlbum, albumTracks, "playlist"),
+                    disabled: !albumTracks.some((track) => firstAvailableFile(track)),
+                  },
+                  {
+                    id: "tag-songs",
+                    label: "Tag songs...",
+                    icon: TagIcon,
+                    onSelect: () => startPicking(libraryAlbum, albumTracks, "tags"),
                     disabled: !albumTracks.some((track) => firstAvailableFile(track)),
                   },
                   {
@@ -3254,7 +3315,14 @@ function LibraryPage() {
       />
       <LibraryInfoModal item={libraryInfo} onClose={() => setLibraryInfo(null)} />
       <RecommendModal target={recommending} onClose={() => setRecommending(null)} />
-      <TagsModal subject={tagging} onClose={() => setTagging(null)} />
+      <TagsModal
+        subject={tagging}
+        onClose={() => setTagging(null)}
+        // Tagging songs chosen on an album is the end of choosing them.
+        onSaved={() => {
+          if (tagging?.kind === "tracks") setPicking(null);
+        }}
+      />
     </>
   );
 
@@ -3351,7 +3419,9 @@ function LibraryPage() {
   // Home has nothing to search, sort or filter; its one control, Refresh, sits
   // in the title row instead, so home skips the toolbar row entirely.
   const showToolbar = !isHome;
-  const hasActiveFilters = Boolean(selectedGenre || selectedRating || favoritesOnly || unratedOnly);
+  const hasActiveFilters = Boolean(
+    selectedGenre || selectedRating || favoritesOnly || unratedOnly || selectedTags.length,
+  );
 
   return (
     <main className="library-page native-library-page">
@@ -3586,6 +3656,11 @@ function LibraryPage() {
                         <option value="favorites">Favorites only</option>
                       </select>
                     </label>
+                    <TagFilter
+                      selected={selectedTags}
+                      match={tagMatch}
+                      onChange={updateTagFilter}
+                    />
                   </>
                 )}
                 {hasActiveFilters && (
@@ -3608,14 +3683,14 @@ function LibraryPage() {
       {!loading && !error && activeCount === 0 && (
         <EmptyState
           title={
-            query || selectedGenre
+            query || selectedGenre || selectedTags.length
               ? "No matches"
               : section === "favorites"
                 ? "No favorites"
                 : "Your library is empty"
           }
           message={
-            query || selectedGenre
+            query || selectedGenre || selectedTags.length
               ? "Try a different search or clear the filter."
               : "Indexed music will appear here when the library is ready."
           }

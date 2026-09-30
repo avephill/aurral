@@ -353,6 +353,24 @@ export function tracksWithTag({ owner, tag }) {
 }
 
 /**
+ * The songs carrying several tags: all of them, or any one of them. A song's
+ * tags are what it has here, what its record has, and what iTunes brought,
+ * minus what has been taken off it - the same as a smart playlist sees.
+ */
+export function tracksWithTags({ owner, tags = [], match = "all" }) {
+  const wanted = [...new Set(tags.map(normalizeTag).filter(Boolean))];
+  if (!wanted.length) return [];
+  const ids = [];
+  for (const [trackId, entry] of tagIndex(owner)) {
+    const hit = match === "any"
+      ? wanted.some((tag) => entry.all.has(tag))
+      : wanted.every((tag) => entry.all.has(tag));
+    if (hit) ids.push(trackId);
+  }
+  return ids;
+}
+
+/**
  * The tags a rule should see for each song: what iTunes brought, plus what
  * they have put on it here, minus anything they have taken off.
  */
