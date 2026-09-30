@@ -1166,6 +1166,7 @@ export default function NavidromePlaylistsPage() {
         mode={smartMode === "edit" ? "edit" : "create"}
         initialName={smartMode === "edit" ? selected?.name || "" : ""}
         initialRules={smartMode === "edit" ? selected?.rules || null : null}
+        keeper={smartMode === "edit" ? selected?.keptBy || null : null}
         busy={busy === "smart"}
         onClose={() => setSmartMode("")}
         onSave={smartMode === "edit" ? handleSaveRules : handleCreateSmart}

@@ -50,7 +50,7 @@ const STEPS = [
   // and it means nothing to anyone with nothing to compare it against.
   {
     title: "Tags",
-    body: "The words you tagged songs with in iTunes came across, and tags are their own thing now: put one on a song from the ••• beside it instead of typing into its comment field, on a whole record from the record's •••, or on several songs of a record at once with \"Tag songs\". To see every song with a tag, pick it in the filter on the Tracks page, or type # and the tag into the search box. What your library arrived with is kept exactly as it was.",
+    body: "The words you tagged songs with in iTunes came across, and tags are their own thing now: put one on a song from the ••• beside it instead of typing into its comment field, on a whole record from the record's •••, or on several songs of a record at once with \"Tag songs\". To see every song with a tag, pick it in the filter on the Tracks page, or type # and the tag into the search box. A smart playlist can be built on them too - every song tagged sunday that you rated four stars, say - and it keeps itself up to date. What your library arrived with is kept exactly as it was.",
     path: "/library/tags",
     anchor: '[data-tour="tags"]',
     needs: fromItunes,

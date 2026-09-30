@@ -787,6 +787,9 @@ tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN listing_id INTEGER");
 // The track an iTunes record's tags were copied onto as the person's own, so
 // they are copied once, and move if the record is linked to another song.
 tryAddColumn("ALTER TABLE song_record_links ADD COLUMN tags_adopted_track_id INTEGER");
+// A smart playlist made in the editor with a tag rule, which Psalter keeps,
+// rather than one converted from an iTunes library.
+tryAddColumn("ALTER TABLE tag_playlists ADD COLUMN made_here INTEGER NOT NULL DEFAULT 0");
 db.exec(`
   UPDATE playlist_shares SET accepted_at = created_at
   WHERE accepted_at IS NULL AND mirror_playlist_id IS NOT NULL

@@ -4,7 +4,7 @@ import { createNavidromeUserClient } from "./navidromeUserClient.js";
 import { getPersonalLibraryIdForUser, mediaPathsForNavidromeSongIds } from "./navidromeTrackResolver.js";
 import { getLibraryIdsForNavidromeSongIds } from "./navidromeSongIdStore.js";
 import { getRecordPlaylistTracks, getTrackTagsForOwner } from "./songRecordService.js";
-import { mergeOwnTags } from "./trackTagService.js";
+import { mergeOwnTags, normalizeTag } from "./trackTagService.js";
 import { logger } from "./logger.js";
 
 /**
@@ -143,6 +143,7 @@ function tagsForOwner(owner) {
 /** A song's value for one field: his tag where he gave one, the file's otherwise. */
 function fieldValue(song, tags, field) {
   switch (field) {
+    case "tag": return tags?.tags || [];
     case "comment": return lower(tags?.comment);
     case "genre": return lower(tags?.genre || song.genre);
     case "artist": return lower(tags?.artist || song.artist);
@@ -176,6 +177,13 @@ function test(condition, song, tags, today) {
   const actual = fieldValue(song, tags, field);
   if (actual === undefined) return undefined;
   const value = condition.value;
+  // One of the person's tags, exactly: "sunday" is not "sunday morning".
+  if (field === "tag") {
+    const has = actual.includes(normalizeTag(value));
+    if (operator === "has") return has;
+    if (operator === "hasNot") return !has;
+    return undefined;
+  }
   if (typeof actual === "string" && ["comment", "genre", "artist", "albumartist", "album", "title"].includes(field)) {
     const check = TEXT[operator];
     return check ? check(actual, lower(value)) : undefined;
@@ -261,7 +269,11 @@ export function evaluateTagPlaylistRules(rules, songs, tagsByTrack, { today = Da
 
 // ---------------------------------------------------------------- report
 
-const listRows = (owner) => db.prepare("SELECT * FROM tag_playlists WHERE owner = ? ORDER BY name COLLATE NOCASE").all(owner);
+// The report is about playlists converted from iTunes; ones made here in the
+// editor are the person's own and not for comparing against anything.
+const listRows = (owner) => db.prepare(
+  "SELECT * FROM tag_playlists WHERE owner = ? AND made_here = 0 ORDER BY name COLLATE NOCASE",
+).all(owner);
 
 const describeSong = (song, tags) => `${tags?.title || song.title} — ${tags?.artist || song.artist}`;
 
@@ -523,4 +535,79 @@ export function scheduleTagPlaylistRebuild(owner, { delayMs = 20_000, reason = "
   }, delayMs);
   timer.unref?.();
   rebuildTimers.set(owner, timer);
+}
+
+// ---------------------------------------------------------------- made in the editor
+
+/**
+ * Smart playlists a person makes in the editor with a rule about a tag.
+ * Navidrome cannot read Psalter's tags, so Psalter keeps these: it evaluates
+ * the rules and writes the songs as an ordinary playlist, the same way it keeps
+ * the playlists converted from iTunes, and rebuilds them when tags, ratings or
+ * the library change.
+ */
+
+export class KeptPlaylistError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.name = "KeptPlaylistError";
+    this.status = status;
+  }
+}
+
+/** A person's Psalter-kept playlists by the Navidrome playlist each is written to. */
+export function keptPlaylistsByNavidromeId(owner) {
+  return new Map(db.prepare(
+    "SELECT * FROM tag_playlists WHERE owner = ? AND enabled = 1 AND navidrome_playlist_id IS NOT NULL",
+  ).all(owner).map((row) => [String(row.navidrome_playlist_id), { ...row, rules: parse(row.rules_json, { conditions: [] }) }]));
+}
+
+export function keptPlaylistFor(owner, navidromePlaylistId) {
+  return keptPlaylistsByNavidromeId(owner).get(String(navidromePlaylistId)) || null;
+}
+
+/**
+ * Make one and write it now. The name must be new: writing into a playlist
+ * the person already has would replace its songs.
+ */
+export async function createKeptPlaylist({ owner, name, rules, existingNames = [] }) {
+  const title = String(name || "").trim();
+  if (!title) throw new KeptPlaylistError("Playlist name is required");
+  const lowered = title.toLowerCase();
+  if (existingNames.some((entry) => String(entry || "").trim().toLowerCase() === lowered)
+    || db.prepare("SELECT 1 FROM tag_playlists WHERE owner = ? AND LOWER(TRIM(name)) = ?").get(owner, lowered)) {
+    throw new KeptPlaylistError(`You already have a playlist called "${title}"`, 409);
+  }
+  const at = Date.now();
+  const { lastInsertRowid: id } = db.prepare(`
+    INSERT INTO tag_playlists (owner, name, rules_json, enabled, made_here, created_at, updated_at)
+    VALUES (?, ?, ?, 1, 1, ?, ?)
+  `).run(owner, title, JSON.stringify(rules), at, at);
+  const result = await buildTagPlaylist(id);
+  if (result.status !== "written" && result.status !== "unchanged") {
+    db.prepare("DELETE FROM tag_playlists WHERE id = ?").run(id);
+    throw new KeptPlaylistError(result.error || "Could not write the playlist", 502);
+  }
+  return { id: Number(id), playlistId: result.playlistId, count: result.count };
+}
+
+/** New rules for one, written now. */
+export async function updateKeptRules(row, rules) {
+  db.prepare("UPDATE tag_playlists SET rules_json = ?, updated_at = ? WHERE id = ?")
+    .run(JSON.stringify(rules), Date.now(), row.id);
+  return buildTagPlaylist(row.id);
+}
+
+/** Its name follows the playlist's, or the next rebuild would name it back. */
+export function renameKept(row, name) {
+  db.prepare("UPDATE tag_playlists SET name = ?, updated_at = ? WHERE id = ?").run(String(name).trim(), Date.now(), row.id);
+}
+
+/**
+ * Stop keeping it. The Navidrome playlist keeps the songs it has - or goes, if
+ * the person is deleting it anyway.
+ */
+export function forgetKept(row) {
+  db.prepare("DELETE FROM tag_playlist_snapshots WHERE tag_playlist_id = ?").run(row.id);
+  db.prepare("DELETE FROM tag_playlists WHERE id = ?").run(row.id);
 }

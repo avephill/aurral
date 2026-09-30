@@ -85,19 +85,119 @@ export class SmartPlaylistRuleError extends Error {
   }
 }
 
-/** Everything the editor needs to offer only rules Navidrome will honour. */
+// ---------------------------------------------------------------- kept by Psalter
+
+// A rule about one of the person's Psalter tags. Navidrome has never heard of
+// these, so a playlist with one is kept by Psalter instead: it evaluates the
+// rules over the person's own library (tagPlaylistService) and writes what
+// they pick as an ordinary playlist, refreshed as tags and ratings change.
+const TAG_FIELD = { name: "tag", type: "tag", label: "Tag" };
+const TAG_OPERATORS = ["has", "hasNot"];
+const TAG_OPERATOR_LABELS = { has: "is", hasNot: "is not" };
+
+// What Psalter's own evaluation can judge. A playlist Psalter keeps is limited
+// to these, and the editor offers only these once a rule is about a tag.
+const PSALTER_FIELDS = ["tag", "title", "artist", "albumartist", "album", "genre", "year", "rating", "playcount", "loved", "dateadded", "lastplayed"];
+const PSALTER_SORTABLE = ["title", "artist", "albumartist", "album", "genre", "year", "rating", "playcount", "dateadded", "lastplayed"];
+
+/** Everything the editor needs to offer only rules that will be honoured. */
 export function describeSmartPlaylistFields() {
   return {
-    fields: FIELDS.map((field) => ({
-      ...field,
-      operators: OPERATORS_BY_TYPE[field.type].map((operator) => ({
-        name: operator,
-        label: OPERATOR_LABELS[operator],
+    fields: [
+      {
+        ...TAG_FIELD,
+        operators: TAG_OPERATORS.map((operator) => ({ name: operator, label: TAG_OPERATOR_LABELS[operator] })),
+      },
+      ...FIELDS.map((field) => ({
+        ...field,
+        operators: OPERATORS_BY_TYPE[field.type].map((operator) => ({
+          name: operator,
+          label: OPERATOR_LABELS[operator],
+        })),
       })),
-    })),
+    ],
     sortFields: SORTABLE,
+    // Navidrome keeps a playlist unless a rule is about a tag; then Psalter
+    // does, and only these can be used.
+    keptByPsalter: { fields: PSALTER_FIELDS, sortFields: PSALTER_SORTABLE },
     maxConditions: MAX_CONDITIONS,
     maxLimit: MAX_LIMIT,
+  };
+}
+
+/** Whether any rule is about a tag, which makes the playlist Psalter's to keep. */
+export function usesTagRule(input) {
+  return (Array.isArray(input?.conditions) ? input.conditions : []).some((condition) => condition?.field === "tag");
+}
+
+/**
+ * An editor's rules, checked for a playlist Psalter keeps. They stay in the
+ * editor's shape, which is what the evaluation reads. Throws
+ * SmartPlaylistRuleError with a message meant for the person who typed it.
+ */
+export function toPsalterRules(input) {
+  const match = String(input?.match || "all").toLowerCase();
+  if (!["all", "any"].includes(match)) throw new SmartPlaylistRuleError("Match must be all or any");
+  const conditions = Array.isArray(input?.conditions) ? input.conditions : [];
+  if (!conditions.length) throw new SmartPlaylistRuleError("A smart playlist needs at least one rule");
+  if (conditions.length > MAX_CONDITIONS) throw new SmartPlaylistRuleError(`At most ${MAX_CONDITIONS} rules`);
+
+  const checked = conditions.map((condition) => {
+    const name = String(condition?.field || "").trim();
+    const operator = String(condition?.operator || "").trim();
+    if (name === "tag") {
+      if (!TAG_OPERATORS.includes(operator)) throw new SmartPlaylistRuleError(`Tag cannot be asked "${operator}"`);
+      const value = String(condition?.value ?? "").replace(/,/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+      if (!value) throw new SmartPlaylistRuleError("Tag needs a value");
+      return { field: "tag", operator, value };
+    }
+    const field = FIELD_BY_NAME.get(name);
+    if (!field || !PSALTER_FIELDS.includes(name)) {
+      throw new SmartPlaylistRuleError(
+        `${field?.label || name} cannot be used with a tag rule; use it in a playlist without one`,
+      );
+    }
+    if (!OPERATORS_BY_TYPE[field.type].includes(operator)) {
+      throw new SmartPlaylistRuleError(`${field.label} cannot be asked "${operator}"`);
+    }
+    return { field: name, operator, value: coerce(field, operator, condition?.value) };
+  });
+
+  const rules = { match, conditions: checked };
+  const sort = String(input?.sort || "").trim();
+  if (sort) {
+    if (!PSALTER_SORTABLE.includes(sort)) throw new SmartPlaylistRuleError(`Cannot sort by ${sort} here`);
+    rules.sort = sort;
+    rules.order = String(input?.order || "asc").toLowerCase() === "desc" ? "desc" : "asc";
+  }
+  if (input?.limit !== undefined && input?.limit !== null && input?.limit !== "") {
+    const limit = Number(input.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+      throw new SmartPlaylistRuleError(`Limit must be a whole number up to ${MAX_LIMIT}`);
+    }
+    rules.limit = limit;
+  }
+  return rules;
+}
+
+/**
+ * A Psalter-kept playlist's rules for the editor, or null when they hold
+ * something it cannot show - a nested group, as an iTunes conversion can.
+ */
+export function editorRulesFromPsalter(rules) {
+  const conditions = Array.isArray(rules?.conditions) ? rules.conditions : [];
+  if (!conditions.length || conditions.some((condition) => Array.isArray(condition?.conditions))) return null;
+  if (conditions.some((condition) => !PSALTER_FIELDS.includes(condition?.field))) return null;
+  return {
+    match: rules.match === "any" ? "any" : "all",
+    conditions: conditions.map((condition) => ({
+      field: condition.field,
+      operator: condition.operator,
+      value: Array.isArray(condition.value) ? condition.value.join(",") : condition.value,
+    })),
+    sort: rules.sort || "",
+    order: rules.order === "desc" ? "desc" : "asc",
+    limit: Number(rules.limit) > 0 ? Number(rules.limit) : null,
   };
 }
 
