@@ -8,6 +8,7 @@ import { getCanonicalMediaFilesByPaths } from "./libraryQueryService.js";
 import { joinRoot, navidromeRelativePath, normalizePath } from "./navidromePathMapping.js";
 import { buildCandidateIndex, matchRecords, normAlbum, normArtist } from "./songRecordMatching.js";
 import { logger } from "./logger.js";
+import { adoptImportedTags, releaseAdoptedTags } from "./trackTagService.js";
 
 /**
  * A person's songs as their old music library knew them.
@@ -306,6 +307,8 @@ export function relinkSongRecords({ owner = null } = {}) {
     totals.linked += linked;
     totals.review += review;
   }
+  // What was just linked brings its iTunes tags with it, once.
+  adoptImportedTags({ owner });
   return totals;
 }
 
@@ -514,6 +517,8 @@ export function getSongLinkReview({ owner } = {}) {
 export function decideSongLink(recordId, decision) {
   const id = Number(recordId);
   if (!["confirm", "reject"].includes(decision)) throw new SongRecordImportError("Decision must be confirm or reject");
+  // A wrong link takes back the tags it gave the song.
+  if (decision === "reject") releaseAdoptedTags(id);
   const result = db.prepare("UPDATE song_record_links SET status = ?, updated_at = ? WHERE record_id = ?")
     .run(decision === "confirm" ? "confirmed" : "rejected", now(), id);
   return result.changes > 0;

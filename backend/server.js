@@ -470,6 +470,12 @@ httpServer.listen(PORT, async () => {
   import("./services/socialService.js")
     .then(({ startSocialSync }) => startSocialSync())
     .catch((error) => logger.warn("library", `[Social] Share sync did not start: ${error.message}`));
+  // Tags that came in with an iTunes library become the person's own, once:
+  // the first start after this change copies them all, later ones only what
+  // was linked since.
+  import("./services/trackTagService.js")
+    .then(({ adoptImportedTags }) => adoptImportedTags())
+    .catch((error) => logger.warn("library", `[Tags] Copying iTunes tags failed: ${error.message}`));
   // Smart playlists follow ratings and imports as they happen; this catches
   // what moves without Psalter being told, such as play counts.
   import("./services/tagPlaylistService.js")

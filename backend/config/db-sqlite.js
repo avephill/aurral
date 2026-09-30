@@ -784,6 +784,9 @@ tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN source_updated_at TEXT");
 // effect accepted.
 tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN accepted_at INTEGER");
 tryAddColumn("ALTER TABLE playlist_shares ADD COLUMN listing_id INTEGER");
+// The track an iTunes record's tags were copied onto as the person's own, so
+// they are copied once, and move if the record is linked to another song.
+tryAddColumn("ALTER TABLE song_record_links ADD COLUMN tags_adopted_track_id INTEGER");
 db.exec(`
   UPDATE playlist_shares SET accepted_at = created_at
   WHERE accepted_at IS NULL AND mirror_playlist_id IS NOT NULL
