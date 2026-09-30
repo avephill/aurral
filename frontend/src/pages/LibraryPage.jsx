@@ -85,6 +85,7 @@ import { DeleteArtistModal } from "./ArtistDetails/components/DeleteArtistModal"
 import { DeleteTrackModal } from "./ArtistDetails/components/DeleteTrackModal";
 import LibraryInfoModal from "./LibraryInfoModal";
 import { useUserLibrary } from "../hooks/useUserLibrary";
+import { useLibraryScope } from "../hooks/useLibraryScope";
 import RecommendModal from "../components/RecommendModal";
 import TagsModal from "../components/TagsModal";
 import TagFilter from "../components/TagFilter";
@@ -100,25 +101,6 @@ import { queryClient, queryKeys } from "../queryClient.js";
 // Views that still open though the sidebar no longer lists them, so old
 // links keep working: album artists became artists, and favorites is a view
 // reached by link now that hearted songs live in a playlist.
-// Browsing defaults to the person's own library: every personal library here
-// is a symlinked subset of the shared one, and Navidrome already scopes what
-// they can play. "Whole server" is a click away for anyone who wants it.
-const SCOPE_KEY = "psalter.libraryScope";
-const readScopePreference = (userId) => {
-  try {
-    return window.localStorage.getItem(`${SCOPE_KEY}:${userId}`) === "server" ? "server" : "mine";
-  } catch {
-    return "mine";
-  }
-};
-const writeScopePreference = (userId, scope) => {
-  try {
-    window.localStorage.setItem(`${SCOPE_KEY}:${userId}`, scope);
-  } catch {
-    // A browser that refuses storage still gets the default each visit.
-  }
-};
-
 const LIBRARY_VIEW_IDS = new Set([
   ...LIBRARY_VIEWS.map((view) => view.id),
   "album-artists",
@@ -536,11 +518,8 @@ function LibraryPage() {
   } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { bootstrap, hasPermission, user } = useAuth();
-  const [libraryScope, setLibraryScope] = useState(() => readScopePreference(user?.id ?? "anon"));
-  const chooseScope = (next) => {
-    setLibraryScope(next);
-    writeScopePreference(user?.id ?? "anon", next);
-  };
+  // Shared with the search box and library search results.
+  const [libraryScope, chooseScope] = useLibraryScope(user?.id);
   const ratingsEnabled = bootstrap?.navidromeRatingsEnabled === true;
   const { showError, showSuccess } = useToast();
   const {

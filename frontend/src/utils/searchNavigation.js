@@ -139,8 +139,15 @@ export function getReleaseNavigationTarget(item) {
   };
 }
 
-export function navigateFromSearchResult(navigate, item, { query = "" } = {}) {
+export function navigateFromSearchResult(navigate, item, { query = "", scope = "discover" } = {}) {
   if (!item || typeof navigate !== "function") return;
+
+  // Searching from the library stays in the library: an artist opens their
+  // library page, not the Discover page where their records can be asked for.
+  if (scope === "library" && item.type === "artist" && item.canonicalArtistId) {
+    navigate(`/library/artist/${encodeURIComponent(item.canonicalArtistId)}`);
+    return;
+  }
 
   if (item.type === "artist") {
     if (item.id) {

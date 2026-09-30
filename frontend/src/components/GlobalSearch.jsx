@@ -8,6 +8,9 @@ import {
   createSharedPlaylist,
 } from "../utils/api/endpoints/playlists.js";
 import { getTagSuggestions } from "../utils/api/endpoints/discovery.js";
+import { getMyTags } from "../utils/api/endpoints/tags.js";
+import { searchPathFor, searchScopeFor } from "../utils/searchScope";
+import { useLibraryScope } from "../hooks/useLibraryScope";
 import { searchUnified } from "../utils/api/endpoints/search.js";
 import { getArtistRecordId } from "../utils/artistTaste";
 import {
@@ -39,7 +42,7 @@ import { getAlbumAddButtonLabel, shouldTriggerAlbumSearch } from "../utils/album
 import { useDebouncedTask } from "../hooks/useDebouncedTask";
 import { useSharedPlaylists } from "../hooks/useSharedPlaylists";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Clock, Search } from "lucide-react";
+import { Clock, Compass, Globe, Search } from "lucide-react";
 import { DotLoader } from "./DotLoader";
 import AddActionButton from "./AddActionButton";
 import SearchLibraryCheck from "./SearchLibraryCheck";
@@ -62,7 +65,11 @@ function GlobalSearch({ settingsMode = false }) {
   const { schedule: scheduleSuggest, cancel: cancelSuggest } = useDebouncedTask();
   const navigate = useNavigate();
   const location = useLocation();
-  const { hasPermission, bootstrap } = useAuth();
+  const { hasPermission, bootstrap, user } = useAuth();
+  // Library pages search the library; Discover searches everything.
+  const scope = settingsMode ? "settings" : searchScopeFor(location.pathname);
+  const inLibrary = scope === "library";
+  const [libraryScope, chooseLibraryScope] = useLibraryScope(user?.id);
   const { showSuccess, showError } = useToast();
   const {
     sharedPlaylists,
@@ -80,7 +87,8 @@ function GlobalSearch({ settingsMode = false }) {
 
   const selectableRows = useMemo(() => {
     if (suggestionMode === "tag") return suggestionRows;
-    return suggestionRows.filter((row) => row.kind === "item" || row.kind === "search-all");
+    return suggestionRows.filter((row) =>
+      ["item", "search-all", "show-server", "own-tag"].includes(row.kind));
   }, [suggestionRows, suggestionMode]);
 
   const settingsSearchResults = useMemo(() => {
@@ -169,6 +177,36 @@ function GlobalSearch({ settingsMode = false }) {
       closeAutocomplete();
       return cancelSuggest;
     }
+    // In the library, #word is one of their own tags, and leads to the songs
+    // carrying it. In Discover it is a genre to explore, from Last.fm.
+    if (inLibrary && trimmed.startsWith("#")) {
+      const wanted = trimmed.slice(1).trim().toLowerCase();
+      scheduleSuggest(async (isCurrent, signal) => {
+        setLoadingSuggestions(true);
+        try {
+          const data = await getMyTags({ signal });
+          if (!isCurrent()) return;
+          const tags = (data?.tags || [])
+            .filter((entry) => !wanted || entry.tag.includes(wanted))
+            .sort((a, b) => Number(b.tag.startsWith(wanted)) - Number(a.tag.startsWith(wanted)) || b.songs - a.songs)
+            .slice(0, TAG_SUGGESTIONS_LIMIT);
+          setSuggestionRows(tags.map((entry) => ({
+            kind: "own-tag",
+            key: `own-tag:${entry.tag}`,
+            tagName: entry.tag,
+            songs: entry.songs,
+          })));
+          setSuggestionMode("own-tag");
+          setSuggestionIndex(-1);
+        } catch {
+          if (isCurrent()) closeAutocomplete();
+        } finally {
+          if (isCurrent()) setLoadingSuggestions(false);
+        }
+      }, AUTOCOMPLETE_DEBOUNCE_MS);
+      return cancelSuggest;
+    }
+
     const isTagShortcut = lastfmConfigured && trimmed.startsWith("#");
     const tagPart = isTagShortcut ? trimmed.slice(1).trim() : trimmed;
 
@@ -237,13 +275,30 @@ function GlobalSearch({ settingsMode = false }) {
         });
         if (!isCurrent()) return;
         setLocalSearchConfigured(!!data?.localSearchConfigured);
-        const sections = buildUnifiedSuggestionSections(data);
+        // Looking at their own library, matches elsewhere on the server are
+        // counted rather than listed, with a way to show them.
+        let shown = data;
+        let onServer = 0;
+        if (inLibrary && libraryScope === "mine") {
+          const theirs = (items) => (items || []).filter((item) => item.inUserLibrary !== false);
+          const library = data?.library || {};
+          onServer = ["artists", "albums", "tracks"]
+            .reduce((sum, key) => sum + (library[key] || []).filter((item) => item.inUserLibrary === false).length, 0);
+          shown = {
+            ...data,
+            library: { artists: theirs(library.artists), albums: theirs(library.albums), tracks: theirs(library.tracks) },
+          };
+        }
+        const sections = buildUnifiedSuggestionSections(shown);
         const rows = flattenSuggestionSections(sections);
+        if (onServer) {
+          rows.push({ kind: "show-server", key: "show-server", query: trimmed, count: onServer });
+        }
         rows.push({
           kind: "search-all",
           key: "search-all",
           query: trimmed,
-          hasLibraryRows: rows.length > 0,
+          hasLibraryRows: rows.some((row) => row.kind === "item"),
         });
         setSuggestionRows(rows);
         setSuggestionMode("unified");
@@ -260,7 +315,16 @@ function GlobalSearch({ settingsMode = false }) {
     }, LIBRARY_SUGGEST_DEBOUNCE_MS);
 
     return cancelSuggest;
-  }, [searchQuery, closeAutocomplete, lastfmConfigured, scheduleSuggest, cancelSuggest, settingsMode]);
+  }, [
+    searchQuery,
+    closeAutocomplete,
+    lastfmConfigured,
+    scheduleSuggest,
+    cancelSuggest,
+    settingsMode,
+    inLibrary,
+    libraryScope,
+  ]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -277,16 +341,18 @@ function GlobalSearch({ settingsMode = false }) {
       const trimmed = String(rawQuery || "").trim();
       if (!trimmed || settingsMode) return;
       rememberSearch(trimmed);
-      if (trimmed.startsWith("#")) {
+      if (trimmed.startsWith("#") && inLibrary) {
+        navigate(`/library/tracks?tags=${encodeURIComponent(trimmed.slice(1).trim().toLowerCase())}`);
+      } else if (trimmed.startsWith("#")) {
         navigate(`/search?q=${encodeURIComponent(trimmed.slice(1))}&type=tag`);
       } else {
-        navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+        navigate(searchPathFor(scope, trimmed));
       }
       setSearchQuery("");
       closeAutocomplete();
       setInputFocused(false);
     },
-    [navigate, closeAutocomplete, rememberSearch, settingsMode],
+    [navigate, closeAutocomplete, rememberSearch, settingsMode, inLibrary, scope],
   );
 
   const navigateToSettings = useCallback(
@@ -313,8 +379,33 @@ function GlobalSearch({ settingsMode = false }) {
     (selection) => {
       if (!selection) return;
 
-      if (selection.kind === "recent" || selection.kind === "search-all") {
+      if (selection.kind === "recent") {
         navigateToSearch(selection.query);
+        return;
+      }
+
+      // The way out of the library: the same words, searched in Discover.
+      if (selection.kind === "search-all") {
+        rememberSearch(selection.query);
+        navigate(searchPathFor("discover", selection.query));
+        setSearchQuery("");
+        closeAutocomplete();
+        setInputFocused(false);
+        return;
+      }
+
+      // Show what the rest of the server has too; the list redraws itself.
+      if (selection.kind === "show-server") {
+        chooseLibraryScope("server");
+        return;
+      }
+
+      if (selection.kind === "own-tag") {
+        rememberSearch(`#${selection.tagName}`);
+        navigate(`/library/tracks?tags=${encodeURIComponent(selection.tagName)}`);
+        setSearchQuery("");
+        closeAutocomplete();
+        setInputFocused(false);
         return;
       }
 
@@ -330,13 +421,13 @@ function GlobalSearch({ settingsMode = false }) {
       if (selection.kind === "item") {
         const query = searchQuery.trim();
         if (query) rememberSearch(query);
-        navigateFromSearchResult(navigate, selection.item, { query });
+        navigateFromSearchResult(navigate, selection.item, { query, scope });
         setSearchQuery("");
         closeAutocomplete();
         setInputFocused(false);
       }
     },
-    [navigate, navigateToSearch, rememberSearch, searchQuery, closeAutocomplete],
+    [navigate, navigateToSearch, rememberSearch, searchQuery, closeAutocomplete, chooseLibraryScope, scope],
   );
 
   const handleClearRecentSearches = useCallback((event) => {
@@ -643,13 +734,17 @@ function GlobalSearch({ settingsMode = false }) {
       <span className="global-search__scope-label--full">to search</span>
     </>
   ) : inputFocused ? (
-    <span className="global-search__scope-label--full">Search music, artists, or #rock</span>
+    <span className="global-search__scope-label--full">
+      {inLibrary ? "Search your library, or #tag" : "Search everything: music, artists, or #rock"}
+    </span>
   ) : (
     <>
-      <span className="global-search__scope-label--short">Search...</span>
+      <span className="global-search__scope-label--short">{inLibrary ? "Search library" : "Search everything"}</span>
       <span className="global-search__scope-label--full">Type</span>
       <span className="global-search__key">/</span>
-      <span className="global-search__scope-label--full">to search</span>
+      <span className="global-search__scope-label--full">
+        {inLibrary ? "to search your library" : "to search everything"}
+      </span>
     </>
   );
 
@@ -672,7 +767,9 @@ function GlobalSearch({ settingsMode = false }) {
             }}
             onKeyDown={handleKeyDown}
             placeholder=""
-            aria-label={settingsMode ? "Search settings" : "Search music, artists, or tags"}
+            aria-label={
+              settingsMode ? "Search settings" : inLibrary ? "Search your library" : "Search everything"
+            }
             className="global-search__input"
             autoComplete="off"
           />
@@ -753,7 +850,24 @@ function GlobalSearch({ settingsMode = false }) {
 
       {!loadingSuggestions && !settingsMode && suggestionRows.length > 0 && (
         <div className="global-search__suggestions global-search__suggestions--grouped">
-          {suggestionMode === "tag"
+          {suggestionMode === "own-tag"
+            ? [
+                <div key="own-tag-header" className="global-search__suggestion-group">Your tags</div>,
+                ...suggestionRows.map((row, index) => (
+                  <button
+                    key={row.key}
+                    type="button"
+                    onClick={() => handleSuggestionSelect(row)}
+                    className={`global-search__suggestion global-search__suggestion--own-tag${
+                      index === suggestionIndex ? " is-highlighted" : ""
+                    }`}
+                  >
+                    <span>#{row.tagName}</span>
+                    <small>{row.songs} song{row.songs === 1 ? "" : "s"}</small>
+                  </button>
+                )),
+              ]
+            : suggestionMode === "tag"
             ? suggestionRows.map((row, index) => (
                 <button
                   key={row.key}
@@ -774,13 +888,36 @@ function GlobalSearch({ settingsMode = false }) {
                     </div>
                   );
                 }
+                if (row.kind === "show-server") {
+                  selectableCursor += 1;
+                  const highlighted = selectableCursor === suggestionIndex;
+                  return (
+                    <button
+                      key={row.key}
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => handleSuggestionSelect(row)}
+                      className={`global-search__suggestion global-search__suggestion--search-all${
+                        highlighted ? " is-highlighted" : ""
+                      }`}
+                    >
+                      <Globe className="artist-icon-sm" aria-hidden="true" />
+                      <span>
+                        {row.count} more on the server
+                        <small>Music others have added. Show the whole server&apos;s library</small>
+                      </span>
+                    </button>
+                  );
+                }
                 if (row.kind === "search-all") {
                   selectableCursor += 1;
                   const highlighted = selectableCursor === suggestionIndex;
                   return (
                     <div key={row.key} className="global-search__suggestion-footer">
                       {!row.hasLibraryRows ? (
-                        <div className="global-search__suggestion-group">Nothing in your library matches</div>
+                        <div className="global-search__suggestion-group">
+                          {inLibrary ? "Nothing in your library matches" : "Nothing on the server matches yet"}
+                        </div>
                       ) : null}
                       <button
                         type="button"
@@ -789,10 +926,10 @@ function GlobalSearch({ settingsMode = false }) {
                           highlighted ? " is-highlighted" : ""
                         }`}
                       >
-                        <Search className="artist-icon-sm" aria-hidden="true" />
+                        <Compass className="artist-icon-sm" aria-hidden="true" />
                         <span>
-                          Search everywhere for “{row.query}”
-                          <small>Artists and albums not in your library</small>
+                          {inLibrary ? `Search Discover for “${row.query}”` : `Search everywhere for “${row.query}”`}
+                          <small>Artists and albums not on the server yet, to ask for</small>
                         </span>
                       </button>
                     </div>
