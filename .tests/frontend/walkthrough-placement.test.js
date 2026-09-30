@@ -96,7 +96,7 @@ test("the step is dropped where personal libraries are off", () => {
     new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
     "utf8",
   );
-  assert.match(source, /needs: \(bootstrap\) => bootstrap\?\.userLibrariesEnabled === true/);
+  assert.match(source, /needs: \(bootstrap\) => bootstrap\?\.userLibrariesEnabled === true && !fromItunes\(bootstrap\)/);
   // And the count reads off what is actually being shown, not the full list.
   assert.match(source, /\{step \+ 1\} of \{steps\.length\}/);
   assert.match(source, /STEPS\.filter\(\(entry\) => !entry\.needs \|\| entry\.needs\(bootstrap\)\)/);
@@ -123,9 +123,10 @@ test("the tour explains tags against iTunes, for the people who had iTunes", () 
     new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
     "utf8",
   );
-  const step = source.match(/\{[^{}]*title: "Tags, and playlists that fill themselves"[\s\S]*?\},/);
+  const step = source.match(/\{[^{}]*title: "Tags"[\s\S]*?\},/);
   assert.ok(step, "the step is there");
-  assert.match(step[0], /needs: \(bootstrap\) => bootstrap\?\.itunesLibraryImported === true/);
+  assert.match(step[0], /needs: fromItunes/);
+  assert.match(source, /const fromItunes = \(bootstrap\) => bootstrap\?\.itunesLibraryImported === true;/);
   assert.match(step[0], /path: "\/library\/tags"/);
   assert.match(step[0], /data-tour="tags"/);
   // The point of it: tags are their own thing here, and the import is left alone.
@@ -139,4 +140,23 @@ test("the server says whose library came from iTunes", () => {
     "utf8",
   );
   assert.match(health, /payload\.itunesLibraryImported = hasSongRecords\(currentUser\.username\)/);
+});
+
+// Someone who came from iTunes had their artists picked for them, so their
+// tour ends on the playlists they brought instead, and hears about tags.
+
+test("an iTunes library gets its own ending, and the tags step", () => {
+  const source = readFileSync(
+    new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /const fromItunes = \(bootstrap\) => bootstrap\?\.itunesLibraryImported === true;/);
+  assert.match(source, /cta: "Show my playlists",\s*needs: fromItunes,/);
+  assert.match(source, /title: "Tags",[\s\S]{0,700}needs: fromItunes,/);
+  // What it tells them has to be true of the app now.
+  assert.match(source, /The search box searches whatever you are looking at\./);
+  assert.match(source, /with \\"Tag songs\\"/);
+  assert.match(source, /pick it in the filter on the Tracks page, or type # and the tag/);
+  assert.match(source, /ask for it - a few a day -/);
+  assert.doesNotMatch(source, /Your own library comes first, then the rest of the server/, "the old search");
 });
