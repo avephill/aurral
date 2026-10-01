@@ -55,15 +55,11 @@ const STEPS = [
     anchor: '[data-tour="tags"]',
     needs: fromItunes,
   },
+  // One stop for Discover: finding records and asking for them are the same
+  // visit, and two steps saying so in turn read as the tour repeating itself.
   {
-    title: "Adding music",
-    body: "Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: find the album on Discover and ask for it - a few a day - and when it arrives it goes into your library too. Once an artist is in your library, anything of theirs that reaches the server later joins it on its own.",
-    path: "/discover",
-    anchor: '[data-tour="discover"]',
-  },
-  {
-    title: "Discover",
-    body: "Somewhere to find records worth asking for - new releases, things like what you already play, and what has just been added to the server. Searching from here looks everywhere.",
+    title: "Discover, and adding music",
+    body: "Discover is for finding more: new releases, things like what you already play, and what has just been added to the server. Searching from here looks everywhere. Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for the album - a few a day - and when it arrives it goes into your library too. Once an artist is in your library, anything of theirs that reaches the server later joins it on its own.",
     path: "/discover",
     anchor: '[data-tour="discover"]',
   },

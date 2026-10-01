@@ -157,6 +157,9 @@ test("an iTunes library gets its own ending, and the tags step", () => {
   assert.match(source, /The search box searches whatever you are looking at\./);
   assert.match(source, /with \\"Tag songs\\"/);
   assert.match(source, /pick it in the filter on the Tracks page, or type # and the tag/);
-  assert.match(source, /ask for it - a few a day -/);
+  assert.match(source, /ask for the album - a few a day -/);
+  // Discover is one stop, not "Adding music" and then "Discover" saying it again.
+  assert.equal((source.match(/path: "\/discover",/g) || []).length, 1);
+  assert.doesNotMatch(source, /title: "Adding music"/);
   assert.doesNotMatch(source, /Your own library comes first, then the rest of the server/, "the old search");
 });
