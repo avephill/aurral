@@ -8,9 +8,10 @@ import { SettingsArrFieldSet, SettingsArrFormGroup } from "./arr/SettingsArrLayo
 import { SettingsCongregations } from "./SettingsCongregations";
 import { UserQualityProfile } from "./UserQualityProfile";
 import { UserRequestLimit } from "./UserRequestLimit";
+import { LibraryHistoryModal } from "./LibraryHistoryModal";
 
 import { createPortal } from "react-dom";
-import { Compass, Lock, Trash2, UserPlus, X } from "lucide-react";
+import { Compass, History, Lock, Trash2, UserPlus, X } from "lucide-react";
 import { GRANULAR_PERMISSIONS, granularPerms } from "../constants";
 import { useModalDialog } from "../../../hooks/useModalDialog.js";
 import { AdminPlexLinkField } from "./AdminPlexLinkField";
@@ -183,6 +184,8 @@ export function SettingsUsersTab({
   const userLibrariesNavidromeRootPath = settings?.userLibraries?.navidromeRootPath || "";
   const [syncingUserLibraries, setSyncingUserLibraries] = useState(false);
   const [resettingTour, setResettingTour] = useState(null);
+  // Whose library history is open, if anyone's.
+  const [historyUser, setHistoryUser] = useState(null);
 
   const userLibrariesState = {
     enabled: userLibrariesEnabled,
@@ -227,6 +230,7 @@ export function SettingsUsersTab({
 
   return (
     <div className="arr-page">
+      {historyUser ? <LibraryHistoryModal user={historyUser} onClose={() => setHistoryUser(null)} /> : null}
       {authUser?.role !== "admin" ? (
         <SettingsArrFieldSet legend="Change password">
           <form
@@ -509,6 +513,15 @@ export function SettingsUsersTab({
                               }}
                             >
                               <Lock className="artist-icon-sm" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
+                              className="arr-btn arr-btn--ghost arr-btn--icon"
+                              aria-label={`${user.username}'s library history`}
+                              title="Their playlists, ratings, tags and library as they were on an earlier day, and putting them back"
+                              onClick={() => setHistoryUser(user)}
+                            >
+                              <History className="artist-icon-sm" aria-hidden />
                             </button>
                             <button
                               type="button"

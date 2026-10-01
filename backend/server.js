@@ -476,6 +476,11 @@ httpServer.listen(PORT, async () => {
   import("./services/trackTagService.js")
     .then(({ adoptImportedTags }) => adoptImportedTags())
     .catch((error) => logger.warn("library", `[Tags] Copying iTunes tags failed: ${error.message}`));
+  // A daily copy of everyone's playlists, ratings, tags and library, for
+  // putting back a mistake.
+  import("./services/libraryHistoryService.js")
+    .then(({ startLibraryHistory }) => startLibraryHistory())
+    .catch((error) => logger.warn("library", `[History] Daily snapshots did not start: ${error.message}`));
   // Smart playlists follow ratings and imports as they happen; this catches
   // what moves without Psalter being told, such as play counts.
   import("./services/tagPlaylistService.js")

@@ -176,3 +176,20 @@ export const resetWalkthroughFor = (userId) =>
 // -1 is no limit. Admin only, like the quality above.
 export const setUserAlbumRequestLimit = (id, albumRequestLimit) =>
   patchData(`/users/${encodeURIComponent(id)}/request-limit`, { albumRequestLimit });
+
+// A daily copy of each person's playlists, ratings, favourites, tags and
+// library, and putting parts of one back. Admin only.
+export const getLibraryHistory = (id) => getData(`/users/${encodeURIComponent(id)}/library-history`);
+
+export const takeLibrarySnapshot = (id) =>
+  postData(`/users/${encodeURIComponent(id)}/library-history`, {}, { timeout: 300000 });
+
+export const compareLibrarySnapshot = (id, snapshotId) =>
+  getData(`/users/${encodeURIComponent(id)}/library-history/${encodeURIComponent(snapshotId)}/compare`, { timeout: 300000 });
+
+export const restoreLibrarySnapshot = (id, snapshotId, { sections, playlists }) =>
+  postData(
+    `/users/${encodeURIComponent(id)}/library-history/${encodeURIComponent(snapshotId)}/restore`,
+    { sections, playlists },
+    { timeout: 600000 },
+  );

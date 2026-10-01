@@ -506,6 +506,64 @@ router.patch("/:id/request-limit", requireAuth, requireAdmin, (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------- library history
+// A copy of each person's playlists, ratings, favourites, tags and library,
+// taken daily, and putting parts of one back. An admin's job: someone
+// restoring the wrong day to their own library could make it worse.
+
+const historyFail = (res, error, fallback) =>
+  res.status(error?.status || 500).json({ error: error?.message || fallback });
+
+const historyUser = (req, res) => {
+  const user = userOps.getUserById(Number(req.params.id));
+  if (!user) res.status(404).json({ error: "User not found" });
+  return user;
+};
+
+router.get("/:id/library-history", requireAuth, requireAdmin, async (req, res) => {
+  const user = historyUser(req, res);
+  if (!user) return undefined;
+  const { listSnapshots, snapshotStorage } = await import("../services/libraryHistoryService.js");
+  return res.json({ username: user.username, snapshots: listSnapshots(user.username), storage: snapshotStorage() });
+});
+
+router.post("/:id/library-history", requireAuth, requireAdmin, async (req, res) => {
+  const user = historyUser(req, res);
+  if (!user) return undefined;
+  try {
+    const { takeSnapshot } = await import("../services/libraryHistoryService.js");
+    const { id, unchanged } = await takeSnapshot(user, { reason: "taken by hand" });
+    return res.status(201).json({ id, unchanged });
+  } catch (error) {
+    return historyFail(res, error, "Could not take a snapshot");
+  }
+});
+
+router.get("/:id/library-history/:snapshotId/compare", requireAuth, requireAdmin, async (req, res) => {
+  const user = historyUser(req, res);
+  if (!user) return undefined;
+  try {
+    const { compareWithNow } = await import("../services/libraryHistoryService.js");
+    return res.json(await compareWithNow(user, req.params.snapshotId));
+  } catch (error) {
+    return historyFail(res, error, "Could not compare that snapshot with now");
+  }
+});
+
+router.post("/:id/library-history/:snapshotId/restore", requireAuth, requireAdmin, async (req, res) => {
+  const user = historyUser(req, res);
+  if (!user) return undefined;
+  try {
+    const { restoreSnapshot } = await import("../services/libraryHistoryService.js");
+    return res.json(await restoreSnapshot(user, req.params.snapshotId, {
+      sections: Array.isArray(req.body?.sections) ? req.body.sections.map(String) : [],
+      playlists: Array.isArray(req.body?.playlists) ? req.body.playlists.map(String) : [],
+    }));
+  } catch (error) {
+    return historyFail(res, error, "Could not restore that snapshot");
+  }
+});
+
 router.get("/me/theme", requireAuth, (req, res) => {
   try {
     const user = userOps.getUserById(req.user.id);

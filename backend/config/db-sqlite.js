@@ -555,6 +555,29 @@ db.exec(`
     PRIMARY KEY (listing_id, congregation_id)
   );
 
+  -- A copy of what one person has made of their library - playlists, ratings,
+  -- favourites, tags, which music is theirs - taken daily and before a
+  -- restore, so a mistake can be put back. Each part is stored once however
+  -- many snapshots share it, so a day when nothing changed costs nothing.
+  CREATE TABLE IF NOT EXISTS library_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    taken_at INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    parts_json TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_library_snapshots_user
+    ON library_snapshots (username, taken_at DESC);
+
+  CREATE TABLE IF NOT EXISTS library_snapshot_parts (
+    hash TEXT PRIMARY KEY,
+    section TEXT NOT NULL,
+    data BLOB NOT NULL,
+    raw_bytes INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
   -- Single albums in someone's personal library, alongside the whole artists
   -- Lidarr tags put there. Taking a shared playlist is the usual reason: a
   -- holiday playlist wants one Christmas album, not everything under Various

@@ -318,6 +318,30 @@ export function tagTracks({ owner, trackIds = [], tag, remove = false }) {
   return { changed, tag: value };
 }
 
+/** Every tag row this person has, songs and records, for keeping a copy of. */
+export function readOwnTagRows(owner) {
+  const tracks = {};
+  for (const row of db.prepare("SELECT track_id AS id, tags_json AS tags FROM track_tags WHERE owner = ? ORDER BY track_id").all(owner)) {
+    tracks[row.id] = parse(row.tags);
+  }
+  const albums = {};
+  for (const row of db.prepare("SELECT album_id AS id, tags_json AS tags FROM album_tags WHERE owner = ? ORDER BY album_id").all(owner)) {
+    albums[row.id] = parse(row.tags);
+  }
+  return { tracks, albums };
+}
+
+/** Put back a copy taken with readOwnTagRows, replacing what is there now. */
+export function writeOwnTagRows(owner, { tracks = {}, albums = {} } = {}) {
+  db.transaction(() => {
+    db.prepare("DELETE FROM track_tags WHERE owner = ?").run(owner);
+    db.prepare("DELETE FROM album_tags WHERE owner = ?").run(owner);
+    for (const [trackId, tags] of Object.entries(tracks)) write(owner, Number(trackId), tags);
+    for (const [albumId, tags] of Object.entries(albums)) writeAlbum(owner, Number(albumId), tags);
+  })();
+  scheduleRebuild(owner, "tags restored");
+}
+
 /** Every tag this person uses, with how many songs carry it. */
 export function listTags({ owner } = {}) {
   const counts = new Map();
