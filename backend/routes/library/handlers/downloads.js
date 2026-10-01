@@ -8,6 +8,10 @@ import {
   albumHasTrackFiles,
 } from "../../../services/albumSearchState.js";
 import { logger } from "../../../services/logger.js";
+import {
+  albumRequestLimitResponse,
+  assertAlbumRequestAllowed,
+} from "../../../services/albumRequestService.js";
 import { getCanonicalTrackOwnership } from "../../../services/libraryQueryService.js";
 
 const STALE_GRABBED_MS = 15 * 60 * 1000;
@@ -468,6 +472,13 @@ export function registerDownloads(router) {
         return res.status(404).json({ error: "Album not found" });
       }
 
+      try {
+        assertAlbumRequestAllowed(req.user, { albumMbid: album.foreignAlbumId, lidarrAlbumId: albumId });
+      } catch (limitError) {
+        if (limitError.statusCode !== 429) throw limitError;
+        return res.status(429).json(albumRequestLimitResponse(limitError));
+      }
+
       const artist = album.artistId ? await libraryManager.getArtistById(album.artistId) : null;
       if (artist) {
         await libraryManager.ensureArtistMonitored(artist);
@@ -533,6 +544,15 @@ export function registerDownloads(router) {
         const album = await libraryManager.getAlbumById(albumId);
         if (!album) {
           return res.status(404).json({ error: "Album not found" });
+        }
+
+        // Searching again for an album already asked for costs nothing; an
+        // album nobody has asked for yet is a request like any other.
+        try {
+          assertAlbumRequestAllowed(req.user, { albumMbid: album.foreignAlbumId, lidarrAlbumId: albumId });
+        } catch (limitError) {
+          if (limitError.statusCode !== 429) throw limitError;
+          return res.status(429).json(albumRequestLimitResponse(limitError));
         }
 
         const artist = album.artistId ? await libraryManager.getArtistById(album.artistId) : null;

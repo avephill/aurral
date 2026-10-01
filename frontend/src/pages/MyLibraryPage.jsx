@@ -1,11 +1,14 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Library, ListPlus, Search, X } from "lucide-react";
 import ArtistListImportModal from "../components/ArtistListImportModal";
 import { DotLoader } from "../components/DotLoader";
 import { useAuth } from "../contexts/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useUserLibraryCatalog } from "../hooks/useUserLibrary";
+import { useToast } from "../contexts/ToastContext";
+import { getMyLibraryAlbums, removeMyLibraryAlbums } from "../utils/api/endpoints/userLibrary.js";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -162,6 +165,8 @@ export default function MyLibraryPage() {
         </div>
       </header>
 
+      <SingleAlbums />
+
       <div className="my-library-page__toolbar">
         <div className="my-library-page__search">
           <Search className="artist-icon-sm" aria-hidden="true" />
@@ -303,6 +308,65 @@ export default function MyLibraryPage() {
         />
       ) : null}
     </div>
+  );
+}
+
+// Albums in the library without the rest of their artist - put there when a
+// shared playlist was added. Only shown once there are some.
+function SingleAlbums() {
+  const queryClient = useQueryClient();
+  const { showError, showSuccess } = useToast();
+  const query = useQuery({
+    queryKey: ["user-library", "albums"],
+    queryFn: ({ signal }) => getMyLibraryAlbums({ signal }),
+    staleTime: 30000,
+  });
+  const remove = useMutation({
+    mutationFn: (folder) => removeMyLibraryAlbums([folder]),
+    onSuccess: (_result, folder) => {
+      showSuccess(`Removed ${folder.split("/")[1] || folder}. It leaves your library in a few minutes.`);
+      queryClient.invalidateQueries({ queryKey: ["user-library"] });
+    },
+    onError: (error) => showError(error?.response?.data?.error || error?.message || "Could not remove that album"),
+  });
+  const albums = query.data?.albums || [];
+  if (!albums.length) return null;
+
+  return (
+    <section className="my-library-page__albums" aria-label="Albums added on their own">
+      <h2>Albums added on their own</h2>
+      <p className="my-library-page__row-detail">
+        In your library without the rest of the artist, for playlists shared with you. Removing one takes its
+        songs out of those playlists too.
+      </p>
+      <details open={albums.length <= 8}>
+        <summary>{pluralize(albums.length, "album")}</summary>
+        <ul>
+          {albums.map((album) => {
+            const [artist, title] = album.folder.split("/");
+            return (
+              <li key={album.folder} className="my-library-page__album">
+                <span className="my-library-page__row-name">
+                  <span className="my-library-page__row-title">{title || artist}</span>
+                  <span className="my-library-page__row-detail">
+                    {title ? artist : ""}
+                    {album.addedFor ? `${title ? " · " : ""}for ${album.addedFor}` : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => remove.mutate(album.folder)}
+                  disabled={remove.isPending}
+                >
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </details>
+    </section>
   );
 }
 

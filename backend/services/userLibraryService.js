@@ -11,7 +11,8 @@ import {
   getCanonicalNewlyAvailableAlbums,
 } from "./libraryQueryService.js";
 import { logger } from "./logger.js";
-import { isPlaylistNormalizeEnabled } from "../config/featureFlags.js";
+import { getNavidromeRootMapping, isPlaylistNormalizeEnabled } from "../config/featureFlags.js";
+import { db } from "../config/db-sqlite.js";
 
 const RECONCILE_DEBOUNCE_MS = 3000;
 const RECONCILE_STARTUP_DELAY_MS = 20000;
@@ -413,7 +414,115 @@ async function pruneStaleSymlinks(userDir, desired) {
   return changes;
 }
 
-export async function materializeUserLibrary(userDir, memberArtists, mappings) {
+// ---------------------------------------------------------------- single albums
+
+/**
+ * The unit a song is added to a personal library by: its album folder, the
+ * first two segments of its path in the main library ("Artist/Album"). A disc
+ * subfolder belongs to its album. A song sitting loose in an artist folder is
+ * its own unit, since the folder above it is the whole artist.
+ */
+export function albumFolderOf(relativePath) {
+  const parts = String(relativePath || "").replace(/\\/g, "/").split("/").filter(Boolean);
+  if (parts.length < 2 || parts.some((part) => part === "." || part === "..")) return null;
+  return parts.slice(0, 2).join("/");
+}
+
+export function listUserLibraryAlbums(username) {
+  return db.prepare(`
+    SELECT folder, added_for AS addedFor, added_at AS addedAt
+    FROM user_library_albums WHERE username = ? ORDER BY folder COLLATE NOCASE
+  `).all(username);
+}
+
+/**
+ * Record albums as part of someone's library. Nothing reaches the disk until
+ * the next reconcile; the caller decides whether to wait for one.
+ */
+export function addUserLibraryAlbums(username, folders, addedFor = null) {
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO user_library_albums (username, folder, added_for, added_at)
+    VALUES (?, ?, ?, ?)
+  `);
+  const at = Date.now();
+  let added = 0;
+  db.transaction(() => {
+    for (const folder of new Set(folders || [])) {
+      if (albumFolderOf(folder) !== folder) continue;
+      added += insert.run(username, folder, addedFor, at).changes;
+    }
+  })();
+  return added;
+}
+
+export function removeUserLibraryAlbums(username, folders) {
+  const remove = db.prepare("DELETE FROM user_library_albums WHERE username = ? AND folder = ?");
+  let removed = 0;
+  db.transaction(() => {
+    for (const folder of new Set(folders || [])) removed += remove.run(username, folder).changes;
+  })();
+  if (removed) scheduleUserLibraryReconcile();
+  return removed;
+}
+
+/**
+ * Someone's single albums with the folder each one links to, or null when the
+ * main library's location is not configured. Null is not "none": it leaves
+ * the album folders on disk as they are rather than tearing them down.
+ */
+function albumTargetsFor(username) {
+  const rows = listUserLibraryAlbums(username);
+  if (!rows.length) return [];
+  const musicRoot = getNavidromeRootMapping()?.aurralRoot;
+  if (!musicRoot) {
+    logger.warn(
+      "library",
+      `[UserLibraries] ${username} has single albums, but AURRAL_NAVIDROME_MUSIC_ROOT is not set; leaving them as they are`,
+    );
+    return null;
+  }
+  return rows.map((row) => ({ folder: row.folder, target: path.join(musicRoot, row.folder) }));
+}
+
+// A folder Psalter made to hold single albums carries this file, so a folder
+// anyone else put in a personal library is never mistaken for one and pruned.
+const ALBUM_HOLDER_MARKER = ".psalter-albums";
+
+function isAlbumHolder(dirPath) {
+  return fs.existsSync(path.join(dirPath, ALBUM_HOLDER_MARKER));
+}
+
+// Remove the links in an album holder that are no longer wanted or no longer
+// resolve, and the holder itself once nothing is left in it.
+async function pruneAlbumHolder(dirPath, wanted) {
+  let changes = 0;
+  for (const entry of await fsp.readdir(dirPath, { withFileTypes: true })) {
+    if (entry.name === ALBUM_HOLDER_MARKER || !entry.isSymbolicLink()) continue;
+    const linkPath = path.join(dirPath, entry.name);
+    const target = wanted?.get(entry.name);
+    if (target) {
+      try {
+        const current = path.resolve(dirPath, await fsp.readlink(linkPath));
+        if (current === path.resolve(target) && fs.existsSync(current)) continue;
+      } catch {}
+    }
+    try {
+      await fsp.unlink(linkPath);
+      changes += 1;
+      logger.info("library", `[UserLibraries] Removed album link ${linkPath}`);
+    } catch (error) {
+      logger.warn("library", `[UserLibraries] Failed to remove album link ${linkPath}: ${error.message}`);
+    }
+  }
+  const left = (await fsp.readdir(dirPath)).filter((name) => name !== ALBUM_HOLDER_MARKER);
+  if (!left.length) {
+    await fsp.unlink(path.join(dirPath, ALBUM_HOLDER_MARKER)).catch(() => {});
+    await fsp.rmdir(dirPath).catch(() => {});
+  }
+  return changes;
+}
+
+export async function materializeUserLibrary(userDir, memberArtists, mappings, albums = []) {
   let changes = 0;
   await fsp.mkdir(userDir, { recursive: true });
 
@@ -439,7 +548,30 @@ export async function materializeUserLibrary(userDir, memberArtists, mappings) {
     desired.set(linkName, localPath);
   }
 
+  // Single albums go in a real folder named for the artist, one link per
+  // album. An artist who is in the library whole already has them all.
+  const albumHolders = new Map();
+  for (const album of albums || []) {
+    const [artistFolder, albumName] = String(album.folder).split("/");
+    if (!artistFolder || !albumName || desired.has(artistFolder)) continue;
+    if (!albumHolders.has(artistFolder)) albumHolders.set(artistFolder, new Map());
+    albumHolders.get(artistFolder).set(albumName, album.target);
+  }
+
   changes += await pruneStaleSymlinks(userDir, desired);
+
+  // Null albums means they could not be worked out this time, so the holders
+  // on disk are left exactly as they are.
+  if (albums) {
+    for (const entry of await fsp.readdir(userDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const holderPath = path.join(userDir, entry.name);
+      if (!isAlbumHolder(holderPath)) continue;
+      // An artist now in the library whole replaces the holder with a link.
+      const wanted = desired.has(entry.name) ? null : albumHolders.get(entry.name) || null;
+      changes += await pruneAlbumHolder(holderPath, wanted);
+    }
+  }
 
   for (const [linkName, targetPath] of desired) {
     const linkPath = path.join(userDir, linkName);
@@ -473,6 +605,40 @@ export async function materializeUserLibrary(userDir, memberArtists, mappings) {
         "library",
         `[UserLibraries] Failed to create symlink ${linkPath}: ${error.message}`,
       );
+    }
+  }
+
+  for (const [artistFolder, wanted] of albumHolders) {
+    const holderPath = path.join(userDir, artistFolder);
+    let existing = null;
+    try {
+      existing = await fsp.lstat(holderPath);
+    } catch {}
+    if (existing && (!existing.isDirectory() || !isAlbumHolder(holderPath))) {
+      logger.warn("library", `[UserLibraries] Skipping albums in ${holderPath}: something else is already there`);
+      continue;
+    }
+    for (const [albumName, targetPath] of wanted) {
+      const linkPath = path.join(holderPath, albumName);
+      if (fs.existsSync(linkPath)) continue;
+      if (!fs.existsSync(targetPath)) {
+        logger.warn("library", `[UserLibraries] Skipping link for missing album folder: ${targetPath}`);
+        continue;
+      }
+      try {
+        if (!isAlbumHolder(holderPath)) {
+          await fsp.mkdir(holderPath, { recursive: true });
+          await fsp.writeFile(
+            path.join(holderPath, ALBUM_HOLDER_MARKER),
+            "Albums Psalter linked into this personal library one at a time. Managed by Psalter.\n",
+          );
+        }
+        await fsp.symlink(path.relative(holderPath, targetPath), linkPath);
+        changes += 1;
+        logger.info("library", `[UserLibraries] Linked album ${linkPath}`);
+      } catch (error) {
+        logger.warn("library", `[UserLibraries] Failed to link album ${linkPath}: ${error.message}`);
+      }
     }
   }
 
@@ -673,12 +839,13 @@ async function runReconcile() {
     if (!userDir) continue;
     const memberArtists =
       tagId != null ? artists.filter((artist) => artistHasTag(artist, tagId)) : [];
-    if (!memberArtists.length && !fs.existsSync(userDir)) continue;
+    const albums = albumTargetsFor(user.username);
+    if (!memberArtists.length && !albums?.length && !fs.existsSync(userDir)) continue;
     try {
-      const changes = await materializeUserLibrary(userDir, memberArtists, mappings);
+      const changes = await materializeUserLibrary(userDir, memberArtists, mappings, albums);
       totalChanges += changes;
-      summary.push({ username: user.username, artists: memberArtists.length, changes });
-      if (memberArtists.length) populated.push({ username: user.username, userDir });
+      summary.push({ username: user.username, artists: memberArtists.length, albums: albums?.length || 0, changes });
+      if (memberArtists.length || albums?.length) populated.push({ username: user.username, userDir });
     } catch (error) {
       logger.warn(
         "library",
@@ -763,6 +930,18 @@ export async function reconcileUserLibraries() {
     }
   })();
   return reconcileInFlight;
+}
+
+/**
+ * Bring the libraries up to date now and wait until Navidrome has read them,
+ * for a change someone is waiting on. A run already under way began before
+ * the change and may not include it, so it is let finish first.
+ */
+export async function reconcileUserLibrariesAndWait() {
+  if (reconcileInFlight) await reconcileInFlight.catch(() => {});
+  const result = await reconcileUserLibraries();
+  await getNavidromeClient()?.waitForScanToFinish();
+  return result;
 }
 
 export function scheduleUserLibraryReconcile(delayMs = RECONCILE_DEBOUNCE_MS) {

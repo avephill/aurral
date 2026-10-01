@@ -9,6 +9,10 @@ import {
 } from "../../../middleware/requirePermission.js";
 import { logger } from "../../../services/logger.js";
 import {
+  albumRequestLimitResponse,
+  assertAlbumRequestAllowed,
+} from "../../../services/albumRequestService.js";
+import {
   getCanonicalLibraryReadModelForArtistReferences,
 } from "../../../services/canonicalLibraryReadAdapter.js";
 
@@ -101,6 +105,13 @@ export function registerAlbums(router) {
           }
         }
 
+        try {
+          assertAlbumRequestAllowed(req.user, { albumMbid: mbid });
+        } catch (limitError) {
+          if (limitError.statusCode !== 429) throw limitError;
+          return res.status(429).json(albumRequestLimitResponse(limitError));
+        }
+
         const settings = dbOps.getSettings();
         const searchOnAdd = settings.integrations?.lidarr?.searchOnAdd ?? false;
 
@@ -176,6 +187,13 @@ export function registerAlbums(router) {
           return res.status(400).json({
             error: "albumMbid, albumName, artistMbid, and artistName are required",
           });
+        }
+
+        try {
+          assertAlbumRequestAllowed(req.user, { albumMbid });
+        } catch (limitError) {
+          if (limitError.statusCode !== 429) throw limitError;
+          return res.status(429).json(albumRequestLimitResponse(limitError));
         }
 
         const result = await libraryManager.requestAlbumFromSearch({

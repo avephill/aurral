@@ -7,10 +7,15 @@ import CongregationPicker from "./CongregationPicker";
 import "./walkthrough.css";
 
 // A short look around on someone's first visit: where their music is, how to
-// find something, where playlists live, and the two pages worth knowing about.
-// It ends on Bulk migration and stays there, because picking what of the
-// server's music is theirs is the thing to do first. No lectures - enough to
-// start, and it never comes back.
+// find something, where playlists live, and the pages worth knowing about. No
+// lectures - enough to start, and it never comes back unless an admin hands it
+// back from Settings -> Users.
+//
+// Someone whose library came in from iTunes gets a tour of their own at the
+// edges: tags explained against what they knew, and it ends on the playlists
+// they brought rather than on picking artists, which was done for them.
+
+const fromItunes = (bootstrap) => bootstrap?.itunesLibraryImported === true;
 
 const STEPS = [
   {
@@ -26,39 +31,35 @@ const STEPS = [
   },
   {
     title: "Yours, and the server's",
-    body: "The server holds more music than your library does - other people's records live there too. Yours is the part you have picked out, and it is what you see by default.",
+    body: "The server holds more music than your library does - other people's records live there too. Yours is the part you have picked out, and it is what you see by default. The switch at the top of the Library shows the whole server's instead.",
     path: "/library",
     anchor: '[data-tour="library"]',
   },
   {
     title: "Finding something",
-    body: "Search from anywhere. Your own library comes first, then the rest of the server, and you can search further afield from the bottom of the list.",
+    body: "The search box searches whatever you are looking at. On the Library it looks through your library - music you can play now. On Discover it looks everywhere, records to ask for included. If what you want is not in your library, the bottom of the list offers to look in Discover.",
     anchor: '[data-tour="search"]',
   },
   {
     title: "Playlists",
-    body: "Your playlists live under Library. Add a song to one from the ••• beside it, and they work in any music player you use, not only here.",
+    body: "Your playlists live under Library, and work in any music player you use, not only here. Add a song to one from the ••• beside it, or several songs from an album at once from the album's •••. On this page you can also drag a song onto a playlist on the left. A playlist can be a fixed list of songs, or a set of rules - every song rated five stars, say - that keeps filling itself.",
     path: "/library/playlists",
     anchor: '[data-tour="library"]',
   },
   // Only for someone whose library came in from iTunes: it is a comparison,
   // and it means nothing to anyone with nothing to compare it against.
   {
-    title: "Tags, and playlists that fill themselves",
-    body: "A playlist here can be a fixed list of songs, or a set of rules that keeps filling itself - the way a smart playlist did in iTunes. The words you tagged songs with came across with your library, and they are their own thing now: put one on a song, or on a whole record at once, from the ••• beside it, instead of typing into its comment field. What your library arrived with is kept exactly as it was.",
+    title: "Tags",
+    body: "The words you tagged songs with in iTunes came across, and tags are their own thing now: put one on a song from the ••• beside it instead of typing into its comment field, on a whole record from the record's •••, or on several songs of a record at once with \"Tag songs\". To see every song with a tag, pick it in the filter on the Tracks page, or type # and the tag into the search box. A smart playlist can be built on them too - every song tagged sunday that you rated four stars, say - and it keeps itself up to date. What your library arrived with is kept exactly as it was.",
     path: "/library/tags",
     anchor: '[data-tour="tags"]',
-    needs: (bootstrap) => bootstrap?.itunesLibraryImported === true,
+    needs: fromItunes,
   },
+  // One stop for Discover: finding records and asking for them are the same
+  // visit, and two steps saying so in turn read as the tour repeating itself.
   {
-    title: "Adding music",
-    body: "Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for it, and when it arrives it goes into your library too. Once an artist is in your library, anything of theirs that reaches the server later joins it on its own.",
-    path: "/discover",
-    anchor: '[data-tour="discover"]',
-  },
-  {
-    title: "Discover",
-    body: "Somewhere to find records worth asking for - new releases, things like what you already play, and what has just been added to the server.",
+    title: "Discover, and adding music",
+    body: "Discover is for finding more: new releases, things like what you already play, and what has just been added to the server. Searching from here looks everywhere. Something already on the server: add it to your library and it is yours straight away. Something nobody has yet: ask for the album - a few a day - and when it arrives it goes into your library too. Once an artist is in your library, anything of theirs that reaches the server later joins it on its own.",
     path: "/discover",
     anchor: '[data-tour="discover"]',
   },
@@ -74,12 +75,21 @@ const STEPS = [
   },
   {
     title: "Social",
-    body: "Playlists other people share with you, and albums or songs they think you would like. You can send some back.",
+    body: "A playlist someone shares with you waits here until you add it, and says first if adding it means putting albums in your library. Playlists shown to your whole congregation are here too, to add or not, and albums or songs people think you would like. You can send some back.",
     path: "/social",
     anchor: '[data-tour="social"]',
   },
-  // Last, and left open: the tour ends on the page worth using first, with
-  // the artists already in front of them rather than a page away.
+  // Said once, near the end: when something goes wrong, there is somewhere to
+  // say so other than a phone call.
+  {
+    title: "Ideas & problems",
+    body: "If something isn't working, or you wish Psalter did something it doesn't, say so here. Write it the way you would say it - what you were doing and what happened is plenty. The answer comes back on the same page, and a dot appears beside it in the sidebar when it does.",
+    path: "/feedback",
+    anchor: '[data-tour="feedback"]',
+  },
+  // Last, and left open: the tour ends on the page worth using first. For
+  // someone new that is picking their artists. Someone who came from iTunes
+  // has had that done for them, so theirs ends on the playlists they brought.
   {
     title: "Where to start",
     body: "Bulk migration is the quickest way to say which of the server's music is yours: tick the artists you want and they and their records join your library in one go. It is the one thing worth doing before anything else, so the tour leaves you here.",
@@ -88,7 +98,15 @@ const STEPS = [
     cta: "Pick my artists",
     // Nothing to send anyone to when the server keeps one library for
     // everyone; the step would open a page saying so.
-    needs: (bootstrap) => bootstrap?.userLibrariesEnabled === true,
+    needs: (bootstrap) => bootstrap?.userLibrariesEnabled === true && !fromItunes(bootstrap),
+  },
+  {
+    title: "Where to start",
+    body: "Your music, your ratings and your playlists came across from iTunes and are all here. Pick a playlist and press play - and if something is missing, ask for it from Discover.",
+    path: "/library/playlists",
+    anchor: '[data-tour="library"]',
+    cta: "Show my playlists",
+    needs: fromItunes,
   },
 ];
 

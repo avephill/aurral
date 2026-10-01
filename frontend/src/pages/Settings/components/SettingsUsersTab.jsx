@@ -7,9 +7,11 @@ import { SettingsInput } from "./SettingsField";
 import { SettingsArrFieldSet, SettingsArrFormGroup } from "./arr/SettingsArrLayout";
 import { SettingsCongregations } from "./SettingsCongregations";
 import { UserQualityProfile } from "./UserQualityProfile";
+import { UserRequestLimit } from "./UserRequestLimit";
+import { LibraryHistoryModal } from "./LibraryHistoryModal";
 
 import { createPortal } from "react-dom";
-import { Compass, Lock, Trash2, UserPlus, X } from "lucide-react";
+import { Compass, History, Lock, Trash2, UserPlus, X } from "lucide-react";
 import { GRANULAR_PERMISSIONS, granularPerms } from "../constants";
 import { useModalDialog } from "../../../hooks/useModalDialog.js";
 import { AdminPlexLinkField } from "./AdminPlexLinkField";
@@ -182,6 +184,8 @@ export function SettingsUsersTab({
   const userLibrariesNavidromeRootPath = settings?.userLibraries?.navidromeRootPath || "";
   const [syncingUserLibraries, setSyncingUserLibraries] = useState(false);
   const [resettingTour, setResettingTour] = useState(null);
+  // Whose library history is open, if anyone's.
+  const [historyUser, setHistoryUser] = useState(null);
 
   const userLibrariesState = {
     enabled: userLibrariesEnabled,
@@ -226,6 +230,7 @@ export function SettingsUsersTab({
 
   return (
     <div className="arr-page">
+      {historyUser ? <LibraryHistoryModal user={historyUser} onClose={() => setHistoryUser(null)} /> : null}
       {authUser?.role !== "admin" ? (
         <SettingsArrFieldSet legend="Change password">
           <form
@@ -447,6 +452,7 @@ export function SettingsUsersTab({
                     <th scope="col">Username</th>
                     <th scope="col">Role</th>
                     <th scope="col">Quality</th>
+                    <th scope="col">Albums a day</th>
                     <th scope="col">Plex</th>
                     <th scope="col" className="arr-table__actions-head">
                       <span className="sr-only">Actions</span>
@@ -456,13 +462,13 @@ export function SettingsUsersTab({
                 <tbody>
                   {loadingUsers ? (
                     <tr className="arr-table__empty-row">
-                      <td colSpan={5}>
+                      <td colSpan={6}>
                         <DotLoader size="sm" label={null} /> Loading users…
                       </td>
                     </tr>
                   ) : usersList.length === 0 ? (
                     <tr className="arr-table__empty-row">
-                      <td colSpan={5}>No users configured.</td>
+                      <td colSpan={6}>No users configured.</td>
                     </tr>
                   ) : (
                     usersList.map((user) => (
@@ -479,6 +485,9 @@ export function SettingsUsersTab({
                         </td>
                         <td>
                           <UserQualityProfile user={user} onSaved={refreshUsers} />
+                        </td>
+                        <td>
+                          <UserRequestLimit user={user} onSaved={refreshUsers} />
                         </td>
                         <td>
                           <span className="arr-table__path">{formatPlexLink(user)}</span>
@@ -504,6 +513,15 @@ export function SettingsUsersTab({
                               }}
                             >
                               <Lock className="artist-icon-sm" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
+                              className="arr-btn arr-btn--ghost arr-btn--icon"
+                              aria-label={`${user.username}'s library history`}
+                              title="Their playlists, ratings, tags and library as they were on an earlier day, and putting them back"
+                              onClick={() => setHistoryUser(user)}
+                            >
+                              <History className="artist-icon-sm" aria-hidden />
                             </button>
                             <button
                               type="button"

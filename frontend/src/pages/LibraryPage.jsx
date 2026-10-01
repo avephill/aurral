@@ -76,6 +76,7 @@ import { navigateToLibraryAlbum } from "../utils/searchNavigation";
 import { DEFAULT_LIBRARY_VIEW, LIBRARY_VIEWS } from "../navigation/libraryNavConfig";
 import { libraryPreviewData, libraryPreviewFavorites } from "./libraryPreviewData";
 import {
+  TrackPlaylistMenu,
   TrackPlaylistRemoveSubmenu,
   TrackPlaylistSubmenu,
 } from "./ArtistDetails/components/TrackPlaylistMenu";
@@ -84,8 +85,10 @@ import { DeleteArtistModal } from "./ArtistDetails/components/DeleteArtistModal"
 import { DeleteTrackModal } from "./ArtistDetails/components/DeleteTrackModal";
 import LibraryInfoModal from "./LibraryInfoModal";
 import { useUserLibrary } from "../hooks/useUserLibrary";
+import { useLibraryScope } from "../hooks/useLibraryScope";
 import RecommendModal from "../components/RecommendModal";
 import TagsModal from "../components/TagsModal";
+import TagFilter from "../components/TagFilter";
 import {
   buildSharedPlaylistTrackPayload,
   reserveUniquePlaylistName,
@@ -98,25 +101,6 @@ import { queryClient, queryKeys } from "../queryClient.js";
 // Views that still open though the sidebar no longer lists them, so old
 // links keep working: album artists became artists, and favorites is a view
 // reached by link now that hearted songs live in a playlist.
-// Browsing defaults to the person's own library: every personal library here
-// is a symlinked subset of the shared one, and Navidrome already scopes what
-// they can play. "Whole server" is a click away for anyone who wants it.
-const SCOPE_KEY = "psalter.libraryScope";
-const readScopePreference = (userId) => {
-  try {
-    return window.localStorage.getItem(`${SCOPE_KEY}:${userId}`) === "server" ? "server" : "mine";
-  } catch {
-    return "mine";
-  }
-};
-const writeScopePreference = (userId, scope) => {
-  try {
-    window.localStorage.setItem(`${SCOPE_KEY}:${userId}`, scope);
-  } catch {
-    // A browser that refuses storage still gets the default each visit.
-  }
-};
-
 const LIBRARY_VIEW_IDS = new Set([
   ...LIBRARY_VIEWS.map((view) => view.id),
   "album-artists",
@@ -389,6 +373,10 @@ const formatLongDuration = (durationMs) => {
     : minutes + "m " + (seconds % 60) + "s";
 };
 
+// The saving key while songs chosen on an album are being added, so no single
+// song's menu reads as busy.
+const PICKED_SONGS_KEY = "picked-songs";
+
 const TRACK_DOWNLOAD_ACTIVE_STATUSES = new Set([
   "submitting",
   "pending",
@@ -530,11 +518,8 @@ function LibraryPage() {
   } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { bootstrap, hasPermission, user } = useAuth();
-  const [libraryScope, setLibraryScope] = useState(() => readScopePreference(user?.id ?? "anon"));
-  const chooseScope = (next) => {
-    setLibraryScope(next);
-    writeScopePreference(user?.id ?? "anon", next);
-  };
+  // Shared with the search box and library search results.
+  const [libraryScope, chooseScope] = useLibraryScope(user?.id);
   const ratingsEnabled = bootstrap?.navidromeRatingsEnabled === true;
   const { showError, showSuccess } = useToast();
   const {
@@ -568,6 +553,9 @@ function LibraryPage() {
   const [pageIndex, setPageIndex] = useState(1);
   const refreshAttemptRef = useRef(0);
   const [playlistSavingKey, setPlaylistSavingKey] = useState("");
+  // Choosing songs on an album to add to a playlist: which album, and which
+  // of its songs are ticked. Null when not choosing.
+  const [picking, setPicking] = useState(null);
   const [trackDownloadStates, setTrackDownloadStates] = useState({});
   const [libraryRemoval, setLibraryRemoval] = useState(null);
   const [libraryInfo, setLibraryInfo] = useState(null);
@@ -688,6 +676,13 @@ function LibraryPage() {
   const selectedRating = section === "tracks" && ratingParam >= 1 && ratingParam <= 5 ? ratingParam : 0;
   const favoritesOnly = section === "tracks" && searchParams.get("favorites") === "1";
   const unratedOnly = section === "tracks" && searchParams.get("rating") === "unrated";
+  // Songs carrying the chosen tags - all of them, or any one.
+  const tagsParam = section === "tracks" ? searchParams.get("tags") || "" : "";
+  const selectedTags = useMemo(
+    () => tagsParam.split(",").map((tag) => tag.trim()).filter(Boolean),
+    [tagsParam],
+  );
+  const tagMatch = searchParams.get("tagMatch") === "any" ? "any" : "all";
   const forcePreview = import.meta.env.DEV && searchParams.get("preview") === "1";
   const previewQuery = forcePreview ? "?preview=1" : "";
   // An old /library/album-artists link lands on the artist list, so it should
@@ -707,8 +702,11 @@ function LibraryPage() {
     setViewMode(section === "tracks" || section === "genres" ? "list" : "grid");
     setTrackListSort(null);
     setSearchOpen(false);
-    setFiltersOpen(false);
+    // A link that arrives filtered by tag shows the filter, so the list is
+    // never narrowed by something out of sight.
+    setFiltersOpen(section === "tracks" && Boolean(searchParams.get("tags")));
     setPageIndex(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section]);
 
   const libraryQueryKey = useMemo(
@@ -723,6 +721,8 @@ function LibraryPage() {
       genre: selectedGenre,
       rating: unratedOnly ? "unrated" : selectedRating,
       favorites: favoritesOnly,
+      tags: tagsParam,
+      tagMatch,
       sort: sortMode,
       direction: sortDirection,
       scope: libraryScope,
@@ -737,6 +737,8 @@ function LibraryPage() {
       favoritesOnly,
       section,
       selectedGenre,
+      tagMatch,
+      tagsParam,
       selectedRating,
       sortDirection,
       sortMode,
@@ -808,6 +810,8 @@ function LibraryPage() {
                 minRating: selectedRating || undefined,
                 favorites: favoritesOnly,
                 unrated: unratedOnly,
+                tags: selectedTags,
+                tagMatch,
               }, { signal });
       const pageResults = section === "favorites"
         ? [nextData?.library || EMPTY_LIBRARY]
@@ -974,11 +978,11 @@ function LibraryPage() {
     [getAlbumForTrack, getArtistForAlbum, sharedPlaylists],
   );
 
-  const addLibraryTrackToPlaylist = useCallback(
-    async (track, target) => {
+  const libraryTrackPayload = useCallback(
+    (track) => {
       const album = getAlbumForTrack(track);
       const artist = getArtistForAlbum(album);
-      const payload = buildSharedPlaylistTrackPayload({
+      return buildSharedPlaylistTrackPayload({
         artistName: artist?.name || track?.artistName || "",
         trackName: track?.title || "",
         albumName: album?.title || "",
@@ -990,6 +994,13 @@ function LibraryPage() {
         trackId: track?.id ?? null,
         albumId: album?.id ?? null,
       });
+    },
+    [getAlbumForTrack, getArtistForAlbum],
+  );
+
+  const addLibraryTrackToPlaylist = useCallback(
+    async (track, target) => {
+      const payload = libraryTrackPayload(track);
       if (!payload.artistName || !payload.trackName) {
         showError("Track details are incomplete");
         return;
@@ -1026,9 +1037,68 @@ function LibraryPage() {
       }
     },
     [
-      getAlbumForTrack,
-      getArtistForAlbum,
       getDefaultTrackPlaylistName,
+      libraryTrackPayload,
+      loadSharedPlaylists,
+      setPlaylistsError,
+      setSharedPlaylists,
+      sharedPlaylists,
+      showError,
+      showSuccess,
+    ],
+  );
+
+  // Several songs at once, from choosing them on an album. Songs the playlist
+  // already holds are not put in twice. Resolves true when they went in.
+  const addLibraryTracksToPlaylist = useCallback(
+    async (tracks, target) => {
+      const payloads = tracks
+        .map(libraryTrackPayload)
+        .filter((payload) => payload.artistName && payload.trackName);
+      if (!payloads.length) return false;
+      const songs = (count) => `${count} song${count === 1 ? "" : "s"}`;
+      setPlaylistSavingKey(PICKED_SONGS_KEY);
+      setPlaylistsError("");
+      try {
+        if (target?.mode === "new") {
+          const name = String(target?.name || "").trim() || getDefaultTrackPlaylistName(tracks[0]);
+          await createSharedPlaylist({ name, tracks: payloads });
+          showSuccess(`Saved ${songs(payloads.length)} to ${name}`);
+        } else {
+          const playlist = sharedPlaylists.find((candidate) => candidate.id === target?.playlistId);
+          const result = await addSharedPlaylistTracks(target?.playlistId, { tracks: payloads, skipExisting: true });
+          const added = Number(result?.added ?? payloads.length);
+          const alreadyThere = Number(result?.alreadyThere || 0);
+          const notFound = Array.isArray(result?.unresolved) ? result.unresolved.length : 0;
+          showSuccess(
+            [
+              `Added ${songs(added)} to ${playlist?.name || "the playlist"}`,
+              alreadyThere ? `${alreadyThere} already in it` : "",
+              notFound ? `${notFound} not found in Navidrome` : "",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          );
+        }
+        const nextPlaylists = await loadSharedPlaylists();
+        if (nextPlaylists) setSharedPlaylists(nextPlaylists);
+        return true;
+      } catch (requestError) {
+        const message =
+          requestError.response?.data?.message ||
+          requestError.response?.data?.error ||
+          requestError.message ||
+          "Failed to add those songs to the playlist";
+        setPlaylistsError(message);
+        showError(message);
+        return false;
+      } finally {
+        setPlaylistSavingKey("");
+      }
+    },
+    [
+      getDefaultTrackPlaylistName,
+      libraryTrackPayload,
       loadSharedPlaylists,
       setPlaylistsError,
       setSharedPlaylists,
@@ -1508,6 +1578,17 @@ function LibraryPage() {
     [genreStats],
   );
   const libraryAlbum = routeAlbumId ? albumsById.get(String(routeAlbumId)) || null : null;
+  // Choosing songs belongs to the album it started on.
+  const pickingIds = picking && String(picking.albumId) === String(libraryAlbum?.id) ? picking.ids : null;
+  const togglePicked = (trackId) =>
+    setPicking((current) => {
+      if (!current) return current;
+      const ids = new Set(current.ids);
+      const key = String(trackId);
+      if (ids.has(key)) ids.delete(key);
+      else ids.add(key);
+      return { ...current, ids };
+    });
   const libraryArtist = routeArtistId ? artistsById.get(String(routeArtistId)) || null : null;
   // Opening an album or artist by its id shows what the server holds, which is
   // not the same as what this person's library holds. Membership is per artist,
@@ -1924,10 +2005,20 @@ function LibraryPage() {
     setSearchParams(next);
   };
 
+  const updateTagFilter = (tags, match) => {
+    setPageIndex(1);
+    const next = new URLSearchParams(searchParams);
+    if (tags.length) next.set("tags", tags.join(","));
+    else next.delete("tags");
+    if (tags.length > 1 && match === "any") next.set("tagMatch", "any");
+    else next.delete("tagMatch");
+    setSearchParams(next);
+  };
+
   const clearFilters = () => {
     setPageIndex(1);
     const next = new URLSearchParams(searchParams);
-    ["genre", "rating", "favorites"].forEach((key) => next.delete(key));
+    ["genre", "rating", "favorites", "tags", "tagMatch"].forEach((key) => next.delete(key));
     setSearchParams(next);
   };
 
@@ -2007,7 +2098,9 @@ function LibraryPage() {
     );
   };
 
-  const renderTrackList = (tracks, label, sort = null) => (
+  // `picked`, when given, is the set of ticked song ids: the list is for
+  // choosing songs then, and each row leads with a tick box instead of play.
+  const renderTrackList = (tracks, label, sort = null, picked = null) => (
     <div className="native-library-track-list">
       <div
         className="native-library-track native-library-track--heading"
@@ -2147,18 +2240,30 @@ function LibraryPage() {
                 ]
               : []),
           ];
+          const isPicked = Boolean(picked?.has(String(track.id)));
           return (
             <div
               className={
                 "native-library-track" +
                 (active ? " is-active" : "") +
-                (file ? "" : " is-missing")
+                (file ? "" : " is-missing") +
+                (isPicked ? " is-picked" : "")
               }
               data-library-menu-target
               key={track.id}
               role="listitem"
             >
-            {file ? (
+            {picked ? (
+              <input
+                type="checkbox"
+                className="native-library-track__pick"
+                checked={isPicked}
+                disabled={!file}
+                onChange={() => togglePicked(track.id)}
+                aria-label={(isPicked ? "Leave out " : "Include ") + (track.title || "this song")}
+                title={file ? undefined : "Not on the server, so it cannot go in a playlist"}
+              />
+            ) : file ? (
               <TooltipButton
                 className="native-library-track__play"
                 onClick={() => playTrack(track, tracks)}
@@ -2195,7 +2300,7 @@ function LibraryPage() {
             <button
               type="button"
               className="native-library-track__title"
-              onClick={() => playTrack(track, tracks)}
+              onClick={() => (picked ? file && togglePicked(track.id) : playTrack(track, tracks))}
               title={track.title || "Unknown Track"}
             >
               <span>{track.title || "Unknown Track"}</span>
@@ -2714,6 +2819,90 @@ function LibraryPage() {
     </div>
   );
 
+  // Choosing songs on an album, every playable one ticked to start with, for
+  // a playlist or for tags.
+  const startPicking = (album, albumTracks, purpose) =>
+    setPicking({
+      albumId: album.id,
+      purpose,
+      ids: new Set(albumTracks.filter((track) => firstAvailableFile(track)).map((track) => String(track.id))),
+    });
+
+  // Shown while choosing songs on an album: how many are ticked, a quick all
+  // or none, and what to do with them.
+  const renderPickingBar = (albumTracks) => {
+    const available = albumTracks.filter((track) => firstAvailableFile(track));
+    const chosen = available.filter((track) => pickingIds.has(String(track.id)));
+    const saving = playlistSavingKey === PICKED_SONGS_KEY;
+    const forTags = picking?.purpose === "tags";
+    const songs = chosen.length === 1 ? "1 song" : `${chosen.length} songs`;
+    return (
+      <div
+        className="native-library-picking"
+        role="region"
+        aria-label={forTags ? "Songs to tag" : "Songs to add to a playlist"}
+      >
+        <span className="native-library-picking__count">
+          {chosen.length} of {available.length} songs
+        </span>
+        <div className="native-library-picking__buttons">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() =>
+              setPicking((current) => ({ ...current, ids: new Set(available.map((track) => String(track.id))) }))
+            }
+            disabled={saving || chosen.length === available.length}
+          >
+            All
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setPicking((current) => ({ ...current, ids: new Set() }))}
+            disabled={saving || chosen.length === 0}
+          >
+            None
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPicking(null)} disabled={saving}>
+            Cancel
+          </button>
+          {forTags ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={!chosen.length}
+              onClick={() =>
+                setTagging({
+                  kind: "tracks",
+                  ids: chosen.map((track) => track.id),
+                  title: `Tag ${songs}`,
+                  subtitle: libraryAlbum?.title || "",
+                })
+              }
+            >
+              <TagIcon aria-hidden="true" className="artist-icon-sm" /> Tag {songs}...
+            </button>
+          ) : (
+          <TrackPlaylistMenu
+            triggerLabel={chosen.length === 1 ? "Add 1 song to..." : `Add ${chosen.length} songs to...`}
+            playlists={sharedPlaylists}
+            loading={playlistsLoading}
+            saving={saving}
+            disabled={!chosen.length}
+            error={playlistsError}
+            defaultNewPlaylistName={libraryAlbum?.title || getDefaultTrackPlaylistName(chosen[0])}
+            onLoadPlaylists={loadSharedPlaylists}
+            onSelect={async (target) => {
+              if (await addLibraryTracksToPlaylist(chosen, target)) setPicking(null);
+            }}
+          />
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderLibraryAlbumDetail = () => {
     if (!libraryAlbum) return null;
     const artist = getArtistForAlbum(libraryAlbum);
@@ -2797,6 +2986,20 @@ function LibraryPage() {
                     label: "Play album",
                     icon: Play,
                     onSelect: () => playTracks(albumTracks),
+                    disabled: !albumTracks.some((track) => firstAvailableFile(track)),
+                  },
+                  {
+                    id: "pick-songs",
+                    label: "Add songs to a playlist...",
+                    icon: ListPlus,
+                    onSelect: () => startPicking(libraryAlbum, albumTracks, "playlist"),
+                    disabled: !albumTracks.some((track) => firstAvailableFile(track)),
+                  },
+                  {
+                    id: "tag-songs",
+                    label: "Tag songs...",
+                    icon: TagIcon,
+                    onSelect: () => startPicking(libraryAlbum, albumTracks, "tags"),
                     disabled: !albumTracks.some((track) => firstAvailableFile(track)),
                   },
                   {
@@ -2884,7 +3087,8 @@ function LibraryPage() {
             <h3>Tracks</h3>
             <span>{availability.total}</span>
           </div>
-          {renderTrackList(sortTrackRows(albumTracks), libraryAlbum.title + " tracks", clientTrackSort)}
+          {renderTrackList(sortTrackRows(albumTracks), libraryAlbum.title + " tracks", clientTrackSort, pickingIds)}
+          {pickingIds ? renderPickingBar(albumTracks) : null}
         </section>
       </section>
     );
@@ -3090,7 +3294,14 @@ function LibraryPage() {
       />
       <LibraryInfoModal item={libraryInfo} onClose={() => setLibraryInfo(null)} />
       <RecommendModal target={recommending} onClose={() => setRecommending(null)} />
-      <TagsModal subject={tagging} onClose={() => setTagging(null)} />
+      <TagsModal
+        subject={tagging}
+        onClose={() => setTagging(null)}
+        // Tagging songs chosen on an album is the end of choosing them.
+        onSaved={() => {
+          if (tagging?.kind === "tracks") setPicking(null);
+        }}
+      />
     </>
   );
 
@@ -3187,7 +3398,9 @@ function LibraryPage() {
   // Home has nothing to search, sort or filter; its one control, Refresh, sits
   // in the title row instead, so home skips the toolbar row entirely.
   const showToolbar = !isHome;
-  const hasActiveFilters = Boolean(selectedGenre || selectedRating || favoritesOnly || unratedOnly);
+  const hasActiveFilters = Boolean(
+    selectedGenre || selectedRating || favoritesOnly || unratedOnly || selectedTags.length,
+  );
 
   return (
     <main className="library-page native-library-page">
@@ -3422,6 +3635,11 @@ function LibraryPage() {
                         <option value="favorites">Favorites only</option>
                       </select>
                     </label>
+                    <TagFilter
+                      selected={selectedTags}
+                      match={tagMatch}
+                      onChange={updateTagFilter}
+                    />
                   </>
                 )}
                 {hasActiveFilters && (
@@ -3444,14 +3662,14 @@ function LibraryPage() {
       {!loading && !error && activeCount === 0 && (
         <EmptyState
           title={
-            query || selectedGenre
+            query || selectedGenre || selectedTags.length
               ? "No matches"
               : section === "favorites"
                 ? "No favorites"
                 : "Your library is empty"
           }
           message={
-            query || selectedGenre
+            query || selectedGenre || selectedTags.length
               ? "Try a different search or clear the filter."
               : "Indexed music will appear here when the library is ready."
           }

@@ -43,6 +43,7 @@ import songRecordsRouter from "./routes/songRecords.js";
 import tagsRouter from "./routes/tags.js";
 import congregationsRouter from "./routes/congregations.js";
 import socialRouter from "./routes/social.js";
+import feedbackRouter from "./routes/feedback.js";
 import { bootstrapHonkerSchedules } from "./services/honkerDb.js";
 import { initializeAppRuntime } from "./services/appRuntime.js";
 import {
@@ -244,6 +245,7 @@ app.use("/api/navidrome-playlists", navidromePlaylistsRouter);
 app.use("/api/navidrome-ratings", navidromeRatingsRouter);
 app.use("/api/song-records", songRecordsRouter);
 app.use("/api/social", socialRouter);
+app.use("/api/feedback", feedbackRouter);
 app.use("/api/weekly-flow", (req, res) => {
   const parsed = new URL(req.originalUrl, "http://localhost");
   res.redirect(308, `/api/playlists${parsed.pathname}${parsed.search}`);
@@ -470,6 +472,17 @@ httpServer.listen(PORT, async () => {
   import("./services/socialService.js")
     .then(({ startSocialSync }) => startSocialSync())
     .catch((error) => logger.warn("library", `[Social] Share sync did not start: ${error.message}`));
+  // Tags that came in with an iTunes library become the person's own, once:
+  // the first start after this change copies them all, later ones only what
+  // was linked since.
+  import("./services/trackTagService.js")
+    .then(({ adoptImportedTags }) => adoptImportedTags())
+    .catch((error) => logger.warn("library", `[Tags] Copying iTunes tags failed: ${error.message}`));
+  // A daily copy of everyone's playlists, ratings, tags and library, for
+  // putting back a mistake.
+  import("./services/libraryHistoryService.js")
+    .then(({ startLibraryHistory }) => startLibraryHistory())
+    .catch((error) => logger.warn("library", `[History] Daily snapshots did not start: ${error.message}`));
   // Smart playlists follow ratings and imports as they happen; this catches
   // what moves without Psalter being told, such as play counts.
   import("./services/tagPlaylistService.js")

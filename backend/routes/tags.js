@@ -13,8 +13,8 @@ import {
   tracksWithTag,
 } from "../services/trackTagService.js";
 
-// Tagging songs, which used to be something only iTunes could do here: the
-// imported comments are read-only history, and these sit over them.
+// Tagging songs. The tags an iTunes library came with were copied in as the
+// person's own, so these are all theirs to change; the export is left as it was.
 
 const router = express.Router();
 router.use(requireAuth);

@@ -559,10 +559,12 @@ export function useArtistDetailsLibrary({
       );
       showSuccess(`Downloading album: ${title}`);
     } catch (err) {
+      const data = err.response?.data;
+      // Over the day's limit is not a failure, and says so itself.
       showError(
-        `Failed to add album: ${
-          err.response?.data?.message || err.response?.data?.error || err.message
-        }`,
+        data?.code === "album-request-limit"
+          ? data.message
+          : `Failed to add album: ${data?.message || data?.error || err.message}`,
       );
     } finally {
       setRequestingAlbum(null);

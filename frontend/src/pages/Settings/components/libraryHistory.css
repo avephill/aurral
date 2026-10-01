@@ -1,0 +1,122 @@
+/* One person's library history in Settings -> Users. */
+
+.library-history {
+  width: min(56rem, calc(100vw - 2rem));
+}
+
+.library-history__body {
+  display: grid;
+  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 18rem;
+}
+
+.library-history__list {
+  max-height: 28rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--aurral-border);
+  list-style: none;
+}
+
+.library-history__list button {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: var(--aurral-radius-sm);
+  background: transparent;
+  color: var(--aurral-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.library-history__list button:hover:not(:disabled),
+.library-history__list button.is-selected {
+  background: var(--aurral-surface-hover);
+}
+
+.library-history__when {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.library-history__meta,
+.library-history__muted {
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.library-history__muted {
+  margin: 0;
+}
+
+.library-history__detail {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  max-height: 28rem;
+  overflow-y: auto;
+}
+
+.library-history__section {
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.65rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.library-history__section legend label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.25rem;
+  font-weight: 650;
+}
+
+.library-history__section p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.library-history__section ul {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-history__section li label {
+  display: grid;
+  grid-template-columns: 1.1rem auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+  font-size: 0.875rem;
+}
+
+.library-history__section li label span {
+  color: var(--aurral-text-muted);
+}
+
+.library-history__section li label.is-info {
+  opacity: 0.75;
+}
+
+.library-history__spacer {
+  width: 1.1rem;
+}
+
+@media (max-width: 640px) {
+  .library-history__body {
+    grid-template-columns: 1fr;
+  }
+
+  .library-history__list {
+    max-height: 12rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--aurral-border);
+  }
+}

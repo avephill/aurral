@@ -3,6 +3,8 @@ import { dbOps } from "../db/helpers/index.js";
 import { hasPermission } from "../middleware/auth.js";
 import { requireAuth } from "../middleware/requirePermission.js";
 import { libraryManager } from "../services/libraryManager.js";
+import { albumRequestLimitResponse, assertAlbumRequestAllowed } from "../services/albumRequestService.js";
+import { recordAlbumRequested } from "../services/aurralHistoryService.js";
 import {
   enqueueInboxRefreshForUser,
   getInboxForUser,
@@ -26,7 +28,8 @@ async function addInboxItem(item, user) {
       error.statusCode = 403;
       throw error;
     }
-    return libraryManager.requestAlbumFromSearch({
+    assertAlbumRequestAllowed(user, { albumMbid: metadata.albumMbid });
+    const result = await libraryManager.requestAlbumFromSearch({
       albumMbid: metadata.albumMbid,
       albumName: metadata.albumName,
       artistMbid: metadata.artistMbid,
@@ -34,6 +37,18 @@ async function addInboxItem(item, user) {
       triggerSearch: true,
       user,
     });
+    // Recorded like a request from anywhere else, so it counts toward the
+    // day's limit and shows on the Requests report.
+    recordAlbumRequested({
+      albumId: result?.album?.id || result?.id,
+      albumMbid: metadata.albumMbid,
+      albumName: result?.album?.albumName || metadata.albumName,
+      artistName: result?.artist?.artistName || metadata.artistName,
+      artistMbid: metadata.artistMbid,
+      searching: result?.status !== "available",
+      user,
+    });
+    return result;
   }
   if (item.kind === "discovery") {
     if (!hasPermission(user, "addArtist")) {
@@ -154,6 +169,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     }
     return res.status(400).json({ error: "Unsupported inbox action" });
   } catch (error) {
+    if (error.statusCode === 429) return res.status(429).json(albumRequestLimitResponse(error));
     return res.status(error.statusCode || 500).json({
       error: error.message || "Failed to update inbox item",
     });

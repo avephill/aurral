@@ -115,6 +115,9 @@ test("a copy says it is a copy, and what happens to changes made in it", () => {
   assert.match(socialPage, /replaced next time they change the original/);
 });
 
-test("the owner is told when someone has thrown their copy away", () => {
-  assert.match(socialPage, /removed their copy\. Share it again/);
+test("the sharer is not told what the other person did with it", () => {
+  // Whether they added it, turned it down or threw their copy away is theirs.
+  assert.doesNotMatch(socialPage, /removed their copy/);
+  assert.doesNotMatch(socialPage, /waiting for \$\{share\.recipient\}/);
+  assert.match(socialPage, /<div className="social__muted">shared with \{share\.recipient\}<\/div>/);
 });
