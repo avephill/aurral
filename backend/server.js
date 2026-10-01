@@ -43,6 +43,7 @@ import songRecordsRouter from "./routes/songRecords.js";
 import tagsRouter from "./routes/tags.js";
 import congregationsRouter from "./routes/congregations.js";
 import socialRouter from "./routes/social.js";
+import feedbackRouter from "./routes/feedback.js";
 import { bootstrapHonkerSchedules } from "./services/honkerDb.js";
 import { initializeAppRuntime } from "./services/appRuntime.js";
 import {
@@ -244,6 +245,7 @@ app.use("/api/navidrome-playlists", navidromePlaylistsRouter);
 app.use("/api/navidrome-ratings", navidromeRatingsRouter);
 app.use("/api/song-records", songRecordsRouter);
 app.use("/api/social", socialRouter);
+app.use("/api/feedback", feedbackRouter);
 app.use("/api/weekly-flow", (req, res) => {
   const parsed = new URL(req.originalUrl, "http://localhost");
   res.redirect(308, `/api/playlists${parsed.pathname}${parsed.search}`);

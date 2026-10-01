@@ -9,6 +9,7 @@ import {
   Inbox,
   Library,
   ListMusic,
+  MessageSquare,
   Newspaper,
   Settings,
   Sparkles,
@@ -18,6 +19,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { getSocialOverview } from "../utils/api/endpoints/social.js";
+import { getFeedbackWaiting } from "../utils/api/endpoints/feedback.js";
 import { useFlowWorkerActivity } from "../pages/flows/useFlowWorkerActivity";
 import { DEFAULT_SETTINGS_TAB, SETTINGS_NAV_TABS } from "../pages/Settings/settingsTabsConfig";
 import { DEFAULT_SHOWS_FILTER, SHOWS_FILTERS } from "../navigation/showsNavConfig";
@@ -77,6 +79,16 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
   });
   const hasSocialAlert = (social.data?.recommendations?.unread || 0) > 0
     || (social.data?.shares?.received || []).some((share) => !share.acceptedAt);
+  // An answer to something they sent; for an admin, also anything sent that
+  // nobody has read yet.
+  const feedback = useQuery({
+    queryKey: ["feedback", "waiting"],
+    queryFn: ({ signal }) => getFeedbackWaiting({ signal }),
+    enabled: Boolean(user),
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+  });
+  const hasFeedbackAlert = (feedback.data?.unreadReplies || 0) > 0 || (feedback.data?.unseen || 0) > 0;
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true,
   );
@@ -277,6 +289,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
       // Everyone's page: playlists shared with you, recommendations, and what
       // people have been playing.
       { path: "/social", label: "Social", icon: Users },
+      // Somewhere to say something is broken or would be nice, for everyone.
+      { path: "/feedback", label: "Ideas & problems", icon: MessageSquare },
       // What people have asked for and whether it has arrived. Admins act on
       // it, so only they see it; the same report is also under Settings.
       ...(user?.role === "admin"
@@ -465,7 +479,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
               const Icon = item.icon;
               const active = isNavItemActive(item);
               const showActivityDot = (item.section === "activity" && hasReviewAlert)
-                || (item.path === "/social" && hasSocialAlert);
+                || (item.path === "/social" && hasSocialAlert)
+                || (item.path === "/feedback" && hasFeedbackAlert);
               const activeSubnavId =
                 item.section === "library"
                   ? activeLibraryView
@@ -481,6 +496,8 @@ function Sidebar({ mode, width = 208, settingsMode = false }) {
                 <div key={item.path} className={getNavGroupClassName(item, active)}>
                   <Link
                     to={item.path}
+                    // A report says where it was written from.
+                    state={item.path === "/feedback" ? { from: `${location.pathname}${location.search}` } : undefined}
                     onMouseEnter={(event) => {
                       if (isIcons) positionSidebarTooltip(event);
                     }}

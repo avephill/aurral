@@ -1,0 +1,237 @@
+/* Ideas & problems: sending one, and what has been sent with any answer. */
+
+.feedback {
+  display: grid;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 48rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding-bottom: 4rem;
+}
+
+.feedback__muted {
+  margin: 0.25rem 0 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+}
+
+.feedback__form {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.feedback__kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.feedback__kinds button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.feedback__kinds button:hover {
+  background: var(--aurral-surface-hover);
+}
+
+.feedback__kinds button.is-active {
+  border-color: var(--aurral-accent);
+  background: var(--aurral-surface-selected);
+  color: var(--aurral-text);
+}
+
+.feedback__kinds svg,
+.feedback-item__kind {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.feedback textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface);
+  color: var(--aurral-text);
+  font: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.feedback textarea:focus {
+  outline: 2px solid var(--aurral-ring);
+  outline-offset: 1px;
+}
+
+.feedback__send,
+.feedback__history-head,
+.feedback-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.feedback__send .feedback__muted {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.feedback__history {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.feedback__history h2 {
+  margin: 0;
+  color: var(--aurral-text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.feedback__views {
+  display: inline-flex;
+  border: 1px solid var(--aurral-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.feedback__views button {
+  padding: 0.3rem 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.feedback__views button.is-active {
+  background: var(--aurral-surface-selected);
+  color: var(--aurral-text);
+}
+
+.feedback__list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feedback-item {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+}
+
+.feedback-item.is-unread {
+  border-color: var(--aurral-accent);
+}
+
+.feedback-item--done,
+.feedback-item--wont {
+  opacity: 0.75;
+}
+
+.feedback-item__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.feedback-item__kind {
+  color: var(--aurral-text-muted);
+}
+
+.feedback-item__meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.feedback-item__meta strong {
+  margin-right: 0.4rem;
+  color: var(--aurral-text);
+}
+
+.feedback-item__meta a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.feedback-item__status {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.feedback-item__badge {
+  flex-shrink: 0;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: 999px;
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.feedback-item__badge--planned,
+.feedback-item__badge--done {
+  border-color: var(--aurral-accent);
+  color: var(--aurral-text);
+}
+
+.feedback-item__message {
+  margin: 0;
+  color: var(--aurral-text);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.feedback-item__reply {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--aurral-accent);
+  background: var(--aurral-surface-raised);
+  color: var(--aurral-text);
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.feedback-item__reply span {
+  color: var(--aurral-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.feedback-item__answer {
+  display: grid;
+  gap: 0.5rem;
+}

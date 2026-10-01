@@ -79,6 +79,14 @@ const STEPS = [
     path: "/social",
     anchor: '[data-tour="social"]',
   },
+  // Said once, near the end: when something goes wrong, there is somewhere to
+  // say so other than a phone call.
+  {
+    title: "Ideas & problems",
+    body: "If something isn't working, or you wish Psalter did something it doesn't, say so here. Write it the way you would say it - what you were doing and what happened is plenty. The answer comes back on the same page, and a dot appears beside it in the sidebar when it does.",
+    path: "/feedback",
+    anchor: '[data-tour="feedback"]',
+  },
   // Last, and left open: the tour ends on the page worth using first. For
   // someone new that is picking their artists. Someone who came from iTunes
   // has had that done for them, so theirs ends on the playlists they brought.

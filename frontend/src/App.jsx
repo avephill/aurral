@@ -47,6 +47,7 @@ const BlocklistPage = lazy(() => import("./pages/BlocklistPage"));
 const RequestsPage = lazy(() => import("./pages/RequestsPage"));
 const ItunesLibraryPage = lazy(() => import("./pages/ItunesLibraryPage"));
 const SocialPage = lazy(() => import("./pages/SocialPage"));
+const FeedbackPage = lazy(() => import("./pages/FeedbackPage"));
 const TagsPage = lazy(() => import("./pages/TagsPage"));
 const ArtistDetailsPage = lazy(() => import("./pages/ArtistDetails/ArtistDetailsPage"));
 const ArtistReleaseListPage = lazy(() => import("./pages/ArtistDetails/ArtistReleaseListPage"));
@@ -330,6 +331,7 @@ function AppContent() {
                       <Route path="/requests" element={<RequestsPage />} />
                       <Route path="/itunes-library" element={<AdminRoute><ItunesLibraryPage /></AdminRoute>} />
                       <Route path="/social" element={<SocialPage />} />
+                      <Route path="/feedback" element={<FeedbackPage />} />
                       <Route path="/history" element={<Navigate to="/activity/history" replace />} />
                       <Route path="/history/:legacyTab" element={<LegacyHistoryRedirect />} />
                       <Route path="/activity" element={<ActivityRootRedirect />} />

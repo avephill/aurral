@@ -163,3 +163,27 @@ test("an iTunes library gets its own ending, and the tags step", () => {
   assert.doesNotMatch(source, /title: "Adding music"/);
   assert.doesNotMatch(source, /Your own library comes first, then the rest of the server/, "the old search");
 });
+
+// Everyone hears once that there is somewhere to send ideas and problems,
+// pointed at the sidebar entry itself, and the tour still ends where it did.
+
+test("the tour shows where to send an idea or a problem", () => {
+  const source = readFileSync(
+    new URL("../../frontend/src/components/Walkthrough.jsx", import.meta.url),
+    "utf8",
+  );
+  const sidebar = readFileSync(
+    new URL("../../frontend/src/components/Sidebar.jsx", import.meta.url),
+    "utf8",
+  );
+  const step = source.match(/\{[^{}]*title: "Ideas & problems"[\s\S]*?\},/);
+  assert.ok(step, "the step is there");
+  assert.doesNotMatch(step[0], /needs:/, "for everyone");
+  assert.match(step[0], /anchor: '\[data-tour="feedback"\]'/);
+  assert.match(sidebar, /\{ path: "\/feedback", label: "Ideas & problems"/);
+  assert.match(sidebar, /data-tour=\{item\.section \|\| item\.path\?\.replace\("\/", ""\) \|\| undefined\}/);
+  assert.ok(
+    source.indexOf('title: "Ideas & problems"') < source.indexOf('title: "Where to start"'),
+    "before the ending",
+  );
+});

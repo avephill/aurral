@@ -578,6 +578,26 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 
+  -- Ideas and problems people send from the app. page is where they were
+  -- when they wrote, app_version the build they were using, so a report leads
+  -- back to source. An admin marks each one and can write back; reply_seen_at
+  -- is when its sender last read what came back.
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    message TEXT NOT NULL,
+    page TEXT,
+    app_version TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    reply TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    reply_seen_at INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_feedback_user ON feedback (username, created_at DESC);
+
   -- Single albums in someone's personal library, alongside the whole artists
   -- Lidarr tags put there. Taking a shared playlist is the usual reason: a
   -- holiday playlist wants one Christmas album, not everything under Various
