@@ -41,8 +41,28 @@ test("the album menu can start choosing songs to tag", () => {
 });
 
 test("several songs get each tag added, and keep what they had", () => {
-  assert.match(tagsModal, /for \(const tag of adding\) await applyTag\(\{ trackIds: subject\.ids, tag \}\)/);
+  assert.match(tagsModal, /for \(const tag of wanted\) await applyTag\(\{ trackIds: subject\.ids, tag \}\)/);
   assert.match(tagsModal, /Tags they have already are kept\./);
   // Nothing is read for several songs: there is no one set of tags to show.
   assert.match(tagsModal, /isMany\s*\? Promise\.resolve\(\{ tags: \[\] \}\)/);
+});
+
+// Typing a tag and pressing Save is how most people tag something. A word
+// left in the box used to be dropped for one song or one record - only the
+// several-songs form kept it - and the dialog closed as if it had worked.
+
+test("a tag typed but not entered is saved, whatever is being tagged", () => {
+  const save = tagsModal.slice(tagsModal.indexOf("const save = async"), tagsModal.indexOf("const taken = new Set("));
+  assert.match(save, /const typed = draft\.trim\(\)\.toLowerCase\(\);\s*const wanted = typed && !tags\.includes\(typed\) \? \[\.\.\.tags, typed\] : tags;/);
+  assert.match(save, /applyTag\(\{ trackIds: subject\.ids, tag \}\)/);
+  assert.match(save, /setTagsForAlbum\(subject\.id, wanted\)/);
+  assert.match(save, /setTagsForTrack\(subject\.id, \[\.\.\.wanted, /);
+  assert.doesNotMatch(save, /setTagsFor(Album|Track)\(subject\.id, (\[\.\.\.)?tags\b/, "not the chips alone");
+});
+
+test("a saved tag reaches the tag lists straight away", () => {
+  assert.match(tagsModal, /queryClient\.invalidateQueries\(\{ queryKey: \["tags"\] \}\)/);
+  for (const reader of ["../../frontend/src/components/TagFilter.jsx", "../../frontend/src/pages/TagsPage.jsx"]) {
+    assert.match(read(reader), /queryKey: \["tags"\]/, `${reader} reads that list`);
+  }
 });

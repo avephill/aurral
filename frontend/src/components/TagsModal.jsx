@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import TooltipButton from "./TooltipButton";
 import { DotLoader } from "./DotLoader";
@@ -26,6 +27,7 @@ import {
 export default function TagsModal({ subject, onClose, onSaved }) {
   const titleId = useId();
   const { showError, showSuccess } = useToast();
+  const queryClient = useQueryClient();
   const [tags, setTags] = useState([]);
   const [removed, setRemoved] = useState([]);
   const [inherited, setInherited] = useState([]);
@@ -90,22 +92,27 @@ export default function TagsModal({ subject, onClose, onSaved }) {
   };
 
   const save = async () => {
+    // A tag typed but not yet entered is meant too: typing one and pressing
+    // Save is how most people tag something.
+    const typed = draft.trim().toLowerCase();
+    const wanted = typed && !tags.includes(typed) ? [...tags, typed] : tags;
+    const stillRemoved = removed.filter((tag) => !wanted.includes(tag));
     setSaving(true);
     try {
       if (isMany) {
-        // A tag typed but not yet entered is meant too.
-        const typed = draft.trim().toLowerCase();
-        const adding = typed && !tags.includes(typed) ? [...tags, typed] : tags;
         // One call per tag: each adds that tag to every song not already
         // carrying it.
-        for (const tag of adding) await applyTag({ trackIds: subject.ids, tag });
-        showSuccess(`Tagged ${subject.ids.length} song${subject.ids.length === 1 ? "" : "s"}: ${adding.join(", ")}`);
+        for (const tag of wanted) await applyTag({ trackIds: subject.ids, tag });
+        showSuccess(`Tagged ${subject.ids.length} song${subject.ids.length === 1 ? "" : "s"}: ${wanted.join(", ")}`);
       } else if (isAlbum) {
-        await setTagsForAlbum(subject.id, tags);
+        await setTagsForAlbum(subject.id, wanted);
       } else {
-        await setTagsForTrack(subject.id, [...tags, ...removed.map((tag) => `-${tag}`)]);
+        await setTagsForTrack(subject.id, [...wanted, ...stillRemoved.map((tag) => `-${tag}`)]);
       }
-      onSaved?.(tags);
+      // The tag list, the Tracks filter and the smart playlist editor all
+      // read the same list; a new tag belongs in it straight away.
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      onSaved?.(wanted);
       onClose?.();
     } catch (error) {
       showError(error.response?.data?.error || error.message || "Could not save those tags");
