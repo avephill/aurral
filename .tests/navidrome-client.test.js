@@ -665,3 +665,16 @@ test("deletes playlist artwork through the native API", async () => {
   assert.equal(requests[0].options.method, "DELETE");
   assert.equal(requests[0].options.headers["X-ND-Authorization"], "Bearer token");
 });
+
+test("folders of particular libraries can be scanned on their own", async () => {
+  const requests = [];
+  const fetch = async (url) => {
+    requests.push({ url: new URL(url) });
+    return jsonResponse({ "subsonic-response": { status: "ok" } });
+  };
+  await withFetch(fetch, () =>
+    new NavidromeClient("http://navidrome.test", "user", "password").scanFolders(["4:the Microphones", "7:the Microphones"]));
+  const scan = requests.find(({ url }) => url.pathname.endsWith("/startScan"));
+  assert.deepEqual(scan.url.searchParams.getAll("target"), ["4:the Microphones", "7:the Microphones"]);
+  assert.equal(scan.url.searchParams.get("fullScan"), "true");
+});

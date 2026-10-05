@@ -61,7 +61,10 @@ Learned the hard way in October 2026; read this before touching
   affected person (`libraryHistoryService.takeSnapshot`) and record their play
   counts (`libraryMoves.capturePlayCounts`), which snapshots do not keep. Try
   it on one small artist first.
-- **After it:** wait for Navidrome's scan and for the playlist normaliser
+- **After it:** scan the moved folders in every personal library that links
+  them - `NavidromeClient.scanFolders(["4:the Microphones", ...])` - because a
+  plain scan refreshes only the main library, and personal libraries keep
+  listing the old paths. Then wait for that scan and for the playlist normaliser
   (`[Playlists] Normalised` in the log, or its "Smart testing" warning - a
   deploy and a Lidarr import both start one). Build the old -> new path map
   with `libraryMoves.pathsMovedByLidarr`, then `compareWithNow` each person's

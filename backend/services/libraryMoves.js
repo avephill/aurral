@@ -11,7 +11,10 @@
 //   1. snapshot everyone who holds them (libraryHistoryService.takeSnapshot)
 //      and capturePlayCounts for the files about to move;
 //   2. move them (Lidarr's manual import or rename);
-//   3. pathsMovedByLidarr since step 1 gives old path -> new;
+//   3. pathsMovedByLidarr since step 1 gives old path -> new; scan the moved
+//      folders in every personal library that links them
+//      (NavidromeClient.scanFolders, "<library id>:<folder>") - a plain scan
+//      refreshes only the main library;
 //   4. once Navidrome has scanned and the playlist normaliser has run,
 //      restoreSnapshot with that pathMap, and replayPlayCounts;
 //   5. compareWithNow with the same pathMap should find nothing different.

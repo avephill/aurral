@@ -725,6 +725,15 @@ export class NavidromeClient {
     }
   }
 
+  // Scan particular folders of particular libraries: targets are
+  // "<library id>:<folder>". After files move inside a folder that personal
+  // libraries link, a plain scan refreshes only the main library, and the
+  // personal ones keep listing the old paths until their folders are scanned.
+  async scanFolders(targets, { full = true } = {}) {
+    this._indexedSongsPromise = null;
+    return this.request("startScan", { fullScan: full ? "true" : "false", target: targets });
+  }
+
   async scanLibrary() {
     if (!this.isConfigured()) return null;
     try {
