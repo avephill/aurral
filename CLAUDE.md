@@ -36,6 +36,56 @@ tag every commit.
 Environment changes, like `SESSION_EXPIRY_HOURS`, belong there rather than in
 committed defaults, because they describe this one installation.
 
+## Changing the music library
+
+The music on disk is shared by several people's personal libraries, and
+everything they have done with it - ratings, play counts, favourites,
+playlist entries - hangs off Navidrome ids that change when a file's path does.
+Learned the hard way in October 2026; read this before touching
+`/data/Music/Library`, Lidarr, or anyone's library links.
+
+- **Lidarr is the backbone.** Music gets into the library through Lidarr, by
+  MusicBrainz release, never by copying files into `Library/` by hand: files
+  Lidarr does not manage end up in everyone's libraries who follow that artist,
+  outside Psalter's index, and get adopted by Lidarr's rescans in ways no one
+  chose. `scripts/import-library/` is the supported way to import a folder.
+  Anything Lidarr cannot identify belongs in a holding folder outside
+  `Library/`, not in it.
+- **Lidarr has no recycle bin.** An import with `replaceExistingFiles` deletes
+  the file it replaces, for good. Switching an album's edition detaches all its
+  track files until they are imported again.
+- **Never run anything inside the container as root.** Psalter runs as `node`;
+  a root-owned file in `users/<name>` freezes that person's library, and every
+  change to it then fails quietly.
+- **Before any change that moves, deletes or relinks files:** snapshot every
+  affected person (`libraryHistoryService.takeSnapshot`) and record their play
+  counts (`libraryMoves.capturePlayCounts`), which snapshots do not keep. Try
+  it on one small artist first.
+- **After it:** wait for Navidrome's scan and for the playlist normaliser
+  (`[Playlists] Normalised` in the log, or its "Smart testing" warning - a
+  deploy and a Lidarr import both start one). Build the old -> new path map
+  with `libraryMoves.pathsMovedByLidarr`, then `compareWithNow` each person's
+  snapshot with it. Restore what differs with `restoreSnapshot(..., { pathMap })`
+  and `replayPlayCounts`, and compare again until nothing differs.
+  `backend/services/libraryMoves.js` describes the full order.
+- **What survives what.** Files moved within the main library (Lidarr import
+  or rename) keep their ratings, plays and playlist entries. Changing how a
+  personal library links a folder (a whole-folder link becoming per-album
+  links) does not: every song in it gets a new id. Anything pointing at a
+  deleted file is lost unless the path map says what it stands for.
+- **Re-sent plays never go to Last.fm or ListenBrainz.** `replayPlayCounts`
+  sends them from a `psalter-restore` player with external scrobbling off and
+  refuses to send otherwise. If a job ever needs someone to unlink a scrobbler,
+  ask them to link it again as its own step, and check that they did.
+- **Playlist writes go through `navidromePlaylistWrites.js`.** A person's own
+  Navidrome connection hides entries from libraries they cannot open while
+  Navidrome counts positions against the whole list, and Navidrome silently
+  ignores a request with more than 10,000 parameters. Do not rewrite or remove
+  playlist entries by position through a user client.
+- **Never rewrite playlists while a deploy is starting up** or a reconcile is
+  running: the normaliser rewrites the same playlists, and two writers
+  interleaving doubled a playlist of 11,997 songs.
+
 ## Local build and test gotchas
 
 - `react-router-dom` may be missing from the local `node_modules`, and then
