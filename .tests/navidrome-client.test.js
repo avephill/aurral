@@ -152,97 +152,92 @@ test("preserves Subsonic error codes for missing native IDs", async () => {
   }
 });
 
-test("replaces playlist entries with repeated Subsonic parameters", async () => {
-  const originalFetch = globalThis.fetch;
+// A fake Navidrome holding one playlist, applying updatePlaylist the way the
+// real one does - positions against the whole list - and refusing, silently,
+// any request with more than 10,000 parameters, as Go does.
+function fakePlaylistServer(initial) {
+  let entries = [...initial];
   const requests = [];
-  globalThis.fetch = async (url, init = {}) => {
-    requests.push({ url: new URL(url), init });
-    if (requests.length === 1) {
-      return jsonResponse({
-        "subsonic-response": {
-          status: "ok",
-          playlist: { entry: [{ id: "old-1" }, { id: "old-2" }] },
-        },
-      });
+  const fetch = async (url, init = {}) => {
+    const parsed = new URL(url);
+    requests.push({ url: parsed, init });
+    if (parsed.pathname.endsWith("/getPlaylist")) {
+      return jsonResponse({ "subsonic-response": { status: "ok", playlist: { entry: entries.map((id) => ({ id })) } } });
     }
+    const body = init.body;
+    if ([...body.keys()].length > 10_000) return jsonResponse({ "subsonic-response": { status: "ok" } });
+    const remove = new Set(body.getAll("songIndexToRemove").map(Number));
+    entries = entries.filter((_, index) => !remove.has(index)).concat(body.getAll("songIdToAdd"));
     return jsonResponse({ "subsonic-response": { status: "ok" } });
   };
+  return { fetch, requests, entries: () => entries };
+}
 
+async function withFetch(fetch, run) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = fetch;
   try {
-    await new NavidromeClient("http://navidrome.test", "user", "password")
-      .updatePlaylist("playlist-1", { name: "Renamed", songIds: ["song-1", "song-2"] });
+    return await run();
   } finally {
     globalThis.fetch = originalFetch;
   }
+}
 
-  assert.deepEqual(requests[1].init.body.getAll("songIndexToRemove"), ["0", "1"]);
-  assert.deepEqual(requests[1].init.body.getAll("songIdToAdd"), ["song-1", "song-2"]);
-  assert.equal(requests[1].init.body.get("name"), "Renamed");
+test("replaces playlist entries with repeated Subsonic parameters", async () => {
+  const server = fakePlaylistServer(["old-1", "old-2"]);
+  await withFetch(server.fetch, () =>
+    new NavidromeClient("http://navidrome.test", "user", "password")
+      .updatePlaylist("playlist-1", { name: "Renamed", songIds: ["song-1", "song-2"] }));
+  const writes = server.requests.filter(({ url }) => url.pathname.endsWith("/updatePlaylist"));
+  assert.deepEqual(writes[0].init.body.getAll("songIndexToRemove"), ["0", "1"]);
+  assert.equal(writes[0].init.body.get("name"), "Renamed");
+  assert.deepEqual(writes[1].init.body.getAll("songIdToAdd"), ["song-1", "song-2"]);
+  assert.deepEqual(server.entries(), ["song-1", "song-2"]);
 });
 
 test("batches large playlist replacement requests", async () => {
-  const originalFetch = globalThis.fetch;
-  const requests = [];
-  globalThis.fetch = async (url, init = {}) => {
-    requests.push({ url: new URL(url), init });
-    if (requests.length === 1) {
-      return jsonResponse({
-        "subsonic-response": {
-          status: "ok",
-          playlist: { entry: [{ id: "old-1" }] },
-        },
-      });
-    }
-    return jsonResponse({ "subsonic-response": { status: "ok" } });
-  };
-
-  try {
-    await new NavidromeClient("http://navidrome.test", "user", "password")
-      .updatePlaylist("playlist-1", {
-        name: "Large",
-        songIds: Array.from({ length: 101 }, (_, index) => `song-${index}`),
-      });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-
-  assert.equal(requests.length, 4);
-  assert.equal(requests[1].init.body.getAll("songIdToAdd").length, 50);
-  assert.equal(requests[2].init.body.getAll("songIdToAdd").length, 50);
-  assert.equal(requests[3].init.body.getAll("songIdToAdd").length, 1);
-  assert.ok(requests.every(({ url }) => url.toString().length < 8192));
+  const server = fakePlaylistServer(["old-1"]);
+  await withFetch(server.fetch, () =>
+    new NavidromeClient("http://navidrome.test", "user", "password").updatePlaylist("playlist-1", {
+      name: "Large",
+      songIds: Array.from({ length: 101 }, (_, index) => `song-${index}`),
+    }));
+  const adds = server.requests.filter(({ init }) => init.body?.getAll?.("songIdToAdd").length);
+  assert.deepEqual(adds.map(({ init }) => init.body.getAll("songIdToAdd").length), [50, 50, 1]);
+  assert.ok(server.requests.every(({ url }) => url.toString().length < 8192));
 });
 
 test("posts large playlist replacements without exceeding request URL limits", async () => {
-  const originalFetch = globalThis.fetch;
-  const requests = [];
-  globalThis.fetch = async (url, init = {}) => {
-    if (String(url).length >= 8192) throw new TypeError("fetch failed");
-    requests.push({ url: new URL(url), init });
-    if (requests.length === 1) {
-      return jsonResponse({
-        "subsonic-response": {
-          status: "ok",
-          playlist: {
-            entry: Array.from({ length: 1_000 }, (_, index) => ({ id: `old-${index}` })),
-          },
-        },
-      });
-    }
-    return jsonResponse({ "subsonic-response": { status: "ok" } });
-  };
+  const server = fakePlaylistServer(Array.from({ length: 1_000 }, (_, index) => `old-${index}`));
+  await withFetch(server.fetch, () =>
+    new NavidromeClient("http://navidrome.test", "user", "password")
+      .updatePlaylist("playlist-1", { name: "Large", songIds: ["song-1"] }));
+  const write = server.requests.find(({ url }) => url.pathname.endsWith("/updatePlaylist"));
+  assert.equal(write.init.method, "POST");
+  assert.equal(write.url.search, "");
+  assert.deepEqual(server.entries(), ["song-1"]);
+});
 
-  try {
-    await new NavidromeClient("http://navidrome.test", "user", "password")
-      .updatePlaylist("playlist-1", { name: "Large", songIds: ["song-1"] });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+test("a playlist longer than 10,000 is cleared a chunk at a time, and checked", async () => {
+  // One call naming 11,000 entries is ignored by Navidrome; the playlist used
+  // to end up with all of them plus the new songs.
+  const server = fakePlaylistServer(Array.from({ length: 11_000 }, (_, index) => `old-${index}`));
+  const wanted = Array.from({ length: 100 }, (_, index) => `song-${index}`);
+  await withFetch(server.fetch, () =>
+    new NavidromeClient("http://navidrome.test", "user", "password").updatePlaylist("playlist-1", { songIds: wanted }));
+  assert.deepEqual(server.entries(), wanted);
+  assert.ok(server.requests.every(({ init }) => !init.body || [...init.body.keys()].length <= 10_000));
 
-  assert.equal(requests[1].url.pathname, "/rest/updatePlaylist");
-  assert.equal(requests[1].init.method, "POST");
-  assert.equal(requests[1].url.search, "");
-  assert.equal(requests[1].init.body.getAll("songIndexToRemove").length, 1_000);
+  // And a rewrite that does not land says so rather than reporting success.
+  const stubborn = fakePlaylistServer(["old-1"]);
+  const fetch = async (url, init) => (new URL(url).pathname.endsWith("/getPlaylist")
+    ? stubborn.fetch(url, init)
+    : jsonResponse({ "subsonic-response": { status: "ok" } }));
+  await assert.rejects(
+    withFetch(fetch, () =>
+      new NavidromeClient("http://navidrome.test", "user", "password").updatePlaylist("playlist-1", { songIds: wanted })),
+    /has 1 songs after rewriting, not 100/,
+  );
 });
 
 test("preserves playlist update parameters across same-origin redirects", async () => {

@@ -56,12 +56,24 @@ function createFakeNavidrome() {
     if (url.pathname === "/api/playlist/p-2") {
       return reply(JSON.stringify({ id: "p-2", name: "Theirs", ownerName: "someone-else", songCount: 3 }));
     }
+    if (url.pathname === "/api/user") {
+      return reply(JSON.stringify([{ id: "nd-dunshill", userName: "dunshill", isAdmin: false }]));
+    }
+    if (url.pathname === "/api/user/nd-dunshill/library") return reply(JSON.stringify([{ id: 5 }]));
     if (url.pathname === "/api/playlist/p-1/tracks" && req.method === "GET") {
       return reply(JSON.stringify(state.entries.map((songId, index) => ({
         id: index + 1,
         mediaFileId: songId,
+        libraryId: 5,
         path: `Artist/Album/0${index + 1} Song.flac`,
       }))));
+    }
+    // Entries removed by their own ids, which is how a person's removals are
+    // made: their connection hides what they cannot open, and positions count
+    // against the whole list.
+    if (url.pathname === "/api/playlist/p-1/tracks" && req.method === "DELETE") {
+      state.requests.push({ kind: "delete", ids: url.searchParams.getAll("id") });
+      return reply(JSON.stringify({ id: "p-1" }));
     }
     if (url.pathname.startsWith("/api/playlist/p-1/tracks/") && req.method === "PUT") {
       return collectBody().then((body) => {
@@ -216,12 +228,12 @@ test("several entries are removed in one call, by position", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.body, { removed: 2 });
-  const update = fake.state.requests.findLast((request) => request.kind === "update");
-  assert.deepEqual(update.removed, ["0", "2"]);
+  const removal = fake.state.requests.findLast((request) => request.kind === "delete");
+  assert.deepEqual(removal.ids, ["3", "1"], "the entries at those positions, by their own ids");
 });
 
 test("a stale position stops the whole removal rather than deleting the wrong track", async () => {
-  const before = fake.state.requests.filter((request) => request.kind === "update").length;
+  const before = fake.state.requests.filter((request) => request.kind === "update" || request.kind === "delete").length;
   const response = responseFor();
   await routeHandler("POST", "/:id/entries/remove")(
     {
@@ -232,16 +244,18 @@ test("a stale position stops the whole removal rather than deleting the wrong tr
     response,
   );
   assert.equal(response.statusCode, 409);
-  assert.equal(fake.state.requests.filter((request) => request.kind === "update").length, before);
+  assert.equal(fake.state.requests.filter((request) => request.kind === "update" || request.kind === "delete").length, before);
 });
 
-test("the user client sends one update for a batch of removals", async () => {
+test("the user client removes a batch of entries in one call, by their ids", async () => {
   const client = userClientModule.createNavidromeUserClient(user);
-  const before = fake.state.requests.filter((request) => request.kind === "update").length;
-  assert.equal(await client.removePlaylistEntries("p-1", [3, 1, 1]), 2);
-  const after = fake.state.requests.filter((request) => request.kind === "update");
+  const before = fake.state.requests.filter((request) => request.kind === "delete").length;
+  assert.equal(await client.removePlaylistEntries("p-1", [2, 0, 0]), 2);
+  const after = fake.state.requests.filter((request) => request.kind === "delete");
   assert.equal(after.length, before + 1, "one call, not one per entry");
-  assert.deepEqual(after.at(-1).removed, ["3", "1"]);
+  assert.deepEqual(after.at(-1).ids, ["3", "1"]);
+  assert.equal(fake.state.requests.filter((request) => request.kind === "update" && request.removed.length).length, 0,
+    "never by position");
 });
 
 test("the client move helper targets the right playlist row", async () => {

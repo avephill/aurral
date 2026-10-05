@@ -1,4 +1,5 @@
 import express from "express";
+import { PlaylistWriteError } from "../services/navidromePlaylistWrites.js";
 import { requireAuth } from "../middleware/requirePermission.js";
 import { noCache } from "../middleware/cache.js";
 import {
@@ -148,6 +149,10 @@ function sendNavidromeError(res, error, fallback) {
         + "external-auth trusted sources and make sure the header names match.",
       code: error.code ?? null,
     });
+  }
+  // The playlist changed under someone, or an entry is gone: say so plainly.
+  if (error instanceof PlaylistWriteError) {
+    return res.status(error.status).json({ error: error.message, message: error.message });
   }
   const status = Number(error?.response?.status) || 502;
   return res.status(status >= 400 && status < 600 ? status : 502).json({

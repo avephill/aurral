@@ -6,6 +6,7 @@ const LEGACY_LIBRARY_DIR = "aurral-weekly-flow";
 const PLAYLIST_LIBRARY_NAME = "Aurral Playlists";
 const LEGACY_LIBRARY_NAMES = new Set(["Aurral Weekly Flow"]);
 const PLAYLIST_SONG_BATCH_SIZE = 50;
+const PLAYLIST_REMOVE_CHUNK = 1_000;
 const NAVIDROME_SONG_PAGE_SIZE = 1_000;
 const NAVIDROME_PLAYLIST_TRACK_PAGE_SIZE = 1_000;
 const NAVIDROME_PLAYLIST_WRITE_CHUNK = 500;
@@ -264,23 +265,30 @@ export class NavidromeClient {
     return playlist;
   }
 
+  // Navidrome ignores a request carrying more than 10,000 parameters, without
+  // saying so: one call naming every entry of a long playlist to remove did
+  // nothing, and the new songs were added after the old. Entries go a chunk
+  // at a time, from the end so the positions still to remove keep their
+  // meaning, and the result is counted.
   async updatePlaylist(playlistId, { name, songIds = [] } = {}) {
-    const playlist = await this.getPlaylist(playlistId);
-    const entries = playlist?.entry
-      ? Array.isArray(playlist.entry) ? playlist.entry : [playlist.entry]
-      : [];
+    const countEntries = (playlist) =>
+      playlist?.entry ? (Array.isArray(playlist.entry) ? playlist.entry.length : 1) : 0;
+    const before = countEntries(await this.getPlaylist(playlistId));
     const ids = Array.isArray(songIds) ? songIds : [];
-    await this.request("updatePlaylist", {
-      playlistId,
-      name,
-      songIndexToRemove: entries.map((_, index) => index),
-      songIdToAdd: ids.slice(0, PLAYLIST_SONG_BATCH_SIZE),
-    });
-    for (let index = PLAYLIST_SONG_BATCH_SIZE; index < ids.length; index += PLAYLIST_SONG_BATCH_SIZE) {
-      await this.request("updatePlaylist", {
-        playlistId,
-        songIdToAdd: ids.slice(index, index + PLAYLIST_SONG_BATCH_SIZE),
-      });
+    const calls = [];
+    for (let end = before; end > 0; end -= PLAYLIST_REMOVE_CHUNK) {
+      const start = Math.max(0, end - PLAYLIST_REMOVE_CHUNK);
+      calls.push({ songIndexToRemove: Array.from({ length: end - start }, (_, offset) => start + offset) });
+    }
+    for (let index = 0; index < ids.length; index += PLAYLIST_SONG_BATCH_SIZE) {
+      calls.push({ songIdToAdd: ids.slice(index, index + PLAYLIST_SONG_BATCH_SIZE) });
+    }
+    if (!calls.length) calls.push({});
+    if (name != null) calls[0].name = name;
+    for (const call of calls) await this.request("updatePlaylist", { playlistId, ...call });
+    const after = countEntries(await this.getPlaylist(playlistId));
+    if (after !== ids.length) {
+      throw new Error(`Playlist ${playlistId} has ${after} songs after rewriting, not ${ids.length}`);
     }
   }
 

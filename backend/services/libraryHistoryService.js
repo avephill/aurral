@@ -381,30 +381,16 @@ async function songIdsForPaths(user, paths) {
   return resolveCopiesForUser({ username: user.username, paths, canonicalAlways: true });
 }
 
-/**
- * Make a playlist hold exactly these songs, in this order, and check it does.
- *
- * Through Navidrome's own API, in chunks, the way the playlist normaliser
- * writes: Subsonic's single updatePlaylist call does not reliably clear a
- * playlist of thousands of entries, and the songs it is given are then added
- * after whatever it left behind.
- */
-export async function rewritePlaylistEntries(admin, playlistId, songIds) {
-  const current = await admin.getPlaylistTracks(playlistId);
-  if (current.length) await admin.removePlaylistTracks(playlistId, current.map((track) => track.id));
-  if (songIds.length) await admin.addPlaylistTracks(playlistId, songIds);
-  const after = await admin.getPlaylistTracks(playlistId);
-  if (after.length !== songIds.length) {
-    throw new LibraryHistoryError(`The playlist has ${after.length} songs after restoring, not ${songIds.length}`);
-  }
-  return after.length;
-}
+// Rewriting goes through the one place that does it safely; exported here too
+// for the tests that pin the restore's behaviour.
+export { rewritePlaylistEntries } from "./navidromePlaylistWrites.js";
 
 async function restorePlaylists(user, playlists, names) {
   const { createNavidromeUserClient } = await import("./navidromeUserClient.js");
   const { getAdminNavidromeClient } = await import("./navidromeTrackResolver.js");
   const tagPlaylists = await import("./tagPlaylistService.js");
   const { setPlaylistFolder } = await import("./navidromePlaylistFolders.js");
+  const { rewritePlaylistEntries } = await import("./navidromePlaylistWrites.js");
   const client = createNavidromeUserClient(user);
   const admin = getAdminNavidromeClient();
   const wanted = playlists.filter((playlist) => names.includes(playlist.name));

@@ -183,7 +183,7 @@ test("a playlist is rewritten to exactly the restored songs, or the restore says
 
   await assert.rejects(
     () => history.rewritePlaylistEntries(fakeAdmin({ dropsSome: true }), "pl", wanted),
-    /has 12047 songs after restoring, not 11997/,
+    /has 12047 songs after rewriting, not 11997/,
   );
   const source = readFileSync(new URL("../../backend/services/libraryHistoryService.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /client\.updatePlaylist\(playlistId, \{ name: entry\.name, songIds \}\)/);
