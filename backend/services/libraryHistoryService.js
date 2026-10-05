@@ -381,6 +381,25 @@ async function songIdsForPaths(user, paths) {
   return resolveCopiesForUser({ username: user.username, paths, canonicalAlways: true });
 }
 
+/**
+ * Make a playlist hold exactly these songs, in this order, and check it does.
+ *
+ * Through Navidrome's own API, in chunks, the way the playlist normaliser
+ * writes: Subsonic's single updatePlaylist call does not reliably clear a
+ * playlist of thousands of entries, and the songs it is given are then added
+ * after whatever it left behind.
+ */
+export async function rewritePlaylistEntries(admin, playlistId, songIds) {
+  const current = await admin.getPlaylistTracks(playlistId);
+  if (current.length) await admin.removePlaylistTracks(playlistId, current.map((track) => track.id));
+  if (songIds.length) await admin.addPlaylistTracks(playlistId, songIds);
+  const after = await admin.getPlaylistTracks(playlistId);
+  if (after.length !== songIds.length) {
+    throw new LibraryHistoryError(`The playlist has ${after.length} songs after restoring, not ${songIds.length}`);
+  }
+  return after.length;
+}
+
 async function restorePlaylists(user, playlists, names) {
   const { createNavidromeUserClient } = await import("./navidromeUserClient.js");
   const { getAdminNavidromeClient } = await import("./navidromeTrackResolver.js");
@@ -410,8 +429,10 @@ async function restorePlaylists(user, playlists, names) {
         await client.deletePlaylist(existingId);
         playlistId = null;
       }
-      if (playlistId) await client.updatePlaylist(playlistId, { name: entry.name, songIds });
-      else playlistId = (await client.createPlaylist(entry.name, songIds))?.id || null;
+      // Made empty and then filled: a long list of songs does not fit in the
+      // one request that creates a playlist.
+      if (!playlistId) playlistId = (await client.createPlaylist(entry.name, []))?.id || null;
+      if (playlistId) await rewritePlaylistEntries(admin, playlistId, songIds);
     } else if (entry.kind === "smart") {
       if (keptNow) tagPlaylists.forgetKept(keptNow);
       if (!playlistId) playlistId = (await client.createPlaylist(entry.name, []))?.id || null;

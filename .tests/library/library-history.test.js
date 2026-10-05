@@ -155,3 +155,36 @@ test("only an admin can see or restore someone's history", () => {
   const server = readFileSync(new URL("../../backend/server.js", import.meta.url), "utf8");
   assert.match(server, /startLibraryHistory\(\)/);
 });
+
+// Putting back a long playlist has to leave exactly what was asked for. The
+// single Subsonic call that was used before did not clear thousands of
+// entries, and appended the restored list after what it left.
+
+test("a playlist is rewritten to exactly the restored songs, or the restore says so", async () => {
+  const fakeAdmin = ({ dropsSome = false } = {}) => {
+    let entries = Array.from({ length: 12000 }, (_, i) => ({ id: String(i + 1), mediaFileId: `old-${i}` }));
+    let next = 20000;
+    return {
+      getPlaylistTracks: async () => entries.map((entry) => ({ ...entry })),
+      removePlaylistTracks: async (_id, ids) => {
+        const gone = new Set(dropsSome ? ids.slice(50) : ids);
+        entries = entries.filter((entry) => !gone.has(entry.id));
+      },
+      addPlaylistTracks: async (_id, songIds) => {
+        entries.push(...songIds.map((mediaFileId) => ({ id: String(next++), mediaFileId })));
+      },
+      entries: () => entries,
+    };
+  };
+  const wanted = Array.from({ length: 11997 }, (_, i) => `song-${i}`);
+  const admin = fakeAdmin();
+  assert.equal(await history.rewritePlaylistEntries(admin, "pl", wanted), 11997);
+  assert.deepEqual(admin.entries().map((entry) => entry.mediaFileId), wanted, "in order, nothing left over");
+
+  await assert.rejects(
+    () => history.rewritePlaylistEntries(fakeAdmin({ dropsSome: true }), "pl", wanted),
+    /has 12047 songs after restoring, not 11997/,
+  );
+  const source = readFileSync(new URL("../../backend/services/libraryHistoryService.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /client\.updatePlaylist\(playlistId, \{ name: entry\.name, songIds \}\)/);
+});
