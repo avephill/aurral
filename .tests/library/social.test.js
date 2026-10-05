@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
   cleanupIsolatedState,
@@ -374,6 +375,34 @@ test("after their own library, a copy comes from the main library, not someone e
     },
   });
   assert.equal(resolved.get(REL.his), "in-main");
+});
+
+test("putting back someone's own playlist keeps its main-library songs", async () => {
+  // Dad's account opens only his own library, but his playlists point at the
+  // main library's copies once Psalter has normalised them. Restoring one
+  // must not drop every song that is not in his library.
+  social.resetSocialCaches();
+  const deps = fakeDeps();
+  const resolve = (extra) => social.resolveCopiesForUser({
+    username: "dunshill",
+    paths: [REL.his],
+    deps: {
+      ...deps,
+      personalLibraryId: async () => 5,
+      canonicalLibraryId: async () => 1,
+      songsByPath: async () => [{ id: "in-main", path: REL.his, libraryId: 1 }],
+      adminClient: () => ({
+        getUsers: async () => [{ id: "nd-dunshill", userName: "dunshill" }],
+        getUserLibraries: async () => [{ id: 5 }],
+      }),
+    },
+    ...extra,
+  });
+  assert.equal((await resolve({})).get(REL.his), null, "sharing still only offers what they can open");
+  social.resetSocialCaches();
+  assert.equal((await resolve({ canonicalAlways: true })).get(REL.his), "in-main");
+  const history = readFileSync(new URL("../../backend/services/libraryHistoryService.js", import.meta.url), "utf8");
+  assert.match(history, /resolveCopiesForUser\(\{ username: user\.username, paths, canonicalAlways: true \}\)/);
 });
 
 test("a recommendation reaches named people, or everyone", () => {

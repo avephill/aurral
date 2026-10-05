@@ -201,7 +201,16 @@ export async function sharePlaylist({ owner, playlistId, recipients = [], deps =
  * ids deliberately differ per library - so everything that hands music from
  * one account to another goes through here.
  */
-export async function resolveCopiesForUser({ username, paths = [], preferSongIds = new Map(), deps = defaultSocialDeps } = {}) {
+export async function resolveCopiesForUser({
+  username,
+  paths = [],
+  preferSongIds = new Map(),
+  deps = defaultSocialDeps,
+  // Putting back someone's own playlist: the main library's copy is what it
+  // held, since Psalter sweeps playlists onto it, whether or not their
+  // account can open that library themselves.
+  canonicalAlways = false,
+} = {}) {
   const preferLibraryId = await deps.personalLibraryId(username).catch(() => null);
   const canonicalLibraryId = deps.canonicalLibraryId
     ? await deps.canonicalLibraryId().catch(() => null)
@@ -210,7 +219,8 @@ export async function resolveCopiesForUser({ username, paths = [], preferSongIds
   // After their own library, the main one. An admin can reach everyone's
   // personal library too, and a copy pointed at someone else's goes when they
   // drop the album, and carries ratings nobody sees in the main library.
-  const canReachCanonical = canonicalLibraryId !== null && allowed.has(Number(canonicalLibraryId));
+  const canReachCanonical = canonicalLibraryId !== null
+    && (canonicalAlways || allowed.has(Number(canonicalLibraryId)));
   const resolved = new Map();
   for (const path of paths) {
     if (resolved.has(path)) continue;

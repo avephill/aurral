@@ -375,7 +375,10 @@ export function snapshotStorage() {
 
 async function songIdsForPaths(user, paths) {
   const { resolveCopiesForUser } = await import("./socialService.js");
-  return resolveCopiesForUser({ username: user.username, paths });
+  // Their own copy first, then the main library's - which is where most of a
+  // playlist's songs point once Psalter has normalised it. Leaving out a song
+  // they could not open themselves would take it out of the playlist.
+  return resolveCopiesForUser({ username: user.username, paths, canonicalAlways: true });
 }
 
 async function restorePlaylists(user, playlists, names) {
