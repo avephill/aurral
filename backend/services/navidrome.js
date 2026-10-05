@@ -655,6 +655,16 @@ export class NavidromeClient {
     return song && typeof song === "object" ? song : null;
   }
 
+  // Every player Navidrome has seen, everyone's: an admin call.
+  async getPlayers() {
+    const players = await this._nativeRequest("GET", "/api/player?_end=10000");
+    return Array.isArray(players) ? players : [];
+  }
+
+  async updatePlayer(player) {
+    return this._nativeRequest("PUT", `/api/player/${encodeURIComponent(player.id)}`, player);
+  }
+
   async findSongsByPath(path) {
     const songs = await this._nativeRequest(
       "GET",

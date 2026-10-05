@@ -326,14 +326,32 @@ const COMPARE = {
 };
 
 /** What is different now from one snapshot, section by section. */
-export async function compareWithNow(user, snapshotId, { deps = defaultHistoryDeps } = {}) {
+/**
+ * A snapshot's songs as they would be named after files moved: each path in
+ * the map stands for the one it moved to. Ratings and playlists are kept by
+ * path, so a move - Lidarr renaming a folder, files imported into their
+ * artist's folder - would otherwise read as everything taken out and
+ * something new put in. Favourites, tags and the library are kept by what the
+ * music is, not where, and pass through.
+ */
+export function movedPaths(section, then, pathMap) {
+  if (!pathMap?.size || then == null) return then;
+  const to = (songPath) => pathMap.get(songPath) || songPath;
+  if (section === "ratings") return Object.fromEntries(Object.entries(then).map(([songPath, rating]) => [to(songPath), rating]));
+  if (section === "playlists") {
+    return then.map((playlist) => (playlist.songs ? { ...playlist, songs: playlist.songs.map(to) } : playlist));
+  }
+  return then;
+}
+
+export async function compareWithNow(user, snapshotId, { deps = defaultHistoryDeps, pathMap = null } = {}) {
   const row = snapshotRow(snapshotId);
   if (!row || row.username !== user.username) throw new LibraryHistoryError("No such snapshot", 404);
   const parts = JSON.parse(row.parts_json);
   const now = await readEverything(user, deps);
   const differences = {};
   for (const section of SECTIONS) {
-    const then = loadPart(parts[section]);
+    const then = movedPaths(section, loadPart(parts[section]), pathMap);
     differences[section] = then == null ? null : COMPARE[section](then, now[section]);
   }
   return { snapshot: describe(row), differences };
@@ -548,6 +566,8 @@ export async function restoreSnapshot(user, snapshotId, {
   playlists = [],
   deps = defaultHistoryDeps,
   restore = defaultRestoreDeps,
+  // Old path -> new, for files that have moved since: see movedPaths.
+  pathMap = null,
 } = {}) {
   const row = snapshotRow(snapshotId);
   if (!row || row.username !== user.username) throw new LibraryHistoryError("No such snapshot", 404);
@@ -559,7 +579,7 @@ export async function restoreSnapshot(user, snapshotId, {
   const parts = JSON.parse(row.parts_json);
   const results = {};
   for (const section of chosen) {
-    const then = loadPart(parts[section]);
+    const then = movedPaths(section, loadPart(parts[section]), pathMap);
     if (then == null) {
       results[section] = { skipped: true };
       continue;

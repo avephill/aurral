@@ -188,3 +188,31 @@ test("a playlist is rewritten to exactly the restored songs, or the restore says
   const source = readFileSync(new URL("../../backend/services/libraryHistoryService.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /client\.updatePlaylist\(playlistId, \{ name: entry\.name, songIds \}\)/);
 });
+
+// After files move, a snapshot's ratings and playlists are read with each
+// old path standing for its new one; otherwise a move looks like everything
+// taken out and something new put in.
+
+test("a snapshot compared after a move sees the same songs, at their new paths", async () => {
+  db.prepare("DELETE FROM library_snapshots").run();
+  reset();
+  const { id } = await history.takeSnapshot(dad, { deps });
+  const moved = (p) => p.replace("A/X/", "A/X (2012)/");
+  state.ratings = Object.fromEntries(Object.entries(state.ratings).map(([p, r]) => [moved(p), r]));
+  state.playlists[0] = { ...state.playlists[0], songs: state.playlists[0].songs.map(moved) };
+
+  const plain = (await history.compareWithNow(dad, id, { deps })).differences;
+  assert.equal(plain.ratings.cleared, 2, "without the map, a move reads as ratings lost");
+  const pathMap = new Map([["A/X/1.mp3", "A/X (2012)/1.mp3"], ["A/X/2.mp3", "A/X (2012)/2.mp3"]]);
+  const mapped = (await history.compareWithNow(dad, id, { deps, pathMap })).differences;
+  assert.deepEqual(mapped.ratings, { changed: 0, cleared: 0, added: 0, total: 0 });
+  assert.deepEqual(mapped.playlists, []);
+
+  const given = {};
+  await history.restoreSnapshot(dad, id, {
+    sections: ["ratings"], deps, pathMap,
+    restore: { ratings: async (_user, then) => { given.ratings = then; return {}; } },
+  });
+  assert.deepEqual(given.ratings, { "A/X (2012)/1.mp3": 5, "A/X (2012)/2.mp3": 3 }, "put back where the files are now");
+  reset();
+});

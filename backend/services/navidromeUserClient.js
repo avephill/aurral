@@ -16,9 +16,12 @@ const PLAYLIST_SONG_BATCH_SIZE = 50;
  * Subsonic auth error, which callers surface as "not connected".
  */
 export class NavidromeUserClient extends NavidromeClient {
-  constructor(url, username, { header = getNavidromeUserHeader() } = {}) {
+  constructor(url, username, { header = getNavidromeUserHeader(), clientName = "aurral" } = {}) {
     super(url, username, null);
     this.header = header;
+    // Navidrome keeps a player per client name, and each player has its own
+    // "send plays to Last.fm and ListenBrainz" switch.
+    this.clientName = clientName;
   }
 
   isConfigured() {
@@ -28,7 +31,7 @@ export class NavidromeUserClient extends NavidromeClient {
   getAuthParams() {
     // No token or salt: the header authenticates. `u` is still sent so the
     // request reads sensibly in Navidrome's logs.
-    return { u: this.user, v: "1.16.1", c: "aurral", f: "json" };
+    return { u: this.user, v: "1.16.1", c: this.clientName, f: "json" };
   }
 
   getRequestHeaders() {
@@ -89,11 +92,11 @@ async function adminClient() {
  * connection in Settings (only its URL is used). Returns null when Navidrome
  * is not configured or the user has no username to act as.
  */
-export function createNavidromeUserClient(user, settings = dbOps.getSettings()) {
+export function createNavidromeUserClient(user, settings = dbOps.getSettings(), { clientName } = {}) {
   const navidrome = settings?.integrations?.navidrome;
   const username = String(user?.username || "").trim();
   if (!navidrome?.url || !username) return null;
-  return new NavidromeUserClient(navidrome.url, username);
+  return new NavidromeUserClient(navidrome.url, username, clientName ? { clientName } : {});
 }
 
 /**
