@@ -25,7 +25,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-const SOURCE_ROOT = (process.env.SOURCE_ROOT || "").replace(/\/+$/, "");
+// Or a list of files already inside the library that Lidarr does not manage
+// (a JSON array of absolute paths): they are planned where they are, and the
+// server's own copies of them do not count as the album being on the server.
+const FILE_LIST = process.env.FILE_LIST || "";
+const SOURCE_ROOT = (process.env.SOURCE_ROOT || (FILE_LIST ? "/data/Music/Library" : "")).replace(/\/+$/, "");
 const LABEL = process.env.LABEL || "import";
 const OUT_DIR = process.env.OUT_DIR || `/app/downloads/library-import/${LABEL}`;
 const LOOKUP_DELAY_MS = Number(process.env.LOOKUP_DELAY_MS || 400);
@@ -227,7 +231,36 @@ async function describeAlbum(folder, allFiles, { loose = false } = {}) {
   };
 }
 
+async function collectListedAlbums() {
+  const listed = JSON.parse(await fs.readFile(FILE_LIST, "utf8")).filter((file) => AUDIO.test(file));
+  const byFolder = new Map();
+  for (const file of listed) {
+    const folder = path.dirname(file);
+    if (!byFolder.has(folder)) byFolder.set(folder, []);
+    byFolder.get(folder).push(path.basename(file));
+  }
+  const albums = [];
+  for (const [folder, files] of byFolder) {
+    // Straight in an artist's folder: grouped by their album tag, as below.
+    const loose = path.dirname(folder) === SOURCE_ROOT;
+    if (!loose) {
+      albums.push(await describeAlbum(folder, files.sort()));
+    } else {
+      const groups = new Map();
+      for (const file of files.sort()) {
+        const album = normalize((await readTags(path.join(folder, file))).album) || "(no album tag)";
+        if (!groups.has(album)) groups.set(album, []);
+        groups.get(album).push(file);
+      }
+      for (const group of groups.values()) albums.push(await describeAlbum(folder, group, { loose: true }));
+    }
+    if (LIMIT && albums.length >= LIMIT) break;
+  }
+  return albums;
+}
+
 async function collectAlbums() {
+  if (FILE_LIST) return collectListedAlbums();
   const albums = [];
   for (const artistFolder of await listDirs(SOURCE_ROOT)) {
     const artistPath = path.join(SOURCE_ROOT, artistFolder);
@@ -265,11 +298,30 @@ async function serverAlbums() {
     navidrome.push(...page.filter((album) => Number(album.libraryId) === 1 && !album.missing));
     if (page.length < 500) break;
   }
+  // Planning files already in the library: an album Navidrome knows only
+  // from those very files is not the server having it.
+  let onlyListed = new Set();
+  if (FILE_LIST) {
+    const listed = new Set(JSON.parse(await fs.readFile(FILE_LIST, "utf8")).map((file) => file.slice(SOURCE_ROOT.length + 1)));
+    // Only the albums these files belong to need checking: each listed file's
+    // album, and whether it holds anything else.
+    const albumIds = new Set();
+    for (const file of listed) {
+      const songs = await nd.findSongsByPath(file).catch(() => []);
+      for (const song of songs) if (Number(song.libraryId) === 1 && song.path === file) albumIds.add(song.albumId);
+    }
+    for (const albumId of albumIds) {
+      const songs = await nd._nativeRequest("GET", `/api/song?album_id=${encodeURIComponent(albumId)}&library_id=1&_start=0&_end=500`).catch(() => null);
+      if (Array.isArray(songs) && songs.every((song) => Number(song.libraryId) !== 1 || listed.has(song.path))) onlyListed.add(albumId);
+    }
+    log(`${onlyListed.size} Navidrome albums are only the listed files; they do not count as on the server`);
+  }
   const byRg = new Map();
   for (const album of lidarrAlbums) byRg.set(album.foreignAlbumId, album);
   const ndByRg = new Map();
   const ndByName = new Map();
   for (const album of navidrome) {
+    if (onlyListed.has(album.id)) continue;
     if (album.mbzReleaseGroupId) ndByRg.set(album.mbzReleaseGroupId, album);
     const key = `${normalize(album.albumArtist)}|${stripEdition(album.name)}`;
     if (!ndByName.has(key)) ndByName.set(key, album);
