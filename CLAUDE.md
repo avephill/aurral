@@ -50,7 +50,9 @@ Learned the hard way in October 2026; read this before touching
   outside Psalter's index, and get adopted by Lidarr's rescans in ways no one
   chose. `scripts/import-library/` is the supported way to import a folder.
   Anything Lidarr cannot identify belongs in a holding folder outside
-  `Library/`, not in it.
+  `Library/`, not in it. The one standing exception is
+  `users/bspang/_Unmatched/`: real files, only in Bruce's library, that
+  MusicBrainz could not identify - its own `CLAUDE.md` says how they come back.
 - **Lidarr has no recycle bin.** An import with `replaceExistingFiles` deletes
   the file it replaces, for good. Switching an album's edition detaches all its
   track files until they are imported again.
