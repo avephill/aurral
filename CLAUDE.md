@@ -56,6 +56,14 @@ Learned the hard way in October 2026; read this before touching
 - **Lidarr has no recycle bin.** An import with `replaceExistingFiles` deletes
   the file it replaces, for good. Switching an album's edition detaches all its
   track files until they are imported again.
+- **Never manual-import a file Lidarr already has a record of.** If
+  `/manualimport` offers nothing with `filterExistingFiles=true`, Lidarr knows
+  those files already; do NOT retry with `false`. Lidarr then treats the import
+  as an upgrade of its own record, deletes the "old" file - the very file being
+  imported - and has nothing left to move. That destroyed Zappa's *Roxy &
+  Elsewhere* (10 files) on 2026-10-05. Files inside the artist's folder can be
+  re-matched with a rescan (`RescanFolders`); files outside it need Lidarr to
+  forget them first, and a person deciding how.
 - **Never run anything inside the container as root - and `docker exec` is
   root by default.** Always `docker exec -u node ...`. Psalter runs as `node`
   (uid 1000) and Lidarr as uid 1000 too: a root-owned folder in `users/<name>`
