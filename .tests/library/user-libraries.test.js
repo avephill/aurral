@@ -123,8 +123,11 @@ test("normalizeUserLibrariesSettings merges input over existing values", () => {
     rootPath: "/data/music/users",
     manageNavidrome: false,
     navidromeRootPath: "/music/users",
+    compilationsByAlbum: true,
   };
   assert.deepEqual(normalizeUserLibrariesSettings(undefined, existing), existing);
+  // Saving the settings page leaves the way compilations are kept alone.
+  assert.equal(normalizeUserLibrariesSettings({ enabled: true }, existing).compilationsByAlbum, true);
   assert.deepEqual(normalizeUserLibrariesSettings({ enabled: false }, existing), {
     ...existing,
     enabled: false,
@@ -136,7 +139,7 @@ test("normalizeUserLibrariesSettings merges input over existing values", () => {
   // Legacy saved settings without the Navidrome keys default to managing Navidrome.
   assert.deepEqual(
     normalizeUserLibrariesSettings(undefined, { enabled: true, rootPath: "/data/music/users" }),
-    { enabled: true, rootPath: "/data/music/users", manageNavidrome: true, navidromeRootPath: "" },
+    { enabled: true, rootPath: "/data/music/users", manageNavidrome: true, navidromeRootPath: "", compilationsByAlbum: false },
   );
 });
 

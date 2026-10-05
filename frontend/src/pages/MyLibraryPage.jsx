@@ -8,7 +8,13 @@ import { useAuth } from "../contexts/AuthContext";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useUserLibraryCatalog } from "../hooks/useUserLibrary";
 import { useToast } from "../contexts/ToastContext";
-import { getMyLibraryAlbums, removeMyLibraryAlbums } from "../utils/api/endpoints/userLibrary.js";
+import {
+  addAlbumsToMyLibrary,
+  getCompilations,
+  getMyLibraryAlbums,
+  removeAlbumsFromMyLibraryByMbid,
+  removeMyLibraryAlbums,
+} from "../utils/api/endpoints/userLibrary.js";
 
 const FILTERS = [
   { id: "all", label: "All" },
@@ -42,6 +48,16 @@ export default function MyLibraryPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [visibleLimit, setVisibleLimit] = useState(PAGE_STEP);
   const [importOpen, setImportOpen] = useState(false);
+  // Compilations are picked album by album rather than with an artist, so
+  // they get a list of their own once the server keeps them that way.
+  const compilations = useQuery({
+    queryKey: ["user-library", "compilations"],
+    queryFn: ({ signal }) => getCompilations({ signal }),
+    enabled: !!user,
+    staleTime: 30000,
+  });
+  const compilationsEnabled = compilations.data?.enabled === true;
+  const [section, setSection] = useState("artists");
 
   const enabled = catalog.enabled || bootstrap?.userLibrariesEnabled === true;
   const artists = catalog.artists;
@@ -165,139 +181,166 @@ export default function MyLibraryPage() {
         </div>
       </header>
 
-      <SingleAlbums />
-
-      <div className="my-library-page__toolbar">
-        <div className="my-library-page__search">
-          <Search className="artist-icon-sm" aria-hidden="true" />
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter artists"
-            aria-label="Filter artists"
-          />
-          {query ? (
+      {compilationsEnabled ? (
+        <div className="artist-segmented my-library-page__sections" role="tablist" aria-label="Choose from">
+          {[
+            ["artists", "Artists"],
+            ["compilations", "Compilations"],
+          ].map(([id, label]) => (
             <button
+              key={id}
               type="button"
-              className="btn btn-ghost btn-xs"
-              onClick={() => setQuery("")}
-              aria-label="Clear filter"
+              role="tab"
+              aria-selected={section === id}
+              className={`artist-segmented-button${section === id ? " is-active" : ""}`}
+              onClick={() => setSection(id)}
             >
-              <X className="artist-icon-xs" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-        <div className="artist-segmented" role="group" aria-label="Show">
-          {FILTERS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={`artist-segmented-button${filter === option.id ? " is-active" : ""}`}
-              aria-pressed={filter === option.id}
-              onClick={() => setFilter(option.id)}
-            >
-              {option.label}
+              {label}
             </button>
           ))}
         </div>
-      </div>
+      ) : null}
 
-      {catalog.loading ? (
-        <div className="my-library-page__state">
-          <DotLoader size="sm" label="Loading artists" />
-        </div>
-      ) : catalog.error ? (
-        <div className="my-library-page__state">
-          <p className="my-library-page__empty">
-            {catalog.error?.response?.data?.error || catalog.error?.message || "Could not load the library."}
-          </p>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => catalog.refetch()}>
-            Try again
-          </button>
-        </div>
-      ) : !artists.length ? (
-        <p className="my-library-page__empty">The main library has no artists yet.</p>
+      {compilationsEnabled && section === "compilations" ? (
+        <Compilations items={compilations.data?.compilations || []} loading={compilations.isLoading} />
       ) : (
-        <div className="my-library-page__list" role="group" aria-label="Artists">
-          <div className="my-library-page__row my-library-page__row--head">
+        <>
+        <SingleAlbums hideCompilations={compilationsEnabled} />
+
+        <div className="my-library-page__toolbar">
+          <div className="my-library-page__search">
+            <Search className="artist-icon-sm" aria-hidden="true" />
             <input
-              type="checkbox"
-              className="my-library-page__checkbox"
-              checked={allFilteredSelected}
-              ref={(node) => {
-                if (node) node.indeterminate = !allFilteredSelected && someFilteredSelected;
-              }}
-              onChange={toggleAllFiltered}
-              disabled={!filtered.length}
-              aria-label={allFilteredSelected ? "Deselect all shown artists" : "Select all shown artists"}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter artists"
+              aria-label="Filter artists"
             />
-            <span className="my-library-page__row-name">
-              {filtered.length === artists.length
-                ? pluralize(artists.length, "artist")
-                : `${filtered.length} of ${pluralize(artists.length, "artist")}`}
-            </span>
-            <span className="my-library-page__row-status" aria-hidden="true" />
-          </div>
-          {visible.length ? (
-            visible.map((artist) => (
-              <ArtistRow
-                key={artist.mbid}
-                artist={artist}
-                checked={selected.has(artist.mbid)}
-                onToggle={toggle}
-              />
-            ))
-          ) : (
-            <p className="my-library-page__empty">No artists match.</p>
-          )}
-          {filtered.length > visible.length ? (
-            <div className="my-library-page__more">
+            {query ? (
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setVisibleLimit((limit) => limit + PAGE_STEP)}
+                className="btn btn-ghost btn-xs"
+                onClick={() => setQuery("")}
+                aria-label="Clear filter"
               >
-                Show more ({filtered.length - visible.length} remaining)
+                <X className="artist-icon-xs" aria-hidden="true" />
               </button>
-            </div>
-          ) : null}
-        </div>
-      )}
-
-      {selected.size > 0 ? (
-        <div className="my-library-page__actions" role="region" aria-label="Selection actions">
-          <span className="my-library-page__actions-count">{pluralize(selected.size, "artist")} selected</span>
-          <div className="my-library-page__actions-buttons">
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              onClick={() => setSelected(new Set())}
-              disabled={catalog.pending}
-            >
-              Clear
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost-danger btn-sm"
-              onClick={() => applyBulk("remove")}
-              disabled={!toRemove.length || catalog.pending}
-            >
-              {catalog.pendingAction === "remove" ? <DotLoader size="xs" label={null} /> : null}
-              Remove {toRemove.length || ""}
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => applyBulk("add")}
-              disabled={!toAdd.length || catalog.pending}
-            >
-              {catalog.pendingAction === "add" ? <DotLoader size="xs" label={null} /> : null}
-              Add {toAdd.length || ""} to my library
-            </button>
+            ) : null}
+          </div>
+          <div className="artist-segmented" role="group" aria-label="Show">
+            {FILTERS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={`artist-segmented-button${filter === option.id ? " is-active" : ""}`}
+                aria-pressed={filter === option.id}
+                onClick={() => setFilter(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
         </div>
-      ) : null}
+
+        {catalog.loading ? (
+          <div className="my-library-page__state">
+            <DotLoader size="sm" label="Loading artists" />
+          </div>
+        ) : catalog.error ? (
+          <div className="my-library-page__state">
+            <p className="my-library-page__empty">
+              {catalog.error?.response?.data?.error || catalog.error?.message || "Could not load the library."}
+            </p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => catalog.refetch()}>
+              Try again
+            </button>
+          </div>
+        ) : !artists.length ? (
+          <p className="my-library-page__empty">The main library has no artists yet.</p>
+        ) : (
+          <div className="my-library-page__list" role="group" aria-label="Artists">
+            <div className="my-library-page__row my-library-page__row--head">
+              <input
+                type="checkbox"
+                className="my-library-page__checkbox"
+                checked={allFilteredSelected}
+                ref={(node) => {
+                  if (node) node.indeterminate = !allFilteredSelected && someFilteredSelected;
+                }}
+                onChange={toggleAllFiltered}
+                disabled={!filtered.length}
+                aria-label={allFilteredSelected ? "Deselect all shown artists" : "Select all shown artists"}
+              />
+              <span className="my-library-page__row-name">
+                {filtered.length === artists.length
+                  ? pluralize(artists.length, "artist")
+                  : `${filtered.length} of ${pluralize(artists.length, "artist")}`}
+              </span>
+              <span className="my-library-page__row-status" aria-hidden="true" />
+            </div>
+            {visible.length ? (
+              visible.map((artist) => (
+                <ArtistRow
+                  key={artist.mbid}
+                  artist={artist}
+                  checked={selected.has(artist.mbid)}
+                  onToggle={toggle}
+                />
+              ))
+            ) : (
+              <p className="my-library-page__empty">No artists match.</p>
+            )}
+            {filtered.length > visible.length ? (
+              <div className="my-library-page__more">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setVisibleLimit((limit) => limit + PAGE_STEP)}
+                >
+                  Show more ({filtered.length - visible.length} remaining)
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {selected.size > 0 ? (
+          <div className="my-library-page__actions" role="region" aria-label="Selection actions">
+            <span className="my-library-page__actions-count">{pluralize(selected.size, "artist")} selected</span>
+            <div className="my-library-page__actions-buttons">
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setSelected(new Set())}
+                disabled={catalog.pending}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost-danger btn-sm"
+                onClick={() => applyBulk("remove")}
+                disabled={!toRemove.length || catalog.pending}
+              >
+                {catalog.pendingAction === "remove" ? <DotLoader size="xs" label={null} /> : null}
+                Remove {toRemove.length || ""}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => applyBulk("add")}
+                disabled={!toAdd.length || catalog.pending}
+              >
+                {catalog.pendingAction === "add" ? <DotLoader size="xs" label={null} /> : null}
+                Add {toAdd.length || ""} to my library
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        </>
+      )}
 
       {importOpen ? (
         <ArtistListImportModal
@@ -313,7 +356,7 @@ export default function MyLibraryPage() {
 
 // Albums in the library without the rest of their artist - put there when a
 // shared playlist was added. Only shown once there are some.
-function SingleAlbums() {
+function SingleAlbums({ hideCompilations = false }) {
   const queryClient = useQueryClient();
   const { showError, showSuccess } = useToast();
   const query = useQuery({
@@ -329,7 +372,8 @@ function SingleAlbums() {
     },
     onError: (error) => showError(error?.response?.data?.error || error?.message || "Could not remove that album"),
   });
-  const albums = query.data?.albums || [];
+  // Compilations have their own list, where they are picked and taken out.
+  const albums = (query.data?.albums || []).filter((album) => !(hideCompilations && album.compilation));
   if (!albums.length) return null;
 
   return (
@@ -367,6 +411,190 @@ function SingleAlbums() {
         </ul>
       </details>
     </section>
+  );
+}
+
+// Every compilation on the server, to put in your library or take out one at
+// a time. Nobody gets all of them by having Various Artists: there is no such
+// thing as wanting every compilation.
+function Compilations({ items, loading }) {
+  const queryClient = useQueryClient();
+  const { showError, showSuccess } = useToast();
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query.trim().toLowerCase());
+  const [filter, setFilter] = useState("all");
+  const [selected, setSelected] = useState(() => new Set());
+
+  const inLibraryCount = useMemo(() => items.filter((item) => item.inLibrary).length, [items]);
+  const filtered = useMemo(
+    () =>
+      items.filter((item) => {
+        if (filter === "mine" && !item.inLibrary) return false;
+        if (filter === "available" && item.inLibrary) return false;
+        if (!deferredQuery) return true;
+        const haystack = item.title.toLowerCase();
+        return deferredQuery.split(/\s+/).every((term) => haystack.includes(term));
+      }),
+    [items, filter, deferredQuery],
+  );
+  const chosen = items.filter((item) => selected.has(item.mbid));
+  const toAdd = chosen.filter((item) => !item.inLibrary);
+  const toRemove = chosen.filter((item) => item.inLibrary);
+  const allShownSelected = filtered.length > 0 && filtered.every((item) => selected.has(item.mbid));
+
+  const change = useMutation({
+    mutationFn: ({ action, mbids }) =>
+      action === "add" ? addAlbumsToMyLibrary(mbids) : removeAlbumsFromMyLibraryByMbid(mbids),
+    onSuccess: (_result, { action, mbids }) => {
+      showSuccess(
+        action === "add"
+          ? `Added ${pluralize(mbids.length, "compilation")}. ${mbids.length === 1 ? "It reaches" : "They reach"} your library in a few minutes.`
+          : `Removed ${pluralize(mbids.length, "compilation")}. ${mbids.length === 1 ? "It leaves" : "They leave"} your library in a few minutes.`,
+      );
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["user-library"] });
+    },
+    onError: (error) => showError(error?.response?.data?.error || error?.message || "Could not change your compilations"),
+  });
+
+  const toggle = (mbid) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(mbid)) next.delete(mbid);
+      else next.add(mbid);
+      return next;
+    });
+
+  return (
+    <>
+      <p className="my-library-page__row-detail my-library-page__intro">
+        Albums of songs by many artists. Each one is added on its own.
+        {items.length ? ` ${inLibraryCount} of ${items.length} in your library.` : ""}
+      </p>
+      <div className="my-library-page__toolbar">
+        <div className="my-library-page__search">
+          <Search className="artist-icon-sm" aria-hidden="true" />
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Filter compilations"
+            aria-label="Filter compilations"
+          />
+          {query ? (
+            <button type="button" className="btn btn-ghost btn-xs" onClick={() => setQuery("")} aria-label="Clear filter">
+              <X className="artist-icon-xs" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        <div className="artist-segmented" role="group" aria-label="Show">
+          {FILTERS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`artist-segmented-button${filter === option.id ? " is-active" : ""}`}
+              aria-pressed={filter === option.id}
+              onClick={() => setFilter(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="my-library-page__state">
+          <DotLoader size="sm" label="Loading compilations" />
+        </div>
+      ) : !items.length ? (
+        <p className="my-library-page__empty">There are no compilations on the server yet.</p>
+      ) : (
+        <div className="my-library-page__list" role="group" aria-label="Compilations">
+          <div className="my-library-page__row my-library-page__row--head">
+            <input
+              type="checkbox"
+              className="my-library-page__checkbox"
+              checked={allShownSelected}
+              onChange={() =>
+                setSelected((current) => {
+                  const next = new Set(current);
+                  filtered.forEach((item) => (allShownSelected ? next.delete(item.mbid) : next.add(item.mbid)));
+                  return next;
+                })
+              }
+              disabled={!filtered.length}
+              aria-label={allShownSelected ? "Deselect all shown compilations" : "Select all shown compilations"}
+            />
+            <span className="my-library-page__row-name">
+              {filtered.length === items.length
+                ? pluralize(items.length, "compilation")
+                : `${filtered.length} of ${pluralize(items.length, "compilation")}`}
+            </span>
+            <span className="my-library-page__row-status" aria-hidden="true" />
+          </div>
+          {filtered.length ? (
+            filtered.map((item) => (
+              <label
+                key={item.mbid}
+                className={`my-library-page__row${selected.has(item.mbid) ? " is-selected" : ""}${item.inLibrary ? " is-member" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  className="my-library-page__checkbox"
+                  checked={selected.has(item.mbid)}
+                  onChange={() => toggle(item.mbid)}
+                  aria-label={`Select ${item.title}`}
+                />
+                <span className="my-library-page__row-name">
+                  <span className="my-library-page__row-title">{item.title}</span>
+                  <span className="my-library-page__row-detail">
+                    {[item.year, pluralize(item.trackCount, "song"), formatLibraries(item.libraries)].filter(Boolean).join(" · ")}
+                  </span>
+                </span>
+                <span className="my-library-page__row-status">
+                  {item.inLibrary ? (
+                    <span className="my-library-page__badge" title="In your library">
+                      <Check className="artist-icon-xs" aria-hidden="true" />
+                      <span>In my library</span>
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            ))
+          ) : (
+            <p className="my-library-page__empty">No compilations match.</p>
+          )}
+        </div>
+      )}
+
+      {selected.size > 0 ? (
+        <div className="my-library-page__actions" role="region" aria-label="Selection actions">
+          <span className="my-library-page__actions-count">{pluralize(selected.size, "compilation")} selected</span>
+          <div className="my-library-page__actions-buttons">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())} disabled={change.isPending}>
+              Clear
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost-danger btn-sm"
+              onClick={() => change.mutate({ action: "remove", mbids: toRemove.map((item) => item.mbid) })}
+              disabled={!toRemove.length || change.isPending}
+            >
+              Remove {toRemove.length || ""}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => change.mutate({ action: "add", mbids: toAdd.map((item) => item.mbid) })}
+              disabled={!toAdd.length || change.isPending}
+            >
+              {change.isPending ? <DotLoader size="xs" label={null} /> : null}
+              Add {toAdd.length || ""} to my library
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

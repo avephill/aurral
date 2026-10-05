@@ -17291,3 +17291,13 @@ button.native-library-genre-row:focus-visible {
   gap: 0.35rem;
   margin-top: 0.6rem;
 }
+
+/* Artists or compilations: which list bulk migration is choosing from. */
+.my-library-page__sections {
+  justify-self: start;
+}
+
+.my-library-page__intro {
+  margin: 0;
+  white-space: normal;
+}

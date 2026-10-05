@@ -40,6 +40,10 @@ export function getUserLibrariesSettings(settings = null) {
     manageNavidrome: config.manageNavidrome !== false,
     // The libraries folder as Navidrome sees it; blank means same path as Psalter.
     navidromeRootPath: cleanRootPath(config.navidromeRootPath),
+    // Compilations are picked one album at a time rather than taken whole
+    // with the Various Artists folder. Off until each person's picks have been
+    // seeded, so turning it on never takes compilations away from anyone.
+    compilationsByAlbum: config.compilationsByAlbum === true,
   };
 }
 
@@ -50,6 +54,7 @@ export function normalizeUserLibrariesSettings(input, existing = {}) {
     rootPath: cleanRootPath(pick("rootPath", "")),
     manageNavidrome: pick("manageNavidrome", true) !== false,
     navidromeRootPath: cleanRootPath(pick("navidromeRootPath", "")),
+    compilationsByAlbum: pick("compilationsByAlbum", false) === true,
   };
 }
 
@@ -72,6 +77,19 @@ export function getUserLibraryDir(username, userId = null, settings = null) {
 }
 
 const getUserTagLabel = (username) => String(username || "").trim().toLowerCase();
+
+// MusicBrainz's Various Artists. Everything filed under it is a compilation,
+// and nobody wants all of them, so once compilations are picked by album it is
+// never part of a personal library whole - whatever Lidarr's tags say.
+export const VARIOUS_ARTISTS_MBID = "89ad4ac3-39f7-470e-963a-56509c546377";
+
+export function isWholeArtistAllowed(mbid, settings = null) {
+  return !(getUserLibrariesSettings(settings).compilationsByAlbum
+    && String(mbid || "").toLowerCase() === VARIOUS_ARTISTS_MBID);
+}
+
+const holdsWhole = (artist, tagId, settings = null) =>
+  artistHasTag(artist, tagId) && isWholeArtistAllowed(artist?.foreignArtistId, settings);
 
 function artistHasTag(artist, tagId) {
   return Array.isArray(artist?.tags) && artist.tags.some((id) => Number(id) === Number(tagId));
@@ -128,7 +146,7 @@ export async function getUserLibraryMembership(user, { forceRefresh = false } = 
   const artists = await lidarr.listArtists({ forceRefresh });
   return {
     enabled: true,
-    artists: artists.filter((artist) => artistHasTag(artist, tagId)).map(mapMemberArtist),
+    artists: artists.filter((artist) => holdsWhole(artist, tagId)).map(mapMemberArtist),
   };
 }
 
@@ -148,7 +166,7 @@ export async function filterArtistsToUserLibrary(artists, user) {
     // which carry no tag field, and Lidarr artists match on the same id anyway.
     const memberMbids = new Set(
       (await lidarr.listArtists())
-        .filter((artist) => artistHasTag(artist, tagId))
+        .filter((artist) => holdsWhole(artist, tagId))
         .map((artist) => String(artist.foreignArtistId || ""))
         .filter(Boolean),
     );
@@ -174,7 +192,7 @@ export async function scopeCanonicalArtistsToUser(user) {
     const tagId = await lidarr.findTagId(getUserTagLabel(user.username));
     if (tagId === null) return [];
     const mbids = (await lidarr.listArtists())
-      .filter((artist) => artistHasTag(artist, tagId))
+      .filter((artist) => holdsWhole(artist, tagId))
       .map((artist) => String(artist.foreignArtistId || ""))
       .filter(Boolean);
     if (!mbids.length) return [];
@@ -220,11 +238,17 @@ export async function setUserLibraryMembership(user, mbids, member) {
   );
 
   const missing = [];
+  const refused = [];
   const targets = [];
   for (const mbid of requested) {
     const artist = byMbid.get(mbid);
     if (!artist) {
       missing.push(mbid);
+      continue;
+    }
+    // Compilations are added one at a time; taking the tag off is still fine.
+    if (member && !isWholeArtistAllowed(mbid)) {
+      refused.push(mbid);
       continue;
     }
     if (artistHasTag(artist, tagId) !== member) {
@@ -244,6 +268,7 @@ export async function setUserLibraryMembership(user, mbids, member) {
   return {
     changed: targets.map(mapMemberArtist),
     missing,
+    refused,
   };
 }
 
@@ -255,12 +280,15 @@ export function selectUserLibraryCatalog({
   usernames = [],
   viewerUsername = "",
   albumCountsByMbid = new Map(),
+  compilationsByAlbum = false,
 } = {}) {
   const viewerTag = getUserTagLabel(viewerUsername);
   const userTags = buildUserTags(usernames);
   const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
   return lidarrArtists
     .filter((artist) => artist?.foreignArtistId)
+    // Its albums are listed one by one under Compilations instead.
+    .filter((artist) => !compilationsByAlbum || String(artist.foreignArtistId).toLowerCase() !== VARIOUS_ARTISTS_MBID)
     .map((artist) => {
       const [labels, libraries] = resolveArtistLibraries(artist, tagLabelsById, userTags);
       const stats = artist.statistics || {};
@@ -293,6 +321,7 @@ export async function getUserLibraryCatalog(user) {
       usernames: userOps.getAllUsers().map((entry) => entry.username),
       viewerUsername: user?.username,
       albumCountsByMbid: getCanonicalAlbumCountsByArtistMbid(),
+      compilationsByAlbum: config.compilationsByAlbum,
     }),
   };
 }
@@ -428,11 +457,77 @@ export function albumFolderOf(relativePath) {
   return parts.slice(0, 2).join("/");
 }
 
+const musicRootOf = () => getNavidromeRootMapping()?.aurralRoot || null;
+
+// A path in the main library as Psalter's index stores it, made relative.
+function relativeToRoot(filePath, musicRoot) {
+  const relative = path.relative(musicRoot, String(filePath || ""));
+  return relative && !relative.startsWith("..") && !path.isAbsolute(relative) ? relative : null;
+}
+
+// GLOB rather than LIKE: it is case-sensitive, so it can use the index on
+// path, and folder names are full of the underscores LIKE treats as wildcards.
+const globEscape = (value) => String(value).replace(/[[*?]/g, (char) => `[${char}]`);
+
+/**
+ * Where each album is now, by its MusicBrainz release group: the folder most
+ * of its files are in. Lidarr decides where files live, so when it renames a
+ * folder or settles on another edition, the album is still found.
+ */
+export function currentAlbumFolders(releaseGroupMbids, musicRoot = musicRootOf()) {
+  const found = new Map();
+  const wanted = [...new Set((releaseGroupMbids || []).map((mbid) => String(mbid || "").trim()).filter(Boolean))];
+  if (!wanted.length || !musicRoot) return found;
+  const files = db.prepare(`
+    SELECT file.path FROM library_albums AS album
+    JOIN library_media_files AS file ON file.album_id = album.id AND file.available = 1
+    WHERE album.release_group_mbid = ?
+  `);
+  for (const mbid of wanted) {
+    const counts = new Map();
+    for (const row of files.all(mbid)) {
+      const folder = albumFolderOf(relativeToRoot(row.path, musicRoot));
+      if (folder) counts.set(folder, (counts.get(folder) || 0) + 1);
+    }
+    const [best] = [...counts].sort((a, b) => b[1] - a[1]);
+    if (best) found.set(mbid, best[0]);
+  }
+  return found;
+}
+
+/**
+ * The album a folder holds, when every file Lidarr knows in it belongs to one
+ * album. A folder Lidarr knows nothing about has none, and keeps being found
+ * by its path alone.
+ */
+export function releaseGroupsForFolders(folders, musicRoot = musicRootOf()) {
+  const found = new Map();
+  if (!musicRoot) return found;
+  const albums = db.prepare(`
+    SELECT DISTINCT album.release_group_mbid AS mbid
+    FROM library_media_files AS file
+    JOIN library_albums AS album ON album.id = file.album_id
+    WHERE file.available = 1 AND (file.path = ? OR file.path GLOB ?)
+  `);
+  for (const folder of new Set(folders || [])) {
+    const absolute = path.join(musicRoot, folder);
+    const mbids = albums.all(absolute, `${globEscape(absolute)}/*`).map((row) => row.mbid);
+    if (mbids.length === 1 && mbids[0]) found.set(folder, mbids[0]);
+  }
+  return found;
+}
+
 export function listUserLibraryAlbums(username) {
   return db.prepare(`
-    SELECT folder, added_for AS addedFor, added_at AS addedAt
-    FROM user_library_albums WHERE username = ? ORDER BY folder COLLATE NOCASE
-  `).all(username);
+    SELECT entry.folder, entry.added_for AS addedFor, entry.added_at AS addedAt,
+           entry.release_group_mbid AS releaseGroupMbid,
+           EXISTS (
+             SELECT 1 FROM library_albums AS album
+             JOIN library_artists AS artist ON artist.id = album.artist_id
+             WHERE album.release_group_mbid = entry.release_group_mbid AND lower(artist.mbid) = ?
+           ) AS compilation
+    FROM user_library_albums AS entry WHERE entry.username = ? ORDER BY entry.folder COLLATE NOCASE
+  `).all(VARIOUS_ARTISTS_MBID, username).map((row) => ({ ...row, compilation: row.compilation === 1 }));
 }
 
 /**
@@ -440,19 +535,50 @@ export function listUserLibraryAlbums(username) {
  * the next reconcile; the caller decides whether to wait for one.
  */
 export function addUserLibraryAlbums(username, folders, addedFor = null) {
+  const wanted = [...new Set(folders || [])].filter((folder) => albumFolderOf(folder) === folder);
+  const mbids = releaseGroupsForFolders(wanted);
   const insert = db.prepare(`
-    INSERT OR IGNORE INTO user_library_albums (username, folder, added_for, added_at)
-    VALUES (?, ?, ?, ?)
+    INSERT OR IGNORE INTO user_library_albums (username, folder, added_for, added_at, release_group_mbid)
+    VALUES (?, ?, ?, ?, ?)
   `);
   const at = Date.now();
   let added = 0;
   db.transaction(() => {
-    for (const folder of new Set(folders || [])) {
-      if (albumFolderOf(folder) !== folder) continue;
-      added += insert.run(username, folder, addedFor, at).changes;
-    }
+    for (const folder of wanted) added += insert.run(username, folder, addedFor, at, mbids.get(folder) || null).changes;
   })();
   return added;
+}
+
+/**
+ * Add albums by their MusicBrainz release group, which is how anything picked
+ * from Lidarr's catalog is kept. An album with no files on the server cannot
+ * be linked, and is reported back rather than recorded.
+ */
+export function addUserLibraryAlbumsByMbid(username, releaseGroupMbids, addedFor = null) {
+  const folders = currentAlbumFolders(releaseGroupMbids);
+  const insert = db.prepare(`
+    INSERT INTO user_library_albums (username, folder, added_for, added_at, release_group_mbid)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (username, folder) DO UPDATE SET release_group_mbid = excluded.release_group_mbid
+  `);
+  const held = db.prepare("SELECT 1 FROM user_library_albums WHERE username = ? AND release_group_mbid = ?");
+  const at = Date.now();
+  let added = 0;
+  const missing = [];
+  db.transaction(() => {
+    for (const mbid of new Set(releaseGroupMbids || [])) {
+      const folder = folders.get(mbid);
+      if (!folder) {
+        missing.push(mbid);
+        continue;
+      }
+      if (held.get(username, mbid)) continue;
+      insert.run(username, folder, addedFor, at, mbid);
+      added += 1;
+    }
+  })();
+  if (added) scheduleUserLibraryReconcile();
+  return { added, missing };
 }
 
 export function removeUserLibraryAlbums(username, folders) {
@@ -465,15 +591,41 @@ export function removeUserLibraryAlbums(username, folders) {
   return removed;
 }
 
+export function removeUserLibraryAlbumsByMbid(username, releaseGroupMbids) {
+  const remove = db.prepare("DELETE FROM user_library_albums WHERE username = ? AND release_group_mbid = ?");
+  let removed = 0;
+  db.transaction(() => {
+    for (const mbid of new Set(releaseGroupMbids || [])) removed += remove.run(username, mbid).changes;
+  })();
+  if (removed) scheduleUserLibraryReconcile();
+  return removed;
+}
+
+/** Give rows recorded by folder alone the album they hold, where it is known. */
+export function backfillAlbumReleaseGroups(musicRoot = musicRootOf()) {
+  const rows = db.prepare("SELECT DISTINCT folder FROM user_library_albums WHERE release_group_mbid IS NULL").all();
+  if (!rows.length || !musicRoot) return 0;
+  const found = releaseGroupsForFolders(rows.map((row) => row.folder), musicRoot);
+  const update = db.prepare("UPDATE user_library_albums SET release_group_mbid = ? WHERE folder = ? AND release_group_mbid IS NULL");
+  let changed = 0;
+  db.transaction(() => {
+    for (const [folder, mbid] of found) changed += update.run(mbid, folder).changes;
+  })();
+  return changed;
+}
+
 /**
  * Someone's single albums with the folder each one links to, or null when the
  * main library's location is not configured. Null is not "none": it leaves
  * the album folders on disk as they are rather than tearing them down.
+ *
+ * An album known by its release group is looked up where it is now, and the
+ * row remembers the new folder; one Lidarr cannot place yet keeps its last.
  */
-function albumTargetsFor(username) {
+export function albumTargetsFor(username) {
   const rows = listUserLibraryAlbums(username);
   if (!rows.length) return [];
-  const musicRoot = getNavidromeRootMapping()?.aurralRoot;
+  const musicRoot = musicRootOf();
   if (!musicRoot) {
     logger.warn(
       "library",
@@ -481,7 +633,66 @@ function albumTargetsFor(username) {
     );
     return null;
   }
-  return rows.map((row) => ({ folder: row.folder, target: path.join(musicRoot, row.folder) }));
+  const now = currentAlbumFolders(rows.map((row) => row.releaseGroupMbid), musicRoot);
+  const move = db.prepare("UPDATE OR IGNORE user_library_albums SET folder = ? WHERE username = ? AND folder = ?");
+  const drop = db.prepare("DELETE FROM user_library_albums WHERE username = ? AND folder = ?");
+  const targets = new Map();
+  for (const row of rows) {
+    let folder = row.folder;
+    const current = row.releaseGroupMbid ? now.get(row.releaseGroupMbid) : null;
+    if (current && current !== folder) {
+      // Two rows can arrive at one folder; the one already there stands.
+      if (!move.run(current, username, folder).changes) drop.run(username, folder);
+      logger.info("library", `[UserLibraries] ${username}'s ${folder} is now at ${current}`);
+      folder = current;
+    }
+    targets.set(folder, path.join(musicRoot, folder));
+  }
+  return [...targets].map(([folder, target]) => ({ folder, target }));
+}
+
+/**
+ * Every compilation on the server - an album Lidarr files under Various
+ * Artists that has files - with whether the viewer has it and who else does.
+ */
+export function selectCompilationCatalog(viewerUsername) {
+  const albums = db.prepare(`
+    SELECT album.id, album.release_group_mbid AS mbid, album.title, album.release_date AS releaseDate,
+           COUNT(DISTINCT file.track_id) AS trackCount
+    FROM library_albums AS album
+    JOIN library_artists AS artist ON artist.id = album.artist_id
+    JOIN library_media_files AS file ON file.album_id = album.id AND file.available = 1
+    WHERE lower(artist.mbid) = ? AND album.release_group_mbid IS NOT NULL
+    GROUP BY album.id
+  `).all(VARIOUS_ARTISTS_MBID);
+  const holders = new Map();
+  for (const row of db.prepare(`
+    SELECT release_group_mbid AS mbid, username FROM user_library_albums WHERE release_group_mbid IS NOT NULL
+  `).all()) {
+    if (!holders.has(row.mbid)) holders.set(row.mbid, []);
+    holders.get(row.mbid).push(row.username);
+  }
+  const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  return albums
+    .map((album) => {
+      const people = holders.get(album.mbid) || [];
+      return {
+        id: String(album.id),
+        mbid: album.mbid,
+        title: album.title,
+        year: String(album.releaseDate || "").slice(0, 4) || null,
+        trackCount: Number(album.trackCount) || 0,
+        inLibrary: people.includes(viewerUsername),
+        libraries: people.filter((name) => name !== viewerUsername),
+      };
+    })
+    .sort((a, b) => collator.compare(a.title, b.title));
+}
+
+export function getCompilationCatalog(user) {
+  const config = getUserLibrariesSettings();
+  if (!config.enabled || !config.compilationsByAlbum) return { enabled: false, compilations: [] };
+  return { enabled: true, compilations: selectCompilationCatalog(user?.username) };
 }
 
 // A folder Psalter made to hold single albums carries this file, so a folder
@@ -829,6 +1040,7 @@ async function runReconcile() {
 
   const mappings = getPathMappings("lidarr");
   const users = userOps.getAllUsers();
+  backfillAlbumReleaseGroups();
   let totalChanges = 0;
   const summary = [];
   const populated = [];
@@ -838,7 +1050,7 @@ async function runReconcile() {
     const userDir = getUserLibraryDir(user.username, user.id);
     if (!userDir) continue;
     const memberArtists =
-      tagId != null ? artists.filter((artist) => artistHasTag(artist, tagId)) : [];
+      tagId != null ? artists.filter((artist) => holdsWhole(artist, tagId)) : [];
     const albums = albumTargetsFor(user.username);
     if (!memberArtists.length && !albums?.length && !fs.existsSync(userDir)) continue;
     try {

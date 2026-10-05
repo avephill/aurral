@@ -833,6 +833,14 @@ tryAddColumn("ALTER TABLE song_record_links ADD COLUMN tags_adopted_track_id INT
 // A smart playlist made in the editor with a tag rule, which Psalter keeps,
 // rather than one converted from an iTunes library.
 tryAddColumn("ALTER TABLE tag_playlists ADD COLUMN made_here INTEGER NOT NULL DEFAULT 0");
+// Which album a single album in someone's library is, by its MusicBrainz
+// release group, so it follows the album when Lidarr renames or moves its
+// folder. folder stays as where it was last found.
+tryAddColumn("ALTER TABLE user_library_albums ADD COLUMN release_group_mbid TEXT");
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_user_library_albums_release_group
+    ON user_library_albums (release_group_mbid)
+`);
 db.exec(`
   UPDATE playlist_shares SET accepted_at = created_at
   WHERE accepted_at IS NULL AND mirror_playlist_id IS NOT NULL
