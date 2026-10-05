@@ -54,9 +54,13 @@ Learned the hard way in October 2026; read this before touching
 - **Lidarr has no recycle bin.** An import with `replaceExistingFiles` deletes
   the file it replaces, for good. Switching an album's edition detaches all its
   track files until they are imported again.
-- **Never run anything inside the container as root.** Psalter runs as `node`;
-  a root-owned file in `users/<name>` freezes that person's library, and every
-  change to it then fails quietly.
+- **Never run anything inside the container as root - and `docker exec` is
+  root by default.** Always `docker exec -u node ...`. Psalter runs as `node`
+  (uid 1000) and Lidarr as uid 1000 too: a root-owned folder in `users/<name>`
+  freezes that person's library (every change to it fails quietly), and a
+  root-owned folder Lidarr is asked to import from fails with "Access to the
+  path is denied". Both happened, the second to an agent that had written this
+  very rule down.
 - **Before any change that moves, deletes or relinks files:** snapshot every
   affected person (`libraryHistoryService.takeSnapshot`) and record their play
   counts (`libraryMoves.capturePlayCounts`), which snapshots do not keep. Try
