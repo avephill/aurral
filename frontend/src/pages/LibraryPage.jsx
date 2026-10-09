@@ -235,13 +235,6 @@ const favoriteIdsFromPages = (pages) => new Set(
 // then simply waits for the server as before.
 const HOME_CACHE_KEY = "psalter.libraryHome";
 
-// Artist records reach the page in two shapes: page rows carry `albumCount`
-// (or the ids of the albums loaded with them), the artist projection behind
-// Recently added carries `statistics.albumCount`. Reading only the first
-// shape showed every recently added artist as "0 albums".
-const artistAlbumCount = (artist) =>
-  Number(artist?.albumCount ?? artist?.statistics?.albumCount ?? artist?.albumIds?.length ?? 0) || 0;
-
 const readCachedHome = (userId) => {
   if (userId == null) return null;
   try {
@@ -2504,9 +2497,6 @@ function LibraryPage() {
               onClick={() => toggleFavorite("artist", artist)}
             />
           </div>
-          <span className="native-library-card__meta">
-            {artistAlbumCount(artist)} album{artistAlbumCount(artist) === 1 ? "" : "s"}
-          </span>
         </div>
       </article>
     );
@@ -2516,14 +2506,17 @@ function LibraryPage() {
     const artist = getArtistForAlbum(album);
     const albumTracks = getAlbumTracks(album);
     const availability = albumAvailability(album);
-    const meta =
+    // An album only partly here says its year and nothing else: "1/4
+    // available" read as a count of albums, and nobody browsing a shelf is
+    // auditing it. The album's own page still says what is missing.
+    const partial =
       availability.total
       && availability.available != null
-      && availability.available < availability.total
-        ? availability.available + "/" + availability.total + " available"
-        : (yearOf(album.releaseDate) ? yearOf(album.releaseDate) + " · " : "") +
-          (availability.total || 0) +
-          " tracks";
+      && availability.available < availability.total;
+    const meta = [
+      yearOf(album.releaseDate),
+      partial ? null : (availability.total || 0) + " tracks",
+    ].filter(Boolean).join(" · ");
     const isFavorite = favoriteIds.has(favoriteId("album", album));
     return (
       <article className="native-library-card" data-library-menu-target key={album.id}>
@@ -2639,7 +2632,7 @@ function LibraryPage() {
               {artist?.name || album.albumArtist || "Unknown Artist"}
             </span>
           )}
-          <span className="native-library-card__meta">{meta}</span>
+          {meta ? <span className="native-library-card__meta">{meta}</span> : null}
         </div>
       </article>
     );
