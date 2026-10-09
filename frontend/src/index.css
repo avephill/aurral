@@ -8611,7 +8611,23 @@ button.native-library-card__artist:focus-visible {
 
 .native-library-track__time.is-missing {
   color: var(--aurral-text-muted);
+}
+
+/* "Unavailable" in place of a length has to fit the column a time does. */
+.native-library-track__time.is-unknown {
   font-size: 0.65rem;
+}
+
+/* A track the server does not have: its cover steps back with its text, so a
+   partly-held album reads at a glance without anything shouting. */
+.native-library-track.is-missing .native-library-track__cover {
+  opacity: 0.45;
+}
+
+.native-library-detail__missing {
+  margin: 0.15rem 0 0;
+  color: var(--aurral-text-muted);
+  font-size: 0.875rem;
 }
 
 .native-library-track__download {

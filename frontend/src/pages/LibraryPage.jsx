@@ -235,6 +235,19 @@ const favoriteIdsFromPages = (pages) => new Set(
 // then simply waits for the server as before.
 const HOME_CACHE_KEY = "psalter.libraryHome";
 
+// "Added Oct 5", with the year once it is not this one. What the Recently
+// added shelves are ordered by, so it is the one number worth a line there.
+const formatAdded = (value) => {
+  const date = new Date(typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value);
+  if (!value || Number.isNaN(date.getTime())) return "";
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return "Added " + date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  });
+};
+
 const readCachedHome = (userId) => {
   if (userId == null) return null;
   try {
@@ -342,8 +355,11 @@ const trackDurationMs = (track) => {
   if (Number(track?.durationMs) > 0) return track.durationMs;
   const metadataDurationMs = Number(track?.metadata?.durationMs);
   if (metadataDurationMs > 0) return metadataDurationMs;
-  const metadataDurationSeconds = Number(track?.metadata?.duration);
-  return metadataDurationSeconds > 0 ? Math.round(metadataDurationSeconds * 1000) : null;
+  // Lidarr's own track length, which is all a track with no file has. It is
+  // in milliseconds like the rest; read as seconds, a 4:37 song showed as
+  // "4616:40".
+  const lidarrDurationMs = Number(track?.metadata?.duration);
+  return lidarrDurationMs > 0 ? lidarrDurationMs : null;
 };
 
 const formatDuration = (durationMs) => {
@@ -2321,7 +2337,13 @@ function LibraryPage() {
             ) : (
               <span className="native-library-track__link native-library-track__album">{albumName}</span>
             )}
-            <span className={"native-library-track__time" + (!file ? " is-missing" : "")}>
+            <span
+              className={
+                "native-library-track__time"
+                + (!file ? " is-missing" : "")
+                + (formatDuration(trackDurationMs(track)) ? "" : " is-unknown")
+              }
+            >
               {formatDuration(trackDurationMs(track)) || "Unavailable"}
             </span>
             <span className="native-library-track__rating">
@@ -2391,7 +2413,8 @@ function LibraryPage() {
     </div>
   );
 
-  const renderArtistCard = (artist) => {
+  const renderArtistCard = (artist, options) => {
+    const added = options?.showAdded ? formatAdded(artist.addedAt) : "";
     const isFavorite = favoriteIds.has(favoriteId("artist", artist));
     return (
       <article
@@ -2497,12 +2520,13 @@ function LibraryPage() {
               onClick={() => toggleFavorite("artist", artist)}
             />
           </div>
+          {added ? <span className="native-library-card__meta">{added}</span> : null}
         </div>
       </article>
     );
   };
 
-  const renderAlbumCard = (album) => {
+  const renderAlbumCard = (album, options) => {
     const artist = getArtistForAlbum(album);
     const albumTracks = getAlbumTracks(album);
     const availability = albumAvailability(album);
@@ -2513,7 +2537,9 @@ function LibraryPage() {
       availability.total
       && availability.available != null
       && availability.available < availability.total;
-    const meta = [
+    // On the Recently added shelf, when it was added says more than its year.
+    const added = options?.showAdded ? formatAdded(album.addedAt) : "";
+    const meta = added || [
       yearOf(album.releaseDate),
       partial ? null : (availability.total || 0) + " tracks",
     ].filter(Boolean).join(" · ");
@@ -2702,7 +2728,7 @@ function LibraryPage() {
         <section className="native-library-section">
           {renderSectionHeader("Recently added albums", homeAlbums.length, "/library/albums")}
           <div ref={homeRecentAlbumsGridRef} className="native-library-grid">
-            {homeAlbums.map(renderAlbumCard)}
+            {homeAlbums.map((album) => renderAlbumCard(album, { showAdded: true }))}
           </div>
         </section>
       )}
@@ -2710,7 +2736,7 @@ function LibraryPage() {
         <section className="native-library-section">
           {renderSectionHeader("Recently added artists", homeRecentArtists.length, "/library/artists")}
           <div ref={homeRecentArtistsGridRef} className="native-library-grid native-library-grid--artists">
-            {homeRecentArtists.map(renderArtistCard)}
+            {homeRecentArtists.map((artist) => renderArtistCard(artist, { showAdded: true }))}
           </div>
         </section>
       )}
@@ -2930,6 +2956,12 @@ function LibraryPage() {
                 .filter(Boolean)
                 .join(" · ")}
             </p>
+            {/* Said once, here, rather than as a fraction on every card. */}
+            {availability.total && availability.available != null && availability.available < availability.total ? (
+              <p className="native-library-detail__missing">
+                {availability.total - availability.available} of {availability.total} tracks missing
+              </p>
+            ) : null}
             <div className="native-library-detail__actions">
               <button
                 type="button"

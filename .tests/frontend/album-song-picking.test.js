@@ -66,3 +66,26 @@ test("a saved tag reaches the tag lists straight away", () => {
     assert.match(read(reader), /queryKey: \["tags"\]/, `${reader} reads that list`);
   }
 });
+
+// What a shelf card and an album page say about what is here.
+
+test("cards carry no counts; the Recently added shelves say when", () => {
+  const page = read("../../frontend/src/pages/LibraryPage.jsx");
+  assert.doesNotMatch(page, /" available"/, 'no "1/4 available" on a card');
+  assert.doesNotMatch(page, /artistAlbumCount/, "nor an album count under an artist");
+  assert.match(page, /homeAlbums\.map\(\(album\) => renderAlbumCard\(album, \{ showAdded: true \}\)\)/);
+  assert.match(page, /homeRecentArtists\.map\(\(artist\) => renderArtistCard\(artist, \{ showAdded: true \}\)\)/);
+  assert.match(page, /return "Added " \+ date\.toLocaleDateString/);
+  const home = read("../../backend/services/libraryHomeService.js");
+  assert.match(home, /recentAlbums: withAddedDates\(getCanonicalLibraryPage\(/);
+});
+
+test("an album page says how much of it is missing, and a missing track's real length", () => {
+  const page = read("../../frontend/src/pages/LibraryPage.jsx");
+  assert.match(page, /\{availability\.total - availability\.available\} of \{availability\.total\} tracks missing/);
+  // Lidarr's length is milliseconds; it used to be multiplied by 1000.
+  assert.match(page, /const lidarrDurationMs = Number\(track\?\.metadata\?\.duration\);\s*return lidarrDurationMs > 0 \? lidarrDurationMs : null;/);
+  assert.doesNotMatch(page, /metadataDurationSeconds \* 1000/);
+  const css = read("../../frontend/src/index.css");
+  assert.match(css, /\.native-library-track\.is-missing \.native-library-track__cover \{\s*opacity: 0\.45;/);
+});
