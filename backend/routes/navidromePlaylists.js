@@ -1,4 +1,5 @@
 import express from "express";
+import { PlaylistWriteError } from "../services/navidromePlaylistWrites.js";
 import { requireAuth } from "../middleware/requirePermission.js";
 import { noCache } from "../middleware/cache.js";
 import {
@@ -26,10 +27,22 @@ import {
 import {
   SmartPlaylistRuleError,
   describeSmartPlaylistFields,
+  editorRulesFromPsalter,
   fromNavidromeRules,
   isSmartPlaylistRecord,
   toNavidromeRules,
+  toPsalterRules,
+  usesTagRule,
 } from "../services/navidromeSmartPlaylists.js";
+import {
+  KeptPlaylistError,
+  createKeptPlaylist,
+  forgetKept,
+  keptPlaylistFor,
+  keptPlaylistsByNavidromeId,
+  renameKept,
+  updateKeptRules,
+} from "../services/tagPlaylistService.js";
 
 /**
  * Hand-made playlists that live in Navidrome, read and edited as the
@@ -97,9 +110,11 @@ async function adminClientForOwnedPlaylist(req, res, playlistId) {
   return admin;
 }
 
-function toPlaylistSummary(playlist, username, record = null, folder = "") {
+// `kept` is the row for a smart playlist Psalter keeps - one with a rule
+// about a tag, which Navidrome cannot read - and null otherwise.
+function toPlaylistSummary(playlist, username, record = null, folder = "", kept = null) {
   const owner = String(playlist?.owner || record?.ownerName || "");
-  const smart = isSmartPlaylistRecord(record);
+  const smart = Boolean(kept) || isSmartPlaylistRecord(record);
   return {
     id: String(playlist.id),
     kind: "navidrome",
@@ -114,9 +129,10 @@ function toPlaylistSummary(playlist, username, record = null, folder = "") {
     changedAt: playlist.changed || null,
     folder,
     smart,
+    keptBy: kept ? "psalter" : smart ? "navidrome" : null,
     // Null when the rules use something this editor cannot show; the playlist
     // still works, it just cannot be opened in the rule editor.
-    rules: smart ? fromNavidromeRules(record.rules) : null,
+    rules: kept ? editorRulesFromPsalter(kept.rules) : smart ? fromNavidromeRules(record.rules) : null,
     // Consumers of Psalter's own playlists look for these; an empty set means
     // "unknown", never "already added".
     trackIdentities: [],
@@ -134,10 +150,31 @@ function sendNavidromeError(res, error, fallback) {
       code: error.code ?? null,
     });
   }
+  // The playlist changed under someone, or an entry is gone: say so plainly.
+  if (error instanceof PlaylistWriteError) {
+    return res.status(error.status).json({ error: error.message, message: error.message });
+  }
   const status = Number(error?.response?.status) || 502;
   return res.status(status >= 400 && status < 600 ? status : 502).json({
     error: fallback,
     message: error?.message || fallback,
+  });
+}
+
+/**
+ * The song ids not already in a playlist, in order and each once. Adding a
+ * whole album's worth to a playlist that has some of it should not put those
+ * songs in twice; one song added on its own is the person's call, so this is
+ * only used when the caller asks for it.
+ */
+export function withoutSongsAlreadyIn(playlist, songIds) {
+  const present = new Set((Array.isArray(playlist?.entry) ? playlist.entry : []).map((entry) => String(entry?.id)));
+  const seen = new Set();
+  return songIds.filter((id) => {
+    const key = String(id);
+    if (present.has(key) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 }
 
@@ -152,8 +189,21 @@ function normalizeTrackPayloads(body) {
       artistName: String(track?.artistName || "").trim(),
       albumName: String(track?.albumName || "").trim(),
       trackMbid: String(track?.trackMbid || "").trim() || null,
+      // A Navidrome song id the caller already holds - a song dragged out of
+      // another playlist. Used only when the song cannot be found afresh,
+      // since finding it afresh gets this person's own library's copy.
+      songId: String(track?.songId || "").trim() || null,
     }))
-    .filter((track) => track.trackId || track.trackName);
+    .filter((track) => track.trackId || track.trackName || track.songId);
+}
+
+/** Songs that could not be found afresh, but came with an id to fall back on. */
+export function withSongIdFallback({ resolved, unresolved }) {
+  const fallback = unresolved.filter((payload) => payload.songId);
+  return {
+    resolved: [...resolved, ...fallback.map((payload) => ({ payload, songId: payload.songId, libraryId: null }))],
+    unresolved: unresolved.filter((payload) => !payload.songId),
+  };
 }
 
 router.get("/status", noCache, async (req, res) => {
@@ -205,12 +255,14 @@ router.get("/", noCache, async (req, res) => {
     // folder tree, so the list is the moment to tidy up.
     pruneMissingPlaylists(req.user.id, playlists.map((playlist) => playlist.id));
     const folders = getPlaylistFolders(req.user.id);
+    const kept = keptPlaylistsByNavidromeId(client.user);
     const summaries = playlists
       .map((playlist) => toPlaylistSummary(
         playlist,
         client.user,
         records.get(String(playlist.id)),
         folders.get(String(playlist.id)) || "",
+        kept.get(String(playlist.id)) || null,
       ))
       .sort((a, b) => Number(b.owned) - Number(a.owned) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
     return res.json({ username: client.user, playlists: summaries, folders: listFolders(req.user.id) });
@@ -283,6 +335,22 @@ router.post("/:id/duplicate", noCache, async (req, res) => {
     if (!source) return res.status(404).json({ error: "Playlist not found" });
     const name = String(req.body?.name || "").trim() || `${source.name || "Playlist"} copy`;
 
+    // One Psalter keeps copies its rules into another Psalter keeps.
+    const keptSource = keptPlaylistFor(client.user, req.params.id);
+    if (keptSource) {
+      const made = await createKeptPlaylist({
+        owner: client.user,
+        name,
+        rules: keptSource.rules,
+        existingNames: (await client.getSubsonicPlaylists()).filter((entry) => entry.owner === client.user).map((entry) => entry.name),
+      });
+      const playlist = await client.getSubsonicPlaylist(made.playlistId);
+      return res.status(201).json({
+        playlist: playlist ? toPlaylistSummary(playlist, client.user, null, "", keptPlaylistFor(client.user, made.playlistId)) : null,
+        copied: "rules",
+      });
+    }
+
     const records = await playlistRecordsById();
     const record = records.get(String(req.params.id));
     const smart = isSmartPlaylistRecord(record);
@@ -339,6 +407,7 @@ router.get("/:id", noCache, async (req, res) => {
         client.user,
         records.get(String(req.params.id)),
         getPlaylistFolders(req.user.id).get(String(req.params.id)) || "",
+        keptPlaylistFor(client.user, req.params.id),
       ),
       trackCount: tracks.length,
       tracks,
@@ -378,7 +447,9 @@ router.post("/:id/tracks", noCache, async (req, res) => {
   if (!payloads.length) return res.status(400).json({ error: "tracks are required" });
   try {
     const preferLibraryId = await getPersonalLibraryIdForUser(req.user.username);
-    const { resolved, unresolved } = await resolveNavidromeSongIds(payloads, { preferLibraryId });
+    const { resolved, unresolved } = withSongIdFallback(
+      await resolveNavidromeSongIds(payloads, { preferLibraryId }),
+    );
     if (!resolved.length) {
       return res.status(404).json({
         error: "Track not found in Navidrome",
@@ -386,11 +457,20 @@ router.post("/:id/tracks", noCache, async (req, res) => {
         unresolved: unresolved.map((track) => ({ trackName: track.trackName, artistName: track.artistName })),
       });
     }
-    await client.appendPlaylistSongs(req.params.id, resolved.map((entry) => entry.songId));
+    let songIds = resolved.map((entry) => entry.songId);
+    let alreadyThere = 0;
+    if (req.body?.skipExisting === true) {
+      const before = await client.getSubsonicPlaylist(req.params.id);
+      const fresh = withoutSongsAlreadyIn(before, songIds);
+      alreadyThere = songIds.length - fresh.length;
+      songIds = fresh;
+    }
+    if (songIds.length) await client.appendPlaylistSongs(req.params.id, songIds);
     const playlist = await client.getSubsonicPlaylist(req.params.id);
     return res.json({
       playlist: playlist ? toPlaylistSummary(playlist, client.user) : null,
-      added: resolved.length,
+      added: songIds.length,
+      alreadyThere,
       sharedCopies: resolved.filter((entry) => entry.outsidePreferredLibrary).length,
       unresolved: unresolved.map((track) => ({ trackName: track.trackName, artistName: track.artistName })),
     });
@@ -436,6 +516,31 @@ router.post("/smart", noCache, async (req, res) => {
   if (!client) return undefined;
   const name = String(req.body?.name || "").trim();
   if (!name) return res.status(400).json({ error: "Playlist name is required" });
+
+  // A rule about a tag: Psalter keeps this one, since Navidrome cannot read
+  // Psalter's tags.
+  if (usesTagRule(req.body?.rules)) {
+    try {
+      const rules = toPsalterRules(req.body?.rules);
+      const mine = (await client.getSubsonicPlaylists()).filter((entry) => entry.owner === client.user);
+      const made = await createKeptPlaylist({
+        owner: client.user,
+        name,
+        rules,
+        existingNames: mine.map((entry) => entry.name),
+      });
+      const playlist = await client.getSubsonicPlaylist(made.playlistId);
+      return res.status(201).json({
+        playlist: playlist ? toPlaylistSummary(playlist, client.user, null, "", keptPlaylistFor(client.user, made.playlistId)) : null,
+      });
+    } catch (error) {
+      if (error instanceof SmartPlaylistRuleError || error instanceof KeptPlaylistError) {
+        return res.status(error.status || 400).json({ error: error.message });
+      }
+      return sendNavidromeError(res, error, "Could not make the smart playlist");
+    }
+  }
+
   const admin = getAdminNavidromeClient();
   if (!admin?.isConfigured?.()) {
     return res.status(503).json({
@@ -469,6 +574,27 @@ router.post("/smart", noCache, async (req, res) => {
 router.put("/:id/rules", noCache, async (req, res) => {
   if (!isNavidromePlaylistsEnabled()) {
     return res.status(404).json({ error: "Navidrome playlists are not enabled" });
+  }
+  // One Psalter keeps stays Psalter's, tag rule or not: its rules are checked
+  // against what Psalter can judge, and it is written again at once.
+  const keeper = userClient(req, res);
+  if (!keeper) return undefined;
+  const kept = keptPlaylistFor(keeper.user, req.params.id);
+  if (kept) {
+    try {
+      const result = await updateKeptRules(kept, toPsalterRules(req.body?.rules));
+      if (result.status === "failed") return res.status(502).json({ error: result.error });
+      const playlist = await keeper.getSubsonicPlaylist(req.params.id);
+      return res.json({ playlist: toPlaylistSummary(playlist, keeper.user, null, "", keptPlaylistFor(keeper.user, req.params.id)) });
+    } catch (error) {
+      if (error instanceof SmartPlaylistRuleError) return res.status(400).json({ error: error.message });
+      return sendNavidromeError(res, error, "Could not save the rules");
+    }
+  }
+  if (usesTagRule(req.body?.rules)) {
+    return res.status(400).json({
+      error: "Navidrome keeps this playlist, and it cannot read Psalter's tags. Make a new smart playlist for a tag rule.",
+    });
   }
   let rules;
   try {
@@ -505,6 +631,14 @@ router.put("/:id/rules", noCache, async (req, res) => {
 router.delete("/:id/rules", noCache, async (req, res) => {
   const client = userClient(req, res);
   if (!client) return undefined;
+  // One Psalter keeps is an ordinary playlist already: letting it go is all
+  // it takes, and it keeps the songs it has.
+  const kept = keptPlaylistFor(client.user, req.params.id);
+  if (kept) {
+    forgetKept(kept);
+    const playlist = await client.getSubsonicPlaylist(req.params.id).catch(() => null);
+    return res.json({ smart: false, playlistId: String(req.params.id), tracks: Number(playlist?.songCount || 0) });
+  }
   try {
     const admin = await adminClientForOwnedPlaylist(req, res, req.params.id);
     if (!admin) return undefined;
@@ -620,8 +754,12 @@ router.patch("/:id", noCache, async (req, res) => {
   if (!name) return res.status(400).json({ error: "Playlist name is required" });
   try {
     await client.renamePlaylist(req.params.id, name);
+    const kept = keptPlaylistFor(client.user, req.params.id);
+    if (kept) renameKept(kept, name);
     const playlist = await client.getSubsonicPlaylist(req.params.id);
-    return res.json({ playlist: playlist ? toPlaylistSummary(playlist, client.user) : null });
+    return res.json({
+      playlist: playlist ? toPlaylistSummary(playlist, client.user, null, "", keptPlaylistFor(client.user, req.params.id)) : null,
+    });
   } catch (error) {
     return sendNavidromeError(res, error, "Could not rename the playlist in Navidrome");
   }
@@ -631,8 +769,10 @@ router.delete("/:id", noCache, async (req, res) => {
   const client = userClient(req, res);
   if (!client) return undefined;
   try {
+    const kept = keptPlaylistFor(client.user, req.params.id);
     await client.deletePlaylist(req.params.id);
     forgetPlaylistFolder(req.user.id, req.params.id);
+    if (kept) forgetKept(kept);
     return res.json({ deleted: true });
   } catch (error) {
     return sendNavidromeError(res, error, "Could not delete the playlist in Navidrome");

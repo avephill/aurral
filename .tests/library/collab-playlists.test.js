@@ -250,3 +250,38 @@ test("only the person who started it can put someone out, or end it", async () =
   collab.removeCollabMember({ id, requester: "dunshill", username: "dunshill" });
   assert.deepEqual(collab.listCollabPlaylistsFor("dunshill"), []);
 });
+
+test("a copy read back through Psalter's own paths is not mistaken for new songs", async () => {
+  startClean();
+  const deps = fakeDeps();
+  await collab.createCollabPlaylist({ owner: "avery", name: "Road trip", members: ["dunshill"], fromPlaylistId: "seed", deps });
+
+  // Psalter's index answers with absolute paths in its own filesystem, where
+  // the list holds Navidrome's library-relative ones.
+  const relative = deps.pathsForSongIds;
+  deps.pathsForSongIds = async (ids) => new Map(
+    [...(await relative(ids))].map(([id, path]) => [id, path ? `/data/Music/Library/${path}` : ""]),
+  );
+  const [id] = db.prepare("SELECT id FROM collab_playlists").all().map((row) => row.id);
+  const result = await collab.syncCollabPlaylist(id, deps);
+
+  assert.deepEqual(result.changes, [], "nobody added or took out anything");
+  assert.equal(result.songs, 2);
+  assert.deepEqual(copyOf(deps, "dunshill")[1].songIds, ["one-dun", "two-dun"], "his copy still holds both");
+});
+
+test("a member missing songs is offered the albums they come from", async () => {
+  startClean();
+  const deps = { ...fakeDeps(), canAddAlbums: () => true, addAlbums: (_user, folders) => folders.length, libraryReady: async () => {} };
+  const made = await collab.createCollabPlaylist({ owner: "dunshill", name: "Kitchen", members: ["avery"], deps });
+  db.prepare("INSERT INTO collab_tracks (collab_id, position, path, added_by, added_at) VALUES (?, 0, ?, 'dunshill', 0)")
+    .run(made.id, REL.hers);
+
+  await assert.rejects(() => collab.previewCollabAlbums({ id: made.id, requester: "kitty", deps }), /not yours/);
+  const plan = await collab.previewCollabAlbums({ id: made.id, requester: "avery", deps });
+  assert.equal(plan.missing, 1);
+  assert.deepEqual(plan.albums.map((album) => album.folder), ["Neko Case/Blacklisted"]);
+  const result = await collab.addCollabAlbums({ id: made.id, requester: "avery", deps });
+  assert.equal(result.albumsAdded, 1);
+  await result.ready;
+});

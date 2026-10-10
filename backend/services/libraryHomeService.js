@@ -11,6 +11,7 @@ import {
   rankAlbumsByMedianRating,
 } from "./navidromeUserRatings.js";
 import { logger } from "./logger.js";
+import { db } from "../config/db-sqlite.js";
 
 /**
  * Everything the Library home shows, built per person and kept.
@@ -72,6 +73,25 @@ function topRatedFor(user) {
   };
 }
 
+// When each album on the Recently added shelf got here: its newest file, which
+// is what the shelf is ordered by, so the date under a card is the reason it
+// is where it is.
+export function withAddedDates(page) {
+  const albums = Array.isArray(page?.albums) ? page.albums : [];
+  if (!albums.length) return page;
+  const newest = db.prepare(`
+    SELECT MAX(file.created_at) AS addedAt
+    FROM library_album_tracks AS link
+    JOIN library_media_files AS file ON file.track_id = link.track_id
+    WHERE link.album_id = ? AND file.available = 1
+      AND (file.album_id = link.album_id OR file.album_id IS NULL)
+  `);
+  return {
+    ...page,
+    albums: albums.map((album) => ({ ...album, addedAt: Number(newest.get(Number(album.id))?.addedAt) || null })),
+  };
+}
+
 async function buildHome(user) {
   // What their own Navidrome library holds, or null when they have none of
   // their own and the whole library is theirs. The same scope the library
@@ -85,14 +105,14 @@ async function buildHome(user) {
     : allArtists;
   const addedAt = (artist) => new Date(artist.addedAt || artist.added || 0).getTime() || 0;
   return {
-    recentAlbums: getCanonicalLibraryPage({
+    recentAlbums: withAddedDates(getCanonicalLibraryPage({
       kind: "albums",
       page: 1,
       pageSize: SHELF_SIZE,
       sort: "newest",
       availableOnly: true,
       artistIds: scopedIds,
-    }),
+    })),
     recentArtists: [...artists].sort((left, right) => addedAt(right) - addedAt(left)).slice(0, SHELF_SIZE),
     stats: libraryStats(scopedIds),
     ...topRatedFor(user),

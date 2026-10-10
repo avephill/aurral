@@ -172,6 +172,28 @@ test("rules read his tags, his live ratings, and fall back to the file", () => {
   assert.deepEqual(skipped, ["bpm gt"]);
 });
 
+test("a tag rule is his tag exactly, not a word in the comment", () => {
+  const songs = new Map([
+    [1, { trackId: 1, songId: "a", title: "One", artist: "A", album: "X", rating: 5, discNumber: 1, trackNumber: 1 }],
+    [2, { trackId: 2, songId: "b", title: "Two", artist: "B", album: "Y", rating: 2, discNumber: 1, trackNumber: 1 }],
+    [3, { trackId: 3, songId: "c", title: "Three", artist: "C", album: "Z", rating: 5, discNumber: 1, trackNumber: 1 }],
+  ]);
+  const tags = new Map([
+    [1, { tags: ["sunday"], comment: "sunday" }],
+    [2, { tags: ["sunday"], comment: "sunday" }],
+    [3, { tags: ["sunday morning"], comment: "sunday morning" }],
+  ]);
+  const pick = (rules) => tagPlaylists.evaluateTagPlaylistRules(rules, songs, tags).songs.map((entry) => entry.songId);
+  assert.deepEqual(pick({ match: "all", conditions: [{ field: "tag", operator: "has", value: "Sunday" }] }), ["a", "b"]);
+  assert.deepEqual(pick({ match: "all", conditions: [
+    { field: "tag", operator: "has", value: "sunday" },
+    { field: "rating", operator: "gt", value: 3 },
+  ] }), ["a"]);
+  assert.deepEqual(pick({ match: "all", conditions: [{ field: "tag", operator: "hasNot", value: "sunday" }] }), ["c"]);
+  // "contains" on the comment is what the converted iTunes playlists ask, and it is looser.
+  assert.deepEqual(pick({ match: "all", conditions: [{ field: "comment", operator: "contains", value: "sunday" }] }), ["a", "b", "c"]);
+});
+
 // iTunes credits the person, MusicBrainz the group: "Nat King Cole" against
 // "The Nat King Cole Trio". 71 of his songs sat in the missing list for that
 // reason alone while 893 tracks by the group were on the server.

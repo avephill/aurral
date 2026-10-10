@@ -1,0 +1,296 @@
+/* Searching the library from the search box: artists, albums and songs on the
+   server, with the your-library / whole-server switch and a way to Discover. */
+
+.library-search {
+  display: grid;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 68rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding-bottom: 4rem;
+}
+
+.library-search__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--aurral-border);
+}
+
+.library-search__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.25rem;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.library-search__eyebrow svg,
+.library-search__scope svg,
+.library-search__artists svg,
+.library-search__more svg,
+.library-search__discover svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+}
+
+.library-search__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.library-search__scope {
+  display: inline-flex;
+  border: 1px solid var(--aurral-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.library-search__scope button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0 0.8rem;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.library-search__scope button.is-active {
+  background: var(--aurral-control-on);
+  color: var(--aurral-accent-contrast);
+  font-weight: 600;
+}
+
+.library-search__section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.library-search__section h2 {
+  margin: 0;
+  color: var(--aurral-text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.library-search__artists,
+.library-search__albums,
+.library-search__songs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-search__artists {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.library-search__artists button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--aurral-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--aurral-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.library-search__artists button:hover {
+  background: var(--aurral-surface-hover);
+}
+
+.library-search__albums {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 1rem;
+}
+
+.library-search__albums button {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.library-search__cover {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--aurral-radius-sm);
+  background: var(--aurral-surface-hover);
+  color: var(--aurral-text-muted);
+}
+
+.library-search__cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.library-search__cover svg {
+  width: 2rem;
+  height: 2rem;
+}
+
+.library-search__album-title,
+.library-search__song-title {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-search__album-artist,
+.library-search__song-meta {
+  overflow: hidden;
+  color: var(--aurral-text-muted);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-search__songs li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  border-bottom: 1px solid var(--aurral-border);
+}
+
+.library-search__play {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--aurral-text);
+  cursor: pointer;
+}
+
+.library-search__play:hover {
+  background: var(--aurral-surface-hover);
+}
+
+.library-search__play svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.library-search__song {
+  display: grid;
+  min-width: 0;
+  padding: 0.35rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.library-search__to-album {
+  padding: 0.3rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--aurral-text-muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.library-search__to-album:hover {
+  color: var(--aurral-text);
+  text-decoration: underline;
+}
+
+.library-search__footer {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.library-search__more,
+.library-search__discover {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px dashed var(--aurral-border);
+  border-radius: var(--aurral-radius-sm);
+  background: transparent;
+  color: var(--aurral-text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.library-search__more:hover,
+.library-search__discover:hover {
+  border-style: solid;
+  background: var(--aurral-surface-hover);
+}
+
+.library-search__more span,
+.library-search__discover span {
+  display: grid;
+  gap: 0.1rem;
+  font-weight: 600;
+}
+
+.library-search__more small,
+.library-search__discover small {
+  color: var(--aurral-text-muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.library-search__empty {
+  margin: 0;
+  color: var(--aurral-text-muted);
+}
+
+.library-search__state {
+  padding: 2rem 0;
+}
+
+@media (max-width: 640px) {
+  .library-search__header {
+    align-items: flex-start;
+  }
+
+  .library-search__to-album {
+    display: none;
+  }
+}

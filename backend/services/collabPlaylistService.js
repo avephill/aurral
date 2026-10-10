@@ -1,7 +1,13 @@
 import { db } from "../config/db-sqlite.js";
-import { normalizePath } from "./navidromePathMapping.js";
-import { mediaPathsForNavidromeSongIds } from "./navidromeTrackResolver.js";
-import { SocialError, defaultSocialDeps, resolveCopiesForUser } from "./socialService.js";
+import { normalizePath, relativeToRoot } from "./navidromePathMapping.js";
+import { getNavidromeRoots, mediaPathsForNavidromeSongIds } from "./navidromeTrackResolver.js";
+import {
+  SocialError,
+  addPlannedAlbums,
+  defaultSocialDeps,
+  planAlbumsForPaths,
+  resolveCopiesForUser,
+} from "./socialService.js";
 import { sharesWith } from "./congregationService.js";
 import { logger } from "./logger.js";
 
@@ -124,6 +130,20 @@ export async function createCollabPlaylist({
 const defaultPathsForSongIds = (ids) =>
   mediaPathsForNavidromeSongIds(ids, { maxLookups: Number.POSITIVE_INFINITY });
 
+/**
+ * The shared list keeps paths as Navidrome reports them, relative to the
+ * library root. Psalter's own index answers with absolute paths in its own
+ * filesystem, and one of those compared against the list reads as a different
+ * song - every song in a copy would look taken out and put back as one nobody
+ * can find. So they are brought to the list's form first.
+ */
+function libraryPath(value) {
+  const path = normalizePath(value);
+  const root = getNavidromeRoots().aurralRoot;
+  if (!root || !path.startsWith("/")) return path;
+  return relativeToRoot(path, root) ?? path;
+}
+
 /** What one member's copy holds now, as paths, or null when it cannot be read. */
 async function readCopyPaths(client, copyPlaylistId, deps) {
   if (!copyPlaylistId) return null;
@@ -133,7 +153,7 @@ async function readCopyPaths(client, copyPlaylistId, deps) {
   const ids = entries.map((entry) => String(entry.id));
   const lookup = deps.pathsForSongIds || defaultPathsForSongIds;
   const paths = await lookup(ids);
-  return ids.map((id) => normalizePath(paths.get(id) || "")).filter(Boolean);
+  return ids.map((id) => libraryPath(paths.get(id) || "")).filter(Boolean);
 }
 
 /**
@@ -341,4 +361,34 @@ export function deleteCollabPlaylist({ id, requester } = {}) {
   db.prepare("DELETE FROM collab_members WHERE collab_id = ?").run(collab.id);
   db.prepare("DELETE FROM collab_tracks WHERE collab_id = ?").run(collab.id);
   return { ended: true };
+}
+
+/**
+ * What a member's copy is missing, as the albums that would bring it in. The
+ * shared list is file paths already, so nothing needs asking of Navidrome
+ * about the playlist itself.
+ */
+export async function previewCollabAlbums({ id, requester, deps = defaultSocialDeps } = {}) {
+  const collab = collabRow(id);
+  if (!collab) throw new SocialError("No such playlist", 404);
+  if (!isMember(collab.id, requester)) throw new SocialError("That playlist is not yours", 403);
+  const plan = await planAlbumsForPaths({
+    username: requester,
+    paths: trackRows(collab.id).map((row) => row.path),
+    deps,
+  });
+  return { collabId: collab.id, name: collab.name, owner: collab.owner, ...plan };
+}
+
+/** Put those albums into their library, and write their copy again once scanned. */
+export async function addCollabAlbums({ id, requester, deps = defaultSocialDeps } = {}) {
+  const plan = await previewCollabAlbums({ id, requester, deps });
+  const { added, ready } = addPlannedAlbums({
+    username: requester,
+    plan,
+    addedFor: `${plan.name} (built together)`,
+    deps,
+    then: () => syncCollabPlaylist(plan.collabId, deps),
+  });
+  return { albumsAdded: added, albums: plan.albums.length, ready };
 }

@@ -6,9 +6,12 @@ import { importFromRepo } from "../helpers/backendTestHarness.js";
 const {
   SmartPlaylistRuleError,
   describeSmartPlaylistFields,
+  editorRulesFromPsalter,
   fromNavidromeRules,
   isSmartPlaylistRecord,
   toNavidromeRules,
+  toPsalterRules,
+  usesTagRule,
 } = await importFromRepo("backend/services/navidromeSmartPlaylists.js");
 
 test("an editor's rules become the shape Navidrome evaluates", () => {
@@ -149,7 +152,8 @@ test("the catalogue offers an operator set for every field it lists", () => {
   for (const field of fields) {
     assert.ok(field.operators.length, `${field.name} has operators`);
     for (const operator of field.operators) assert.ok(operator.label, `${operator.name} has a label`);
-    assert.ok(sortFields.includes(field.name), `${field.name} can be sorted by`);
+    // A tag is had or not had; there is nothing to sort by.
+    if (field.type !== "tag") assert.ok(sortFields.includes(field.name), `${field.name} can be sorted by`);
   }
   assert.ok(sortFields.includes("random"));
 });
@@ -207,4 +211,69 @@ test("a playlist that keeps a group cannot be opened in the editor", () => {
     ],
   });
   assert.equal(fromNavidromeRules(withGroup), null, "the editor says so rather than flattening it");
+});
+
+// A rule about one of the person's tags. Navidrome cannot read those, so a
+// playlist with one is Psalter's to keep, over the fields Psalter can judge.
+
+test("the editor is offered a tag rule, and told what can go with it", () => {
+  const { fields, keptByPsalter } = describeSmartPlaylistFields();
+  const tag = fields.find((field) => field.name === "tag");
+  assert.equal(tag.type, "tag");
+  assert.deepEqual(tag.operators.map((operator) => operator.name), ["has", "hasNot"]);
+  assert.ok(keptByPsalter.fields.includes("tag") && keptByPsalter.fields.includes("rating"));
+  assert.ok(!keptByPsalter.fields.includes("bpm"), "only what Psalter can judge");
+});
+
+test("a tag rule makes the playlist Psalter's, and Navidrome never sees one", () => {
+  const rules = {
+    match: "all",
+    conditions: [
+      { field: "tag", operator: "has", value: " Sunday " },
+      { field: "rating", operator: "gt", value: "3" },
+    ],
+    sort: "rating",
+    order: "desc",
+    limit: "25",
+  };
+  assert.equal(usesTagRule(rules), true);
+  assert.equal(usesTagRule({ conditions: [{ field: "rating", operator: "gt", value: 3 }] }), false);
+  assert.deepEqual(toPsalterRules(rules), {
+    match: "all",
+    conditions: [
+      { field: "tag", operator: "has", value: "sunday" },
+      { field: "rating", operator: "gt", value: 3 },
+    ],
+    sort: "rating",
+    order: "desc",
+    limit: 25,
+  });
+  assert.throws(() => toNavidromeRules(rules), /Unknown field: tag/);
+});
+
+test("a tag rule refuses what Psalter cannot judge, with a reason", () => {
+  assert.throws(
+    () => toPsalterRules({ conditions: [{ field: "tag", operator: "has", value: "x" }, { field: "bpm", operator: "gt", value: 100 }] }),
+    (error) => error instanceof SmartPlaylistRuleError && /Beats per minute cannot be used with a tag rule/.test(error.message),
+  );
+  assert.throws(() => toPsalterRules({ conditions: [{ field: "tag", operator: "contains", value: "x" }] }), /Tag cannot be asked/);
+  assert.throws(() => toPsalterRules({ conditions: [{ field: "tag", operator: "has", value: " " }] }), /Tag needs a value/);
+  assert.throws(() => toPsalterRules({ conditions: [{ field: "tag", operator: "has", value: "x" }], sort: "random" }), /Cannot sort by random/);
+});
+
+test("kept rules open in the editor, unless they hold a group it cannot show", () => {
+  const rules = { match: "any", conditions: [{ field: "tag", operator: "has", value: "sunday" }, { field: "year", operator: "inTheRange", value: [1970, 1979] }], limit: 10 };
+  assert.deepEqual(editorRulesFromPsalter(rules), {
+    match: "any",
+    conditions: [
+      { field: "tag", operator: "has", value: "sunday" },
+      { field: "year", operator: "inTheRange", value: "1970,1979" },
+    ],
+    sort: "",
+    order: "asc",
+    limit: 10,
+  });
+  assert.equal(editorRulesFromPsalter({ match: "all", conditions: [{ match: "any", conditions: [] }] }), null);
+  // The converted iTunes playlists read "comment"; the editor does not offer it with a tag rule.
+  assert.equal(editorRulesFromPsalter({ match: "all", conditions: [{ field: "comment", operator: "contains", value: "x" }] }), null);
 });

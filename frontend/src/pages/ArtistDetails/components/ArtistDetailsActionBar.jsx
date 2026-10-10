@@ -45,6 +45,8 @@ export function ArtistDetailsActionBar({
   tasteFeedbackUsed = {},
   tasteActionPending = null,
   userLibrary = null,
+  // In Lidarr, and so in someone's library, with no music on the server yet.
+  nothingOnServer = false,
 }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const currentMonitorOption = library.getCurrentMonitorOption?.();
@@ -117,12 +119,13 @@ export function ArtistDetailsActionBar({
     </>
   );
 
-  const renderLibraryMenu = ({ label, className, icon, items }) => (
+  const renderLibraryMenu = ({ label, title, className, icon, items }) => (
     <div className="artist-relative">
       <button
         type="button"
         onClick={() => library.setShowRemoveDropdown(!library.showRemoveDropdown)}
         className={className}
+        title={title}
         aria-haspopup="menu"
         aria-expanded={library.showRemoveDropdown}
       >
@@ -160,8 +163,13 @@ export function ArtistDetailsActionBar({
       if (userLibrary.inMyLibrary) {
         // Already in the person's library: one settled button, with removing
         // it one deliberate step away inside the menu.
+        // Asked for, but nothing of theirs has arrived: "In My Library" would
+        // send someone looking for music the Library page cannot show.
         return renderLibraryMenu({
-          label: "In My Library",
+          label: nothingOnServer ? "Wanted – nothing here yet" : "In My Library",
+          title: nothingOnServer
+            ? "In your library, but none of their music is on the server yet. It will appear in your library when it arrives."
+            : undefined,
           className: "btn btn-neutral-active btn--bold btn-min-h",
           icon: userLibrary.pending ? <DotLoader size="sm" label={null} /> : <SearchLibraryCheck size="sm" />,
           items: (

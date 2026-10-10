@@ -18,3 +18,15 @@ export const removeArtistFromMyLibrary = (mbid) =>
   deleteData(`/user-library/artists/${encodeURIComponent(mbid)}`);
 
 export const syncUserLibraries = () => postData("/user-library/sync");
+
+// Single albums, put in your library without the rest of the artist.
+export const getMyLibraryAlbums = (options = {}) => getData("/user-library/albums", options);
+
+export const removeMyLibraryAlbums = (folders) => postData("/user-library/albums/remove", { folders });
+
+// Compilations, picked one album at a time by MusicBrainz release group.
+export const getCompilations = (options = {}) => getData("/user-library/compilations", options);
+
+export const addAlbumsToMyLibrary = (mbids) => postData("/user-library/albums", { mbids });
+
+export const removeAlbumsFromMyLibraryByMbid = (mbids) => postData("/user-library/albums/remove", { mbids });

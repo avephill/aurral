@@ -11,7 +11,7 @@ const getUserByUsernameStmt = db.prepare(
   "SELECT * FROM users WHERE username = ?"
 );
 const getAllUsersStmt = db.prepare(
-  "SELECT id, username, role, permissions, lastfm_username, listen_history_provider, listen_history_username, listen_history_url, lidarr_root_folder_path, lidarr_quality_profile_id FROM users ORDER BY username"
+  "SELECT id, username, role, permissions, lastfm_username, listen_history_provider, listen_history_username, listen_history_url, lidarr_root_folder_path, lidarr_quality_profile_id, album_request_limit FROM users ORDER BY username"
 );
 const getUserByIdStmt = db.prepare("SELECT * FROM users WHERE id = ?");
 const getUserAuthByIdStmt = db.prepare(
@@ -31,7 +31,9 @@ const getAllListeningHistoryUsersStmt = db.prepare(
 
 const DEFAULT_PERMISSIONS = {
   accessFlow: false,
-  addArtist: true,
+  // Everything an artist ever released, which is an admin's call. Asking for
+  // one release is addAlbum, and brings in just enough of its artist.
+  addArtist: false,
   addAlbum: true,
   changeMonitoring: false,
   deleteArtist: false,
@@ -115,7 +117,13 @@ export const userOps = {
         r.lidarr_quality_profile_id != null
           ? Number(r.lidarr_quality_profile_id)
           : null,
+      // Null follows the default; -1 is no limit.
+      albumRequestLimit:
+        r.album_request_limit != null ? Number(r.album_request_limit) : null,
     }));
+  },
+  setAlbumRequestLimit(id, limit) {
+    db.prepare("UPDATE users SET album_request_limit = ? WHERE id = ?").run(limit, Number(id));
   },
   createUser(username, passwordHash, role = "user", permissions = null) {
     const un = String(username).trim();

@@ -151,6 +151,28 @@ test("sharing a playlist fails cleanly when Navidrome is not configured", async 
   assert.match(body.error, /Navidrome/);
 });
 
+test("only the person a share is for can look at what it needs, or add it", async () => {
+  const at = Date.now();
+  const { lastInsertRowid: id } = db.prepare(`
+    INSERT INTO playlist_shares (owner, recipient, source_playlist_id, name, created_at, updated_at)
+    VALUES ('avery', 'dunshill', 'pl-9', 'Holiday', ?, ?)
+  `).run(at, at);
+
+  actingAs = { id: 1, username: "avery" };
+  assert.equal((await call("GET", `/shares/${id}/preview`)).status, 403);
+  assert.equal((await call("POST", `/shares/${id}/accept`)).status, 403);
+  assert.equal((await call("GET", "/shares/999999/preview")).status, 404);
+
+  // His to answer; without Navidrome there is nothing to work it out against.
+  actingAs = { id: 2, username: "dunshill" };
+  const preview = await call("GET", `/shares/${id}/preview`);
+  assert.equal(preview.status, 503);
+  assert.match(preview.body.error, /Navidrome/);
+  const overview = await call("GET", "/overview");
+  assert.equal(overview.body.shares.received[0].acceptedAt, null, "still waiting for him");
+  db.prepare("DELETE FROM playlist_shares").run();
+});
+
 test("a person can stop sharing their listening", async () => {
   actingAs = { id: 2, username: "dunshill" };
   const off = await call("PUT", "/settings", { shareListening: false });

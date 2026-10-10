@@ -24,7 +24,7 @@ const entries = new Map();
 const clampRating = (value) => Math.max(0, Math.min(5, Math.round(Number(value) || 0)));
 const asArray = (value) => (Array.isArray(value) ? value : value ? [value] : []);
 
-async function readRatedSongIds(client) {
+export async function readRatedSongIds(client) {
   const rated = new Map();
   let seen = 0;
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -147,6 +147,11 @@ export function noteTrackRating(user, trackId, rating) {
   const value = clampRating(rating);
   if (value > 0) entry.ratings.set(id, value);
   else entry.ratings.delete(id);
+}
+
+/** Drop one person's kept ratings, so the next read asks Navidrome again. */
+export function forgetUserTrackRatings(username) {
+  entries.delete(username);
 }
 
 export function resetUserTrackRatings() {

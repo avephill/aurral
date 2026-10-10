@@ -1,10 +1,12 @@
 import { useEffect, useId, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import TooltipButton from "./TooltipButton";
 import { DotLoader } from "./DotLoader";
 import { useModalDialog } from "../hooks/useModalDialog.js";
 import { useToast } from "../contexts/ToastContext";
 import {
+  applyTag,
   getMyTags,
   getTagsForAlbum,
   getTagsForTrack,
@@ -18,10 +20,14 @@ import {
 // record, or from the iTunes comment it arrived with - is shown as such: the
 // source cannot be rewritten for one song, so taking it off here is recorded
 // as a removal beside it.
+//
+// Or several songs at once (kind "tracks", with ids): the tags typed here are
+// added to each of them, and whatever they carry already is left as it is.
 
 export default function TagsModal({ subject, onClose, onSaved }) {
   const titleId = useId();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
+  const queryClient = useQueryClient();
   const [tags, setTags] = useState([]);
   const [removed, setRemoved] = useState([]);
   const [inherited, setInherited] = useState([]);
@@ -30,6 +36,7 @@ export default function TagsModal({ subject, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const isAlbum = subject?.kind === "album";
+  const isMany = subject?.kind === "tracks";
   const { dialogRef, handleBackdropClick } = useModalDialog({
     open: Boolean(subject),
     onClose,
@@ -37,13 +44,16 @@ export default function TagsModal({ subject, onClose, onSaved }) {
   });
 
   useEffect(() => {
-    if (!subject?.id) return undefined;
+    if (!subject?.id && !isMany) return undefined;
     let cancelled = false;
     setLoading(true);
     setDraft("");
     setRemoved([]);
     setInherited([]);
-    const read = isAlbum ? getTagsForAlbum(subject.id) : getTagsForTrack(subject.id);
+    // Several songs have no one set of tags to show; only what to add.
+    const read = isMany
+      ? Promise.resolve({ tags: [] })
+      : isAlbum ? getTagsForAlbum(subject.id) : getTagsForTrack(subject.id);
     Promise.all([read, getMyTags()])
       .then(([mine, all]) => {
         if (cancelled) return;
@@ -61,7 +71,7 @@ export default function TagsModal({ subject, onClose, onSaved }) {
     return () => {
       cancelled = true;
     };
-  }, [isAlbum, subject?.id]);
+  }, [isAlbum, isMany, subject]);
 
   if (!subject) return null;
 
@@ -82,14 +92,27 @@ export default function TagsModal({ subject, onClose, onSaved }) {
   };
 
   const save = async () => {
+    // A tag typed but not yet entered is meant too: typing one and pressing
+    // Save is how most people tag something.
+    const typed = draft.trim().toLowerCase();
+    const wanted = typed && !tags.includes(typed) ? [...tags, typed] : tags;
+    const stillRemoved = removed.filter((tag) => !wanted.includes(tag));
     setSaving(true);
     try {
-      if (isAlbum) {
-        await setTagsForAlbum(subject.id, tags);
+      if (isMany) {
+        // One call per tag: each adds that tag to every song not already
+        // carrying it.
+        for (const tag of wanted) await applyTag({ trackIds: subject.ids, tag });
+        showSuccess(`Tagged ${subject.ids.length} song${subject.ids.length === 1 ? "" : "s"}: ${wanted.join(", ")}`);
+      } else if (isAlbum) {
+        await setTagsForAlbum(subject.id, wanted);
       } else {
-        await setTagsForTrack(subject.id, [...tags, ...removed.map((tag) => `-${tag}`)]);
+        await setTagsForTrack(subject.id, [...wanted, ...stillRemoved.map((tag) => `-${tag}`)]);
       }
-      onSaved?.(tags);
+      // The tag list, the Tracks filter and the smart playlist editor all
+      // read the same list; a new tag belongs in it straight away.
+      void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      onSaved?.(wanted);
       onClose?.();
     } catch (error) {
       showError(error.response?.data?.error || error.message || "Could not save those tags");
@@ -189,7 +212,9 @@ export default function TagsModal({ subject, onClose, onSaved }) {
               </div>
             ) : null}
             <p className="recommend-modal__hint">
-              {isAlbum
+              {isMany
+                ? `Each tag here is added to all ${subject.ids.length} songs. Tags they have already are kept.`
+                : isAlbum
                 ? "Every song on this record counts as tagged, including any added to it later, so a smart playlist built on one of these picks up the whole record."
                 : "Smart playlists read these, so one added here can put a song into a playlist that keeps itself."}
             </p>
@@ -200,8 +225,13 @@ export default function TagsModal({ subject, onClose, onSaved }) {
           <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={saving}>
             Cancel
           </button>
-          <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving || loading}>
-            {saving ? "Saving..." : "Save tags"}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={save}
+            disabled={saving || loading || (isMany && !tags.length && !draft.trim())}
+          >
+            {saving ? "Saving..." : isMany ? "Add tags" : "Save tags"}
           </button>
         </div>
       </section>

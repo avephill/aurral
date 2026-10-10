@@ -4,11 +4,17 @@ import { Plus, X } from "lucide-react";
 import { DotLoader } from "./DotLoader";
 import { ModalShell } from "./PlaylistModals";
 import { getNavidromePlaylistRuleFields } from "../utils/api/endpoints/playlists.js";
+import { getMyTags } from "../utils/api/endpoints/tags.js";
 import "./smartPlaylistEditor.css";
 
 /**
- * The iTunes smart playlist, rebuilt: a playlist described by rules, which
- * Navidrome keeps up to date on its own.
+ * The iTunes smart playlist, rebuilt: a playlist described by rules, kept up
+ * to date on its own.
+ *
+ * Navidrome keeps it, unless a rule is about one of the person's tags: those
+ * live in Psalter, so Psalter keeps that playlist instead and only the fields
+ * Psalter can judge are offered alongside. `keeper` says which keeps a
+ * playlist being edited, and it stays that way.
  *
  * The fields and operators come from the server rather than being listed
  * here, because Navidrome answers a rule about a field it does not know with
@@ -30,8 +36,22 @@ const blankRules = (fields) => ({
   limit: "",
 });
 
-function ValueInput({ field, operator, value, onChange }) {
+function ValueInput({ field, operator, value, onChange, tagListId }) {
   const type = field?.type || "text";
+  if (type === "tag") {
+    return (
+      <input
+        className="smart-rules__value"
+        type="text"
+        value={value ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="tag"
+        aria-label="Tag"
+        list={tagListId}
+        autoComplete="off"
+      />
+    );
+  }
   if (type === "boolean") {
     return (
       <select
@@ -88,6 +108,7 @@ export default function SmartPlaylistEditor({
   mode = "create",
   initialName = "",
   initialRules = null,
+  keeper = null,
   busy = false,
   onClose,
   onSave,
@@ -98,14 +119,30 @@ export default function SmartPlaylistEditor({
     staleTime: 10 * 60_000,
     enabled: open,
   });
-  const fields = useMemo(
+  const allFields = useMemo(
     () => (Array.isArray(catalogue.data?.fields) ? catalogue.data.fields : []),
     [catalogue.data],
   );
-  const fieldByName = useMemo(
-    () => new Map(fields.map((field) => [field.name, field])),
-    [fields],
+  const psalterNames = useMemo(
+    () => new Set(catalogue.data?.keptByPsalter?.fields || []),
+    [catalogue.data],
   );
+  // Navidrome cannot read tags, so one it keeps is never offered a tag rule.
+  const fields = useMemo(
+    () => (keeper === "navidrome" ? allFields.filter((field) => field.type !== "tag") : allFields),
+    [allFields, keeper],
+  );
+  const fieldByName = useMemo(
+    () => new Map(allFields.map((field) => [field.name, field])),
+    [allFields],
+  );
+  const myTags = useQuery({
+    queryKey: ["tags"],
+    queryFn: ({ signal }) => getMyTags({ signal }),
+    staleTime: 60_000,
+    enabled: open && keeper !== "navidrome",
+  });
+  const tagListId = "smart-rules-tags";
 
   const [name, setName] = useState(initialName);
   const [rules, setRules] = useState(null);
@@ -128,6 +165,19 @@ export default function SmartPlaylistEditor({
 
   if (!open) return null;
 
+  // Psalter keeps it once a rule is about a tag, or when it already does.
+  const keptByPsalter = keeper === "psalter"
+    || (keeper !== "navidrome" && Boolean(rules?.conditions?.some((condition) => condition.field === "tag")));
+  const offered = keptByPsalter ? fields.filter((field) => psalterNames.has(field.name)) : fields;
+  const cannotStay = keptByPsalter
+    ? [...new Set((rules?.conditions || [])
+      .filter((condition) => !psalterNames.has(condition.field))
+      .map((condition) => fieldByName.get(condition.field)?.label || condition.field))]
+    : [];
+  const sortFields = keptByPsalter
+    ? catalogue.data?.keptByPsalter?.sortFields || []
+    : catalogue.data?.sortFields || [];
+
   const update = (patch) => setRules((current) => ({ ...current, ...patch }));
   const updateCondition = (index, patch) => setRules((current) => ({
     ...current,
@@ -148,7 +198,7 @@ export default function SmartPlaylistEditor({
 
   const addCondition = () => setRules((current) => ({
     ...current,
-    conditions: [...current.conditions, emptyCondition(fields)],
+    conditions: [...current.conditions, emptyCondition(offered)],
   }));
 
   const removeCondition = (index) => setRules((current) => ({
@@ -158,13 +208,15 @@ export default function SmartPlaylistEditor({
       : current.conditions,
   }));
 
-  const ready = Boolean(rules && fields.length && (mode !== "create" || name.trim()));
+  const ready = Boolean(rules && fields.length && (mode !== "create" || name.trim()) && !cannotStay.length);
 
   return (
     <ModalShell
       open={open}
       title={mode === "create" ? "New smart playlist" : "Edit rules"}
-      description="Navidrome keeps this playlist up to date from the rules below."
+      description={keptByPsalter
+        ? "Psalter keeps this playlist up to date from the rules below, and it plays in any music player."
+        : "Navidrome keeps this playlist up to date from the rules below."}
       onClose={onClose}
       disableClose={busy}
       className="smart-rules__modal"
@@ -222,7 +274,10 @@ export default function SmartPlaylistEditor({
                     onChange={(event) => changeField(index, event.target.value)}
                     aria-label="Field"
                   >
-                    {fields.map((option) => (
+                    {(offered.some((option) => option.name === condition.field)
+                      ? offered
+                      : [...offered, fieldByName.get(condition.field)].filter(Boolean)
+                    ).map((option) => (
                       <option key={option.name} value={option.name}>{option.label}</option>
                     ))}
                   </select>
@@ -241,6 +296,7 @@ export default function SmartPlaylistEditor({
                     operator={condition.operator}
                     value={condition.value}
                     onChange={(value) => updateCondition(index, { value })}
+                    tagListId={tagListId}
                   />
                   <button
                     type="button"
@@ -255,6 +311,17 @@ export default function SmartPlaylistEditor({
               );
             })}
           </ul>
+
+          <datalist id={tagListId}>
+            {(myTags.data?.tags || []).map((entry) => <option key={entry.tag} value={entry.tag} />)}
+          </datalist>
+
+          {cannotStay.length ? (
+            <p className="smart-rules__warning" role="alert">
+              {cannotStay.join(", ")} cannot be used alongside a tag rule. Change {cannotStay.length === 1 ? "that rule" : "those rules"}, or
+              take the tag rule out.
+            </p>
+          ) : null}
 
           <button type="button" className="btn btn-secondary btn-xs smart-rules__add" onClick={addCondition}>
             <Plus className="artist-icon-xs" aria-hidden="true" />
@@ -277,7 +344,7 @@ export default function SmartPlaylistEditor({
               <span>selected by</span>
               <select value={rules.sort} onChange={(event) => update({ sort: event.target.value })}>
                 <option value="">playlist order</option>
-                {(catalogue.data?.sortFields || []).map((sortField) => (
+                {sortFields.map((sortField) => (
                   <option key={sortField} value={sortField}>
                     {sortField === "random" ? "random" : fieldByName.get(sortField)?.label || sortField}
                   </option>

@@ -126,3 +126,10 @@
     grid-area: remove;
   }
 }
+
+/* A rule that cannot stay once another is about a tag. */
+.smart-rules__warning {
+  margin: 0;
+  color: var(--aurral-warning, #b7791f);
+  font-size: 0.8125rem;
+}

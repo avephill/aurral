@@ -16,9 +16,12 @@ const PLAYLIST_SONG_BATCH_SIZE = 50;
  * Subsonic auth error, which callers surface as "not connected".
  */
 export class NavidromeUserClient extends NavidromeClient {
-  constructor(url, username, { header = getNavidromeUserHeader() } = {}) {
+  constructor(url, username, { header = getNavidromeUserHeader(), clientName = "aurral" } = {}) {
     super(url, username, null);
     this.header = header;
+    // Navidrome keeps a player per client name, and each player has its own
+    // "send plays to Last.fm and ListenBrainz" switch.
+    this.clientName = clientName;
   }
 
   isConfigured() {
@@ -28,7 +31,7 @@ export class NavidromeUserClient extends NavidromeClient {
   getAuthParams() {
     // No token or salt: the header authenticates. `u` is still sent so the
     // request reads sensibly in Navidrome's logs.
-    return { u: this.user, v: "1.16.1", c: "aurral", f: "json" };
+    return { u: this.user, v: "1.16.1", c: this.clientName, f: "json" };
   }
 
   getRequestHeaders() {
@@ -51,14 +54,37 @@ export class NavidromeUserClient extends NavidromeClient {
     return ids.length;
   }
 
+  // This connection hides entries from libraries the person cannot open, and
+  // Navidrome counts positions against the whole list, so changing entries
+  // by position goes through the admin's native API, which sees them all.
+  // See navidromePlaylistWrites.js.
   async removePlaylistEntries(playlistId, indexes) {
-    const values = [...new Set((Array.isArray(indexes) ? indexes : [])
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0))];
-    if (!values.length) return 0;
-    await this.request("updatePlaylist", { playlistId, songIndexToRemove: values });
-    return values.length;
+    const admin = await adminClient();
+    if (!admin) {
+      const values = [...new Set((Array.isArray(indexes) ? indexes : [])
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 0))];
+      if (!values.length) return 0;
+      await this.request("updatePlaylist", { playlistId, songIndexToRemove: values });
+      return values.length;
+    }
+    const { removeVisibleEntries } = await import("./navidromePlaylistWrites.js");
+    return removeVisibleEntries({ admin, client: this, playlistId, username: this.user, indexes });
   }
+
+  async updatePlaylist(playlistId, { name, songIds = [] } = {}) {
+    const admin = await adminClient();
+    if (!admin) return super.updatePlaylist(playlistId, { name, songIds });
+    // The name through their own connection, so it stays their change.
+    if (name != null) await this.request("updatePlaylist", { playlistId, name });
+    const { rewritePlaylistEntries } = await import("./navidromePlaylistWrites.js");
+    await rewritePlaylistEntries(admin, playlistId, songIds);
+  }
+}
+
+async function adminClient() {
+  const { getAdminNavidromeClient } = await import("./navidromeTrackResolver.js");
+  return getAdminNavidromeClient();
 }
 
 /**
@@ -66,11 +92,11 @@ export class NavidromeUserClient extends NavidromeClient {
  * connection in Settings (only its URL is used). Returns null when Navidrome
  * is not configured or the user has no username to act as.
  */
-export function createNavidromeUserClient(user, settings = dbOps.getSettings()) {
+export function createNavidromeUserClient(user, settings = dbOps.getSettings(), { clientName } = {}) {
   const navidrome = settings?.integrations?.navidrome;
   const username = String(user?.username || "").trim();
   if (!navidrome?.url || !username) return null;
-  return new NavidromeUserClient(navidrome.url, username);
+  return new NavidromeUserClient(navidrome.url, username, clientName ? { clientName } : {});
 }
 
 /**

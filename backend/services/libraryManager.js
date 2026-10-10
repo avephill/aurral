@@ -1382,8 +1382,12 @@ export class LibraryManager {
     let createdArtist = false;
 
     if (!artist) {
-      if (!hasPermission(user, "addArtist")) {
-        const error = new Error("Permission required: addArtist to create the album artist");
+      // Asking for one release brings in its artist only to hang it on
+      // (albumOnly below: nothing else of theirs is monitored), so it is part
+      // of asking for an album rather than the whole-artist add that
+      // addArtist is for.
+      if (!hasPermission(user, "addAlbum")) {
+        const error = new Error("Permission required: addAlbum");
         error.statusCode = 403;
         throw error;
       }
