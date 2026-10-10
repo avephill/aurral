@@ -89,3 +89,15 @@ test("an album page says how much of it is missing, and a missing track's real l
   const css = read("../../frontend/src/index.css");
   assert.match(css, /\.native-library-track\.is-missing \.native-library-track__cover \{\s*opacity: 0\.45;/);
 });
+
+// An artist asked for whose music has not arrived is wanted, not had: saying
+// "In My Library" sent someone looking for Ola Belle Reed on a page that only
+// shows music the server holds.
+
+test("an artist with nothing on the server is not called in your library", () => {
+  const page = read("../../frontend/src/pages/ArtistDetails/ArtistDetailsPage.jsx");
+  const bar = read("../../frontend/src/pages/ArtistDetails/components/ArtistDetailsActionBar.jsx");
+  assert.match(page, /existsInLibrary && !loadingLibrary && libraryArtist && !anAlbumHasFiles/, "only once Lidarr has answered");
+  assert.match(page, /nothingOnServer=\{nothingOnServer\}/);
+  assert.match(bar, /label: nothingOnServer \? "Wanted – nothing here yet" : "In My Library"/);
+});

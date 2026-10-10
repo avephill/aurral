@@ -134,6 +134,17 @@ function ArtistDetailsPage() {
   const artistDisplayName = artist?.name || artistNameFromNav || "";
   useDocumentTitle(artistDisplayName);
 
+  // In Lidarr with no file to its name: wanted, not had. Only said once
+  // Lidarr's answer is in, so a slow load never reads as "nothing here".
+  const artistFileCount = Number(libraryArtist?.statistics?.trackFileCount);
+  const anAlbumHasFiles = (libraryAlbums || []).some(
+    (album) => Number(album?.statistics?.trackFileCount) > 0 || Number(album?.statistics?.sizeOnDisk) > 0,
+  );
+  const nothingOnServer = Boolean(
+    existsInLibrary && !loadingLibrary && libraryArtist && !anAlbumHasFiles
+    && (Number.isFinite(artistFileCount) ? artistFileCount === 0 : (libraryAlbums || []).length > 0),
+  );
+
   const tasteArtist = useMemo(
     () => ({
       id: artist?.id || mbid,
@@ -370,6 +381,7 @@ function ArtistDetailsPage() {
         tasteFeedbackUsed={currentArtistFeedback}
         tasteActionPending={tasteActionPending}
         userLibrary={userLibrary}
+        nothingOnServer={nothingOnServer}
       />
 
       {existsInLibrary && libraryAlbums && libraryAlbums.length > 0 && (
